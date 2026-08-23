@@ -1,0 +1,7 @@
+# Governance marker: code lands in this repository's default branch only
+# by the named group's passed vote. The merge executor refuses to act for
+# any other group. Keep this file in the default branch; delete it to
+# withdraw consent. Generated in Manage group — do not edit by hand.
+version: 1
+group: d8a:batch-threadline
+token: dlMpukYaW-XMzLORYJh34lzftS1z070iPy7K9cngU6Ln5zCNfTpyGnKSPEdFMVFJCSt6kOVmgNDl0N5sktQh0X8yj3rbeH_B8hJKkGwvwcVD128oFAEDfw6VfQgZfcU5Mbkd1zvCiYk4mpMu7_aXevEKRFQehgM-9TE-a0NcctRXPxSx7CHlJl5p9q5udzY3GVOIwslm9dCJ_kXo6Wx6pAUWzunwW1zS5ZbaM8JRm-BwAHK4v_7S9dDHWF6bsMsxUUrURvSvn-FtaVeuVrp3rDqyH1wEb53-vWJHHfUjAkmagfq0AXr-ZOI5zNySkqG15sy9wARHstTGvcTcgR7trQ
