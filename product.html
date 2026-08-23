@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Threadline — Product</title>
+  <link rel="stylesheet" href="css/product.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <h1 class="brand"><a href="index.html">Threadline</a></h1>
+      <nav class="site-nav" aria-label="Primary">
+        <a href="index.html">Shop</a>
+        <a href="lookbook.html">Lookbook</a>
+        <a href="about.html">About</a>
+        <a href="size-guide.html">Size guide</a>
+        <a href="contact.html">Contact</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <article class="product">
+      <figure class="gallery">
+        <img src="images/product-placeholder.svg" alt="Placeholder product image" class="product-image">
+        <figcaption class="visually-hidden">Product image placeholder</figcaption>
+      </figure>
+
+      <section class="details">
+        <h2 class="product-title">Classic Threadline Tee</h2>
+        <p class="product-sku">SKU: TL-TEE-001</p>
+        <p class="product-price">$39.00</p>
+        <p class="product-desc">A comfortable, all-purpose tee made from midweight cotton. Clean lines and a classic fit make this a versatile wardrobe staple.</p>
+
+        <form class="purchase" aria-labelledby="purchase-label">
+          <p id="purchase-label" class="visually-hidden">Purchase options</p>
+
+          <label for="size">Size</label>
+          <select id="size" name="size">
+            <option value="s">S</option>
+            <option value="m" selected>M</option>
+            <option value="l">L</option>
+            <option value="xl">XL</option>
+          </select>
+
+          <label for="quantity">Quantity</label>
+          <input id="quantity" name="quantity" type="number" min="1" value="1">
+
+          <div class="actions">
+            <button type="button" class="add-to-cart" aria-disabled="true" disabled>Add to cart</button>
+            <a href="contact.html" class="help-link">Ask a question</a>
+          </div>
+        </form>
+
+        <aside class="meta">
+          <h3>Details</h3>
+          <ul>
+            <li>100% cotton</li>
+            <li>Machine wash cold</li>
+            <li>Made responsibly</li>
+          </ul>
+        </aside>
+      </section>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>&copy; Threadline Clothing Co.</p>
+    </div>
+  </footer>
+
+  <style>
+    /* Minimal helper for screen-reader only text */
+    .visually-hidden { position: absolute !important; height: 1px; width: 1px; overflow: hidden; clip: rect(1px, 1px, 1px, 1px); white-space: nowrap; }
+  </style>
+</body>
+</html>
