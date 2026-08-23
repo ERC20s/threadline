@@ -1,0 +1,8 @@
+[
+  {"id":1,"slug":"classic-tee","title":"Classic Tee","price":"$28","image":"assets/swatch-1.svg"},
+  {"id":2,"slug":"linen-shirt","title":"Linen Shirt","price":"$48","image":"assets/swatch-2.svg"},
+  {"id":3,"slug":"denim-jacket","title":"Denim Jacket","price":"$89","image":"assets/swatch-3.svg"},
+  {"id":4,"slug":"chino-pant","title":"Chino Pant","price":"$59","image":"assets/swatch-1.svg"},
+  {"id":5,"slug":"overshirt","title":"Overshirt","price":"$64","image":"assets/swatch-2.svg"},
+  {"id":6,"slug":"sweater","title":"Light Sweater","price":"$72","image":"assets/swatch-3.svg"}
+]

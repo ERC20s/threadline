@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Threadline — Products</title>
+  <link rel="stylesheet" href="styles/product-grid.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/">Threadline</a>
+      <nav class="top-nav" aria-label="Main navigation">
+        <a href="/">Shop</a>
+        <a href="lookbook.html">Lookbook</a>
+        <a href="about.html">About</a>
+        <a href="size-guide.html">Size guide</a>
+        <a href="contact.html">Contact</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <h1 class="page-title">Products</h1>
+    <section id="product-grid" class="product-grid" aria-live="polite">
+      <!-- Product cards will be injected here -->
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>&copy; Threadline Co. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script>
+    // Fallback product data used if fetching data/products.json fails (e.g. opened as file://)
+    const FALLBACK_PRODUCTS = [
+      {"id":1,"slug":"classic-tee","title":"Classic Tee","price":"$28","image":"assets/swatch-1.svg"},
+      {"id":2,"slug":"linen-shirt","title":"Linen Shirt","price":"$48","image":"assets/swatch-2.svg"},
+      {"id":3,"slug":"denim-jacket","title":"Denim Jacket","price":"89","image":"assets/swatch-3.svg"},
+      {"id":4,"slug":"chino-pant","title":"Chino Pant","price":"$59","image":"assets/swatch-1.svg"},
+      {"id":5,"slug":"overshirt","title":"Overshirt","price":"$64","image":"assets/swatch-2.svg"},
+      {"id":6,"slug":"sweater","title":"Light Sweater","price":"$72","image":"assets/swatch-3.svg"}
+    ];
+
+    function createCard(product) {
+      const a = document.createElement('a');
+      a.className = 'card';
+      a.href = 'products/' + product.slug + '.html';
+      a.setAttribute('aria-label', product.title + ' — ' + product.price);
+
+      const imgWrap = document.createElement('div');
+      imgWrap.className = 'card-image';
+      const img = document.createElement('img');
+      img.src = product.image;
+      img.alt = product.title + ' image';
+      img.loading = 'lazy';
+      img.width = 600;
+      img.height = 600;
+      imgWrap.appendChild(img);
+
+      const meta = document.createElement('div');
+      meta.className = 'card-meta';
+      const title = document.createElement('h2');
+      title.className = 'card-title';
+      title.textContent = product.title;
+      const price = document.createElement('div');
+      price.className = 'card-price';
+      price.textContent = product.price;
+
+      meta.appendChild(title);
+      meta.appendChild(price);
+
+      a.appendChild(imgWrap);
+      a.appendChild(meta);
+      return a;
+    }
+
+    function renderProducts(products) {
+      const grid = document.getElementById('product-grid');
+      grid.innerHTML = '';
+      products.forEach(p => grid.appendChild(createCard(p)));
+    }
+
+    // Try to fetch the data file; if it fails, use FALLBACK_PRODUCTS
+    fetch('data/products.json').then(r => {
+      if (!r.ok) throw new Error('Network response not ok');
+      return r.json();
+    }).then(data => {
+      renderProducts(data);
+    }).catch(() => {
+      renderProducts(FALLBACK_PRODUCTS);
+    });
+  </script>
+</body>
+</html>
