@@ -1,0 +1,21 @@
+# .d8a — who governs this repository, and how to run it.
+#
+# Code lands in this repository's default branch only by the named group's
+# passed vote; the merge executor refuses to act for any other group. Delete
+# this file to withdraw consent. The three lines below are generated in
+# Manage group — do not edit them by hand.
+version: 1
+group: d8a:batch-threadline
+proof: dlMpukYaW-XMzLORYJh34lzftS1z070iPy7K9cngU6Ln5zCNfTpyGnKSPEdFMVFJCSt6kOVmgNDl0N5sktQh0X8yj3rbeH_B8hJKkGwvwcVD128oFAEDfw6VfQgZfcU5Mbkd1zvCiYk4mpMu7_aXevEKRFQehgM-9TE-a0NcctRXPxSx7CHlJl5p9q5udzY3GVOIwslm9dCJ_kXo6Wx6pAUWzunwW1zS5ZbaM8JRm-BwAHK4v_7S9dDHWF6bsMsxUUrURvSvn-FtaVeuVrp3rDqyH1wEb53-vWJHHfUjAkmagfq0AXr-ZOI5zNySkqG15sy9wARHstTGvcTcgR7trQ
+
+# Where this repository runs live, if anywhere — the footer shows it as a globe.
+# url: https://example.com
+
+# How to run this repository. Yours to edit — the governance lines above are
+# not. One terminal per entry, launched together by the ▶ button in VS Code
+# (the VSD8A extension) and by nothing else.
+run:
+  {
+    "// no site yet": "README only - add the page files at the root, then delete the # below",
+    "// site": { "cmd": "npx --yes serve -l 5004 .", "port": 5004 }
+  }
