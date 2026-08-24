@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Products | Threadline</title>
+<style>
+  :root {
+    --color-bg: #faf9f7;
+    --color-text: #1a1a1a;
+    --color-muted: #6b6b6b;
+    --color-border: #e2e0dc;
+    --color-accent: #2f2f2f;
+    --max-width: 1200px;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--color-bg);
+    color: var(--color-text);
+    line-height: 1.5;
+  }
+
+  header.site-header {
+    border-bottom: 1px solid var(--color-border);
+    padding: 1rem 1.25rem;
+  }
+
+  .site-header .inner {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .logo {
+    font-weight: 700;
+    font-size: 1.25rem;
+    letter-spacing: 0.05em;
+    text-decoration: none;
+    color: var(--color-text);
+    text-transform: uppercase;
+  }
+
+  nav.site-nav ul {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin: 0;
+    padding: 0;
+  }
+
+  nav.site-nav a {
+    text-decoration: none;
+    color: var(--color-muted);
+    font-size: 0.95rem;
+  }
+
+  nav.site-nav a:hover,
+  nav.site-nav a:focus,
+  nav.site-nav a[aria-current="page"] {
+    color: var(--color-text);
+  }
+
+  main {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 2rem 1.25rem 3rem;
+  }
+
+  .page-heading {
+    margin-bottom: 1.5rem;
+  }
+
+  .page-heading h1 {
+    margin: 0 0 0.25rem;
+    font-size: 1.75rem;
+  }
+
+  .page-heading p {
+    margin: 0;
+    color: var(--color-muted);
+  }
+
+  .product-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .product-card {
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    overflow: hidden;
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .product-card .thumb {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: #f0efec;
+  }
+
+  .product-card .thumb svg {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .product-info {
+    padding: 0.85rem 1rem 1.1rem;
+  }
+
+  .product-info .name {
+    margin: 0 0 0.25rem;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .product-info .price {
+    margin: 0;
+    color: var(--color-muted);
+    font-size: 0.9rem;
+  }
+
+  footer.site-footer {
+    border-top: 1px solid var(--color-border);
+    padding: 1.5rem 1.25rem;
+    text-align: center;
+    color: var(--color-muted);
+    font-size: 0.85rem;
+  }
+
+  @media (max-width: 480px) {
+    .site-header .inner {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="logo" href="products.html">Threadline</a>
+    <nav class="site-nav" aria-label="Primary">
+      <ul>
+        <li><a href="products.html" aria-current="page">Shop</a></li>
+        <li><a href="product.html">Product</a></li>
+        <li><a href="lookbook.html">Lookbook</a></li>
+        <li><a href="about.html">About</a></li>
+        <li><a href="size-guide.html">Size Guide</a></li>
+        <li><a href="contact.html">Contact</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="page-heading">
+    <h1>All Products</h1>
+    <p>Considered basics, made to last. Browse the current collection.</p>
+  </div>
+
+  <section class="product-grid" aria-label="Product listing">
+
+    <a class="product-card" href="product.html">
+      <span class="thumb">
+        <svg viewBox="0 0 300 360" role="img" aria-labelledby="p1title">
+          <title id="p1title">Placeholder image for Field Jacket</title>
+          <rect width="300" height="360" fill="#d9d5cd"/>
+          <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="18" fill="#6b6b6b">Field Jacket</text>
+        </svg>
+      </span>
+      <span class="product-info">
+        <p class="name">Field Jacket</p>
+        <p class="price">$128.00</p>
+      </span>
+    </a>
+
+    <a class="product-card" href="product.html">
+      <span class="thumb">
+        <svg viewBox="0 0 300 360" role="img" aria-labelledby="p2title">
+          <title id="p2title">Placeholder image for Cotton Tee</title>
+          <rect width="300" height="360" fill="#d3ccc0"/>
+          <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="18" fill="#6b6b6b">Cotton Tee</text>
+        </svg>
+      </span>
+      <span class="product-info">
+        <p class="name">Cotton Tee</p>
+        <p class="price">$38.00</p>
+      </span>
+    </a>
+
+    <a class="product-card" href="product.html">
+      <span class="thumb">
+        <svg viewBox="0 0 300 360" role="img" aria-labelledby="p3title">
+          <title id="p3title">Placeholder image for Wide-Leg Trouser</title>
+          <rect width="300" height="360" fill="#cfd2c9"/>
+          <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="18" fill="#6b6b6b">Wide-Leg Trouser</text>
+        </svg>
+      </span>
+      <span class="product-info">
+        <p class="name">Wide-Leg Trouser</p>
+        <p class="price">$96.00</p>
+      </span>
+    </a>
+
+    <a class="product-card" href="product.html">
+      <span class="thumb">
+        <svg viewBox="0 0 300 360" role="img" aria-labelledby="p4title">
+          <title id="p4title">Placeholder image for Merino Knit</title>
+          <rect width="300" height="360" fill="#ded7c9"/>
+          <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="18" fill="#6b6b6b">Merino Knit</text>
+        </svg>
+      </span>
+      <span class="product-info">
+        <p class="name">Merino Knit</p>
+        <p class="price">$112.00</p>
+      </span>
+    </a>
+
+    <a class="product-card" href="product.html">
+      <span class="thumb">
+        <svg viewBox="0 0 300 360" role="img" aria-labelledby="p5title">
+          <title id="p5title">Placeholder image for Canvas Tote</title>
+          <rect width="300" height="360" fill="#d6d1c4"/>
+          <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="18" fill="#6b6b6b">Canvas Tote</text>
+        </svg>
+      </span>
+      <span class="product-info">
+        <p class="name">Canvas Tote</p>
+        <p class="price">$54.00</p>
+      </span>
+    </a>
+
+    <a class="product-card" href="product.html">
+      <span class="thumb">
+        <svg viewBox="0 0 300 360" role="img" aria-labelledby="p6title">
+          <title id="p6title">Placeholder image for Denim Shirt</title>
+          <rect width="300" height="360" fill="#c9cdd2"/>
+          <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="18" fill="#6b6b6b">Denim Shirt</text>
+        </svg>
+      </span>
+      <span class="product-info">
+        <p class="name">Denim Shirt</p>
+        <p class="price">$88.00</p>
+      </span>
+    </a>
+
+    <a class="product-card" href="product.html">
+      <span class="thumb">
+        <svg viewBox="0 0 300 360" role="img" aria-labelledby="p7title">
+          <title id="p7title">Placeholder image for Wool Overcoat</title>
+          <rect width="300" height="360" fill="#d0c9bd"/>
+          <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="18" fill="#6b6b6b">Wool Overcoat</text>
+        </svg>
+      </span>
+      <span class="product-info">
+        <p class="name">Wool Overcoat</p>
+        <p class="price">$210.00</p>
+      </span>
+    </a>
+
+    <a class="product-card" href="product.html">
+      <span class="thumb">
+        <svg viewBox="0 0 300 360" role="img" aria-labelledby="p8title">
+          <title id="p8title">Placeholder image for Linen Shorts</title>
+          <rect width="300" height="360" fill="#dad6cb"/>
+          <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="18" fill="#6b6b6b">Linen Shorts</text>
+        </svg>
+      </span>
+      <span class="product-info">
+        <p class="name">Linen Shorts</p>
+        <p class="price">$62.00</p>
+      </span>
+    </a>
+
+  </section>
+</main>
+
+<footer class="site-footer">
+  <p>&copy; 2026 Threadline Clothing Co. All rights reserved.</p>
+</footer>
+
+</body>
+</html>
