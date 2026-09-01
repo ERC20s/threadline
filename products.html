@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Threadline — Products</title>
+  <style>
+    :root{--max-width:980px;--gap:16px;--accent:#7c5cff;--muted:#6b7280}
+    html,body{height:100%}
+    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;margin:0;padding:24px;box-sizing:border-box;color:#0f172a;background:#fff;display:flex;justify-content:center}
+    .wrap{width:100%;max-width:var(--max-width)}
+    header h1{font-size:1.25rem;margin:0 0 8px}
+    .note{margin:0 0 16px;color:var(--muted);font-size:0.95rem}
+    a{color:var(--accent);text-decoration:none}
+    a:focus{outline:3px solid rgba(124,92,255,0.18);outline-offset:3px}
+
+    .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--gap)}
+    @media(min-width:800px){.grid{grid-template-columns:repeat(4,1fr)}}
+
+    .card{display:flex;flex-direction:column;gap:10px;text-decoration:none;color:inherit}
+    .thumb{border-radius:8px;overflow:hidden;background:#fff}
+    .thumb svg{display:block;width:100%;height:auto}
+
+    .name{font-weight:700;margin:0;font-size:0.95rem}
+    .price{color:#111827;font-weight:700}
+
+    .card:focus{box-shadow:0 0 0 4px rgba(124,92,255,0.08),0 2px 8px rgba(2,6,23,0.06);border-radius:8px}
+
+    .actions{margin-top:18px}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <h1 id="page-heading">Threadline — Products</h1>
+      <p class="note">A responsive product grid of placeholder items. Each thumbnail contains its own inline SVG <defs> with a unique gradient id to avoid duplicate references; SVGs expose accessible names. Replace placeholders with real assets before publishing.</p>
+    </header>
+
+    <section aria-labelledby="page-heading">
+      <div class="grid" role="list">
+
+        <a class="card" role="listitem" href="product.html" aria-labelledby="p1-name">
+          <div class="thumb">
+            <svg viewBox="0 0 400 400" role="img" aria-label="Everyday tee preview">
+              <defs>
+                <linearGradient id="g-1" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0" stop-color="#f3f0ff"/>
+                  <stop offset="1" stop-color="#ffffff"/>
+                </linearGradient>
+              </defs>
+              <rect width="400" height="400" rx="8" fill="url(#g-1)"/>
+              <g transform="translate(80,80) scale(0.6)" fill="#e6e6ea">
+                <path d="M160 0c-20 0-28 10-40 24-6 8-20 18-40 18s-34-10-40-18C0 10-8 0-28 0L0 40c10 14 20 20 36 34 20 20 44 36 76 36s56-16 76-36C450 60 470 46 480 34L508 0c-20 0-28 10-40 24-6 8-20 18-40 18s-34-10-40-18C360 10 352 0 332 0z"/>
+              </g>
+            </svg>
+          </div>
+          <div>
+            <h3 id="p1-name" class="name">Everyday Tee</h3>
+            <div class="price">$38</div>
+          </div>
+        </a>
+
+        <a class="card" role="listitem" href="product.html" aria-labelledby="p2-name">
+          <div class="thumb">
+            <svg viewBox="0 0 400 400" role="img" aria-label="Relaxed shirt preview">
+              <defs>
+                <linearGradient id="g-2" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0" stop-color="#fff7ed"/>
+                  <stop offset="1" stop-color="#ffffff"/>
+                </linearGradient>
+              </defs>
+              <rect width="400" height="400" rx="8" fill="url(#g-2)"/>
+            </svg>
+          </div>
+          <div>
+            <h3 id="p2-name" class="name">Relaxed Shirt</h3>
+            <div class="price">$48</div>
+          </div>
+        </a>
+
+        <a class="card" role="listitem" href="product.html" aria-labelledby="p3-name">
+          <div class="thumb">
+            <svg viewBox="0 0 400 400" role="img" aria-label="Lightweight hoodie preview">
+              <defs>
+                <linearGradient id="g-3" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0" stop-color="#effaf9"/>
+                  <stop offset="1" stop-color="#ffffff"/>
+                </linearGradient>
+              </defs>
+              <rect width="400" height="400" rx="8" fill="url(#g-3)"/>
+            </svg>
+          </div>
+          <div>
+            <h3 id="p3-name" class="name">Lightweight Hoodie</h3>
+            <div class="price">$68</div>
+          </div>
+        </a>
+
+        <a class="card" role="listitem" href="product.html" aria-labelledby="p4-name">
+          <div class="thumb">
+            <svg viewBox="0 0 400 400" role="img" aria-label="Casual pant preview">
+              <defs>
+                <linearGradient id="g-4" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0" stop-color="#f8fafc"/>
+                  <stop offset="1" stop-color="#ffffff"/>
+                </linearGradient>
+              </defs>
+              <rect width="400" height="400" rx="8" fill="url(#g-4)"/>
+            </svg>
+          </div>
+          <div>
+            <h3 id="p4-name" class="name">Casual Pant</h3>
+            <div class="price">$58</div>
+          </div>
+        </a>
+
+        <a class="card" role="listitem" href="product.html" aria-labelledby="p5-name">
+          <div class="thumb">
+            <svg viewBox="0 0 400 400" role="img" aria-label="Woven shirt preview">
+              <defs>
+                <linearGradient id="g-5" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0" stop-color="#fff1f2"/>
+                  <stop offset="1" stop-color="#ffffff"/>
+                </linearGradient>
+              </defs>
+              <rect width="400" height="400" rx="8" fill="url(#g-5)"/>
+            </svg>
+          </div>
+          <div>
+            <h3 id="p5-name" class="name">Woven Shirt</h3>
+            <div class="price">$52</div>
+          </div>
+        </a>
+
+        <a class="card" role="listitem" href="product.html" aria-labelledby="p6-name">
+          <div class="thumb">
+            <svg viewBox="0 0 400 400" role="img" aria-label="Classic cap preview">
+              <defs>
+                <linearGradient id="g-6" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0" stop-color="#eef2ff"/>
+                  <stop offset="1" stop-color="#ffffff"/>
+                </linearGradient>
+              </defs>
+              <rect width="400" height="400" rx="8" fill="url(#g-6)"/>
+            </svg>
+          </div>
+          <div>
+            <h3 id="p6-name" class="name">Classic Cap</h3>
+            <div class="price">$22</div>
+          </div>
+        </a>
+
+      </div>
+
+      <div class="actions">
+        <!-- d8a payments widget: copied from the repository .d8a payments block / product.html -->
+        <div id="group-store"></div>
+        <script>
+        (function () {
+          var BASE = "https://d8a.com";
+          var GROUP = "batch-threadline";
+          var esc = function (s) {
+            return String(s).replace(/[&<>\"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; });
+          };
+          var el = document.getElementById("group-store");
+          // The handshake: an order id is only proof once the platform says so.
+          var verify = function (id) {
+            return fetch(BASE + "/api/v1/store/orders/" + encodeURIComponent(id) + "?group=" + encodeURIComponent(GROUP))
+              .then(function (r) { return r.ok ? r.json() : null; })
+              .then(function (d) { return d && d.paid ? d.order : null; })
+              .catch(function () { return null; });
+          };
+          window.groupStoreVerify = verify;
+          var back = (location.search.match(/[?&]d8a_order=([A-Za-z0-9_-]+)/) || [])[1];
+          if (back) verify(back).then(function (o) {
+            if (!o) return;
+            window.groupStorePaid = o;
+            if (el && el.parentNode) {
+              var p = document.createElement("p");
+              p.setAttribute("data-paid", o.id);
+              p.style.cssText = "font:13px system-ui,sans-serif;color:#059669";
+              p.innerHTML = "Paid: " + esc(o.itemName) + (o.quantity > 1 ? " \u00d7"+o.quantity : "") + " \u2014 order " + esc(o.id);
+              el.parentNode.insertBefore(p, el);
+            }
+            document.dispatchEvent(new CustomEvent("group-store:paid", { detail: o }));
+          });
+          fetch(BASE + "/api/v1/store/items?group=" + encodeURIComponent(GROUP))
+            .then(function (r) { return r.json(); })
+            .then(function (s) {
+              if (!el || !s.items) return;
+              if (!s.items.length) { el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now.</p>'; return; }
+              el.innerHTML = s.items.map(function (it) {
+                return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif">' +
+                  '<div style="flex:1"><b>' + esc(it.name) + '</b>' +
+                  (it.description ? '<div style="font-size:12px;color:#6b7280">' + esc(it.description) + '</div>' : '') + '</div>' +
+                  '<span>' + esc(it.price) + '</span>' +
+                  '<a href="' + esc(it.payUrl) + '" data-item="' + esc(it.id) + '" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a></div>';
+              }).join("") + '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group.url) + '" style="color:#7c5cff">' + esc(s.group.name) + '</a></p>';
+              el.addEventListener("click", function (e) {
+                var a = e.target && e.target.closest ? e.target.closest("a[data-item]") : null;
+                if (!a || !s.checkout.enabled) return;
+                e.preventDefault();
+                a.textContent = "Opening\u2026";
+                // Come back to this page — minus any earlier receipt on the URL.
+                var here = location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1");
+                fetch(s.checkout.url, { method: "POST", headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ group: GROUP, item: a.getAttribute("data-item"), quantity: 1, returnUrl: here }) })
+                  .then(function (r) { return r.json(); })
+                  .then(function (d) { if (d.url) { location.href = d.url; } else { a.textContent = "Buy"; location.href = a.href; } })
+                  .catch(function () { location.href = a.href; });
+              });
+            });
+        })();
+        </script>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
