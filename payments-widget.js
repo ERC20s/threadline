@@ -36,6 +36,11 @@
   window.__d8aPaymentsWidgetStoreCache = window.__d8aPaymentsWidgetStoreCache || {};
   var storeFetchCache = window.__d8aPaymentsWidgetStoreCache;
 
+  // Shared map for concurrent checkout attempts across containers. Keys are
+  // namespaced by group so the same item in different groups is distinct.
+  window.__d8aPaymentsWidgetOpening = window.__d8aPaymentsWidgetOpening || {};
+  var globalOpening = window.__d8aPaymentsWidgetOpening;
+
   // Helper: return the current set of #group-store containers on demand.
   var currentContainers = function () {
     try { return Array.prototype.slice.call(document.querySelectorAll('#group-store')); } catch (e) { return []; }
@@ -262,8 +267,6 @@
   // Attach a per-container buy click listener that uses the container's stored store data.
   var ensureBuyListener = function (el) {
     if (el.getAttribute('data-d8a-listener')) return;
-    // We'll keep a set of anchors currently opening to prevent duplicate checkouts.
-    var opening = {};
     el.addEventListener('click', function (e) {
       var a = e.target && e.target.closest ? e.target.closest('a[data-item]') : null;
       if (!a) return;
@@ -290,24 +293,25 @@
         }
       } catch (e) {}
 
-      // Prevent duplicate concurrent checkouts for the same anchor.
-      var key = itemId + '::' + qty;
-      if (opening[key]) return;
-      opening[key] = true;
+      // Prevent duplicate concurrent checkouts for the same group+item+qty across all containers.
+      var group = getGroupForElement(el);
+      var key = group + '::' + itemId + '::' + qty;
+      if (globalOpening[key]) return;
+      try { globalOpening[key] = true; } catch (e) {}
 
       e.preventDefault();
       var originalText = a.textContent;
-      a.textContent = "Opening\u2026";
+      a.textContent = "Opening…";
 
       // Build the return URL: current page without any earlier d8a_order param
       var here = location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1");
 
       // POST to the store's checkout URL as JSON
-      var body = JSON.stringify({ group: getGroupForElement(el), item: itemId, quantity: qty, returnUrl: here });
+      var body = JSON.stringify({ group: group, item: itemId, quantity: qty, returnUrl: here });
       doFetch((store && store.checkout && store.checkout.url) ? store.checkout.url : (BASE + '/api/v1/store/checkout'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body }, 10000)
         .then(function (r) { return r.json ? r.json() : null; })
         .then(function (d) {
-          opening[key] = false;
+          try { delete globalOpening[key]; } catch (e) {}
           if (d && d.url) {
             location.href = d.url;
             return;
@@ -317,7 +321,7 @@
           var safe = sanitizeUrl(a.getAttribute('href')) || (store && store.group && store.group.url) || a.getAttribute('href');
           location.href = safe;
         }).catch(function () {
-          opening[key] = false;
+          try { delete globalOpening[key]; } catch (e) {}
           try { a.textContent = originalText; } catch (e) {}
           var safe2 = sanitizeUrl(a.getAttribute('href')) || (store && store.group && store.group.url) || a.getAttribute('href');
           location.href = safe2;
@@ -339,64 +343,42 @@
 
   // Build item markup using DOM APIs and attach listeners. Use sanitizeUrl to avoid unsafe urls.
   var buildItemsInto = function (el, store) {
-    // Clear container
-    while (el.firstChild) el.removeChild(el.firstChild);
+    if (!el || !store) return;
+    try { el.innerHTML = ''; } catch (e) {}
 
-    if (!store || !store.items) {
-      renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">There was an error loading the store.</p>');
-      ensureRetryListener(el);
-      return;
-    }
-
-    if (!store.items.length) {
-      el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now.</p>';
+    if (!store.items || !store.items.length) {
+      var p0 = document.createElement('p');
+      p0.style.cssText = "font:13px system-ui,sans-serif;color:#9ca3af";
+      p0.textContent = 'Nothing for sale right now.';
+      el.appendChild(p0);
       return;
     }
 
     store.items.forEach(function (it) {
-      var row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif';
-
-      var left = document.createElement('div');
-      left.style.cssText = 'flex:1';
-      var b = document.createElement('b');
-      b.textContent = it.name || '';
-      left.appendChild(b);
-      if (it.description) {
-        var desc = document.createElement('div');
-        desc.style.cssText = 'font-size:12px;color:#6b7280';
-        desc.textContent = it.description;
-        left.appendChild(desc);
-      }
-
-      var price = document.createElement('span');
-      price.textContent = it.price != null ? String(it.price) : '';
-
-      var a = document.createElement('a');
-      // sanitize payUrl and fall back to group url when unsafe
-      var safePay = sanitizeUrl(it.payUrl) || (store && store.group && store.group.url) || '#';
-      a.setAttribute('href', safePay);
-      a.setAttribute('data-item', it.id != null ? String(it.id) : '');
-      a.setAttribute('role', 'link');
-      a.style.cssText = 'background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none';
-      a.textContent = 'Buy';
-      // Provide a contextual aria-label when possible
-      try { a.setAttribute('aria-label', 'Buy ' + (it.name || '').replace(/\s+/g, ' ').trim()); } catch (e) {}
-
-      row.appendChild(left);
-      row.appendChild(price);
-      row.appendChild(a);
-      el.appendChild(row);
+      try {
+        var row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif';
+        var left = document.createElement('div'); left.style.flex = '1';
+        var b = document.createElement('b'); b.textContent = it.name; left.appendChild(b);
+        if (it.description) { var d = document.createElement('div'); d.style.fontSize = '12px'; d.style.color = '#6b7280'; d.textContent = it.description; left.appendChild(d); }
+        row.appendChild(left);
+        var price = document.createElement('span'); price.textContent = it.price; row.appendChild(price);
+        var a = document.createElement('a');
+        var safe = sanitizeUrl(it.payUrl) || (store && store.group && store.group.url) || '#';
+        a.setAttribute('href', safe);
+        a.setAttribute('data-item', it.id);
+        a.style.cssText = 'background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none';
+        a.textContent = 'Buy';
+        row.appendChild(a);
+        el.appendChild(row);
+      } catch (e) {}
     });
 
-    // Footer link to storefront
     var p = document.createElement('p');
-    p.style.cssText = 'font:11px system-ui,sans-serif;color:#9ca3af';
-    var text = document.createTextNode('Sold by ');
-    p.appendChild(text);
+    p.style.cssText = "font:11px system-ui,sans-serif;color:#9ca3af";
     var link = document.createElement('a');
-    link.style.cssText = 'color:#7c5cff';
-    link.setAttribute('href', (store && store.group && store.group.url) ? sanitizeUrl(store.group.url) || '#' : '#');
+    link.setAttribute('href', (store && store.group && store.group.url) ? store.group.url : '');
+    link.style.color = '#7c5cff';
     link.textContent = store && store.group && store.group.name ? store.group.name : '';
     p.appendChild(link);
     el.appendChild(p);
