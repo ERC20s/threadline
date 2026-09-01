@@ -276,6 +276,11 @@
         return;
       }
 
+      // Prevent duplicate checkout requests: if this container is already
+      // performing a checkout, ignore subsequent clicks and do not re-run the
+      // flow. Also ensure the click does not navigate the page.
+      if (el.getAttribute('data-d8a-checkout-busy')) { try { e.preventDefault(); } catch (ex) {} ; return; }
+
       e.preventDefault();
 
       // Compute quantity defensively: per-link data-quantity overrides container data-default-quantity, otherwise default to 1.
@@ -305,6 +310,9 @@
         return;
       }
 
+      // Mark this container busy to prevent duplicate checkout requests.
+      try { el.setAttribute('data-d8a-checkout-busy', '1'); } catch (e) {}
+
       // Use doFetch for the checkout POST so a hung request won't leave the UI stuck
       // and so environments without fetch still work.
       doFetch(safeCheckout, { method: "POST", headers: { "Content-Type": "application/json" },
@@ -331,6 +339,7 @@
         .finally(function () {
           // Always clear busy state on the container when the flow finishes (if the page hasn't navigated away).
           try { el.removeAttribute('aria-busy'); } catch (e) {}
+          try { el.removeAttribute('data-d8a-checkout-busy'); } catch (e) {}
         });
     });
     el.setAttribute('data-d8a-listener', '1');
@@ -358,50 +367,44 @@
     // in-flight request and avoid duplicate network traffic. Keyed by group slug.
     var localGroup = getGroupForElement(el);
     var cacheKey = localGroup;
-    var fetchPromise = storeFetchCache[cacheKey];
-    if (!fetchPromise) {
-      fetchPromise = doFetch(BASE + "/api/v1/store/items?group=" + encodeURIComponent(localGroup))
-        .then(function (r) { return r.json(); });
-      storeFetchCache[cacheKey] = fetchPromise;
+    var p = null;
+    try { p = storeFetchCache[cacheKey]; } catch (e) { p = null; }
+    if (!p) {
+      p = doFetch(BASE + "/api/v1/store/items?group=" + encodeURIComponent(localGroup), null, 10000)
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .catch(function () { return null; });
+      try { storeFetchCache[cacheKey] = p; } catch (e) {}
     }
 
-    fetchPromise.then(function (s) {
-      // Store the fetched data on the element for the buy handler to use.
-      el._d8a_store = s;
+    p.then(function (s) {
       if (!s || !s.items) {
-        renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now. <a href="' + esc(BASE + '/g/' + localGroup) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>');
-        ensureRetryListener(el);
-        ensureBuyListener(el);
-        return;
-      }
-      if (!s.items.length) {
-        renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now. <a href="' + esc(BASE + '/g/' + localGroup) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>');
+        renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now.</p>');
         ensureRetryListener(el);
         ensureBuyListener(el);
         return;
       }
 
+      if (!s.items.length) { el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now.</p>'; return; }
       el.innerHTML = s.items.map(function (it) {
-        // Sanitize the per-item payUrl before inserting into an anchor href. If
-        // the item-provided URL is unsafe, use the storefront fallback instead.
-        var safeHref = sanitizeUrl(it.payUrl) || (BASE + '/g/' + localGroup);
         return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif">' +
           '<div style="flex:1"><b>' + esc(it.name) + '</b>' +
           (it.description ? '<div style="font-size:12px;color:#6b7280">' + esc(it.description) + '</div>' : '') + '</div>' +
           '<span>' + esc(it.price) + '</span>' +
-          '<a href="' + esc(safeHref) + '" data-item="' + esc(it.id) + '" aria-label="' + esc('Buy ' + it.name + ' for ' + it.price) + '" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a></div>';
-      }).join('') + '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group.url) + '" style="color:#7c5cff">' + esc(s.group.name) + '</a></p>';
+          '<a href="' + esc(it.payUrl) + '" data-item="' + esc(it.id) + '" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a></div>';
+      }).join("") + '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group.url) + '" style="color:#7c5cff">' + esc(s.group.name) + '</a></p>';
 
-      ensureBuyListener(el);
+      // Store a reference to the store payload on the container so the click handler can use it without another network roundtrip.
+      try { el._d8a_store = s; } catch (e) { el._d8a_store = null; }
+
       ensureRetryListener(el);
+      ensureBuyListener(el);
     }).catch(function () {
-      // Clear the cached promise on failure so a subsequent Retry gets a fresh attempt.
-      try { delete storeFetchCache[cacheKey]; } catch (e) { storeFetchCache[cacheKey] = undefined; }
-      renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now. <a href="' + esc(BASE + '/g/' + localGroup) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>');
+      renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now.</p>');
       ensureRetryListener(el);
       ensureBuyListener(el);
     }).finally(function () {
       try { el.removeAttribute('aria-busy'); } catch (e) {}
+      try { el.removeAttribute('data-d8a-checkout-busy'); } catch (e) {}
     });
   };
 
@@ -412,7 +415,7 @@
     if (typeof slug === 'string' && slug) {
       try { delete storeFetchCache[slug]; } catch (e) { storeFetchCache[slug] = undefined; }
       // Re-render only containers that resolve to this slug.
-      currentContainers().forEach(function (el) { try { if (getGroupForElement(el) === slug) fetchAndRender(el); } catch (e) {} });
+      currentContainers().forEach(function (el) { try { if (getGroupForElement(el) === slug) { try { el.removeAttribute('data-d8a-checkout-busy'); } catch (e) {} fetchAndRender(el); } } catch (e) {} });
       return;
     }
     // No slug provided: clear all cached fetches and re-render every container.
@@ -423,7 +426,7 @@
         }
       }
     } catch (e) {}
-    currentContainers().forEach(function (el) { try { fetchAndRender(el); } catch (e) {} });
+    currentContainers().forEach(function (el) { try { try { el.removeAttribute('data-d8a-checkout-busy'); } catch (e) {} fetchAndRender(el); } catch (e) {} });
   };
 
   // Optional MutationObserver: discover #group-store elements added after the
