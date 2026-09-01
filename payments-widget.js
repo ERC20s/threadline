@@ -49,58 +49,92 @@
     document.dispatchEvent(new CustomEvent("group-store:paid", { detail: o }));
   });
 
-  // Before loading items mark the containers busy and ensure aria-live is present.
-  if (els.length) els.forEach(function (el) { el.setAttribute('aria-live', el.getAttribute('aria-live') || 'polite'); el.setAttribute('aria-busy', 'true'); });
+  // Helper: render an error / empty message with a Retry control into a container.
+  var renderMessageWithRetry = function (el, htmlMessage) {
+    var retryBtn = '<button data-d8a-retry style="margin-left:10px;background:transparent;border:1px solid #e5e7eb;padding:6px 10px;border-radius:6px;color:#111;cursor:pointer">Retry</button>';
+    el.innerHTML = htmlMessage + retryBtn;
+  };
 
-  // Load items, render widget into every matching container. If the network or API fails, show a friendly message.
-  fetch(BASE + "/api/v1/store/items?group=" + encodeURIComponent(GROUP))
-    .then(function (r) { return r.json(); })
-    .then(function (s) {
-      // We deliberately do not early-return here without allowing the final step to clear aria-busy.
-      if (!els.length) return s;
-      els.forEach(function (el) {
+  // Attach a per-container retry listener if not already attached.
+  var ensureRetryListener = function (el) {
+    if (el.getAttribute('data-d8a-retry-listener')) return;
+    el.addEventListener('click', function (e) {
+      var btn = e.target && e.target.closest ? e.target.closest('[data-d8a-retry]') : null;
+      if (!btn) return;
+      e.preventDefault();
+      // Re-run the fetch/render flow for only this container.
+      fetchAndRender(el);
+    });
+    el.setAttribute('data-d8a-retry-listener', '1');
+  };
+
+  // Attach a per-container buy click listener that uses the container's stored store data.
+  var ensureBuyListener = function (el) {
+    if (el.getAttribute('data-d8a-listener')) return;
+    el.addEventListener('click', function (e) {
+      var a = e.target && e.target.closest ? e.target.closest('a[data-item]') : null;
+      if (!a) return;
+      var s = el._d8a_store;
+      if (!s || !s.checkout.enabled) return;
+      e.preventDefault();
+      a.textContent = "Opening\u2026";
+      var here = location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1");
+      fetch(s.checkout.url, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ group: GROUP, item: a.getAttribute("data-item"), quantity: 1, returnUrl: here }) })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (d.url) { location.href = d.url; } else { a.textContent = "Buy"; location.href = a.href; } })
+        .catch(function () { location.href = a.href; });
+    });
+    el.setAttribute('data-d8a-listener', '1');
+  };
+
+  // Fetch and render only for a specific container.
+  var fetchAndRender = function (el) {
+    try { el.setAttribute('aria-live', el.getAttribute('aria-live') || 'polite'); } catch (e) {}
+    try { el.setAttribute('aria-busy', 'true'); } catch (e) {}
+    // Show a small loading message so users know something is happening.
+    el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Loading</p>';
+
+    fetch(BASE + "/api/v1/store/items?group=" + encodeURIComponent(GROUP))
+      .then(function (r) { return r.json(); })
+      .then(function (s) {
+        // Store the fetched data on the element for the buy handler to use.
+        el._d8a_store = s;
         if (!s || !s.items) {
-          el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now. <a href="' + esc(BASE + '/g/' + GROUP) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>';
+          renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now. <a href="' + esc(BASE + '/g/' + GROUP) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>');
+          ensureRetryListener(el);
+          ensureBuyListener(el);
           return;
         }
         if (!s.items.length) {
-          el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now. <a href="' + esc(BASE + '/g/' + GROUP) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>';
+          renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now. <a href="' + esc(BASE + '/g/' + GROUP) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>');
+          ensureRetryListener(el);
+          ensureBuyListener(el);
           return;
         }
+
         el.innerHTML = s.items.map(function (it) {
           return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif">' +
             '<div style="flex:1"><b>' + esc(it.name) + '</b>' +
             (it.description ? '<div style="font-size:12px;color:#6b7280">' + esc(it.description) + '</div>' : '') + '</div>' +
             '<span>' + esc(it.price) + '</span>' +
             '<a href="' + esc(it.payUrl) + '" data-item="' + esc(it.id) + '" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a></div>';
-        }).join("") + '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group.url) + '" style="color:#7c5cff">' + esc(s.group.name) + '</a></p>';
+        }).join('') + '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group.url) + '" style="color:#7c5cff">' + esc(s.group.name) + '</a></p>';
 
-        // Avoid attaching the listener multiple times to the same element in case this file is executed more than once in contexts
-        // where the guard might not apply; mark attached containers.
-        if (!el.getAttribute('data-d8a-listener')) {
-          el.addEventListener("click", function (e) {
-            var a = e.target && e.target.closest ? e.target.closest("a[data-item]") : null;
-            if (!a || !s.checkout.enabled) return;
-            e.preventDefault();
-            a.textContent = "Opening\u2026";
-            // Come back to this page — minus any earlier receipt on the URL.
-            var here = location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1");
-            fetch(s.checkout.url, { method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ group: GROUP, item: a.getAttribute("data-item"), quantity: 1, returnUrl: here }) })
-              .then(function (r) { return r.json(); })
-              .then(function (d) { if (d.url) { location.href = d.url; } else { a.textContent = "Buy"; location.href = a.href; } })
-              .catch(function () { location.href = a.href; });
-          });
-          el.setAttribute('data-d8a-listener', '1');
-        }
+        ensureBuyListener(el);
+        ensureRetryListener(el);
+      })
+      .catch(function () {
+        renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now. <a href="' + esc(BASE + '/g/' + GROUP) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>');
+        ensureRetryListener(el);
+        ensureBuyListener(el);
+      })
+      .then(function () {
+        try { el.removeAttribute('aria-busy'); } catch (e) {}
       });
-      return s;
-    })
-    .catch(function () {
-      if (els.length) els.forEach(function (el) { el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now. <a href="' + esc(BASE + '/g/' + GROUP) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>'; });
-    })
-    .then(function () {
-      // Always clear aria-busy on every code path after the fetch completes.
-      if (els.length) els.forEach(function (el) { try { el.removeAttribute('aria-busy'); } catch (e) {} });
-    });
+  };
+
+  // Kick off per-container loads so each one can be retried independently.
+  if (els.length) els.forEach(function (el) { fetchAndRender(el); });
+
 })();
