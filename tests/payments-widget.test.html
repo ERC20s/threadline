@@ -32,6 +32,10 @@
       <div id="group-store" data-d8a-group="other-group"></div>
     </div>
     <div>
+      <h3>Checkout group (checkout-group)</h3>
+      <div id="group-store" data-d8a-group="checkout-group"></div>
+    </div>
+    <div>
       <h3>Retry group (retry-group)</h3>
       <form onsubmit="window._submitted = true; return false;">
         <div id="group-store" data-d8a-group="retry-group"></div>
@@ -56,6 +60,7 @@
   (function () {
     var BASE = 'https://d8a.com';
     window.__testFetchCounts = {};
+    window.__testCheckoutCount = 0;
 
     // Stateful behavior: retry-group first call fails, second call succeeds.
     var callState = { 'retry-group': 0 };
@@ -94,6 +99,11 @@
           return jsonResponse({ items: [], group: { name: 'Other', url: 'https://d8a.com/g/other-group' }, checkout: { enabled: false } }, true);
         }
 
+        // checkout-group: present a checkout-enabled store with one item
+        if (g === 'checkout-group') {
+          return jsonResponse({ items: [ { id: 'c1', name: 'Checkout Tee', price: '$15', payUrl: '#' } ], group: { name: 'Checkout', url: '#' }, checkout: { enabled: true, url: BASE + '/api/v1/store/checkout' } }, true);
+        }
+
         // default fallback
         return jsonResponse({ items: [], group: { name: g, url: BASE + '/g/' + g }, checkout: { enabled: false } }, true);
       }
@@ -109,8 +119,19 @@
         return jsonResponse({ paid: false }, true);
       }
 
-      // checkout endpoint: return a benign url
+      // checkout endpoint: increment counter for test and return no redirect for checkout-group
       if (url.indexOf('/api/v1/store/checkout') !== -1) {
+        try {
+          // attempt to read group from POST body (if provided)
+          var body = opts && opts.body ? JSON.parse(opts.body) : null;
+          var grp = body && body.group ? body.group : null;
+          if (grp === 'checkout-group') {
+            window.__testCheckoutCount = (window.__testCheckoutCount || 0) + 1;
+            // return a benign response with no 'url' so the widget falls back to the anchor href ('#')
+            return jsonResponse({}, true);
+          }
+        } catch (e) {}
+        // other callers: return a benign redirect URL
         return jsonResponse({ url: 'https://d8a.com/checkout' }, true);
       }
 
@@ -148,7 +169,25 @@
         note('groupStoreVerify-paid', false, 'groupStoreVerify not found');
       }
 
-      // 4) Retry control: retry-group should show Retry button, clicking it should trigger a second network attempt and render items
+      // 4) Prevent duplicate checkout: clicking Buy twice should only POST once for checkout-group
+      (function(){
+        var checkoutContainer = document.querySelector('#fixtures [data-d8a-group="checkout-group"]') || document.querySelector('[data-d8a-group="checkout-group"]');
+        setTimeout(function(){
+          var anchor = checkoutContainer && checkoutContainer.querySelector('a[data-item="c1"]');
+          var hadAnchor = !!anchor;
+          if (!hadAnchor) { note('prevent-duplicate-checkout', false, 'anchor not found'); return; }
+          // simulate two rapid clicks
+          anchor.click(); anchor.click();
+          // wait for widget to perform checkout POSTs
+          setTimeout(function(){
+            var count = window.__testCheckoutCount || 0;
+            var ok = (count === 1) && !!anchor;
+            note('prevent-duplicate-checkout', ok, 'checkout POSTs=' + count + ' anchorExists=' + (!!anchor));
+          }, 600);
+        }, 400);
+      })();
+
+      // 5) Retry control: retry-group should show Retry button, clicking it should trigger a second network attempt and render items
       var retryContainer = document.querySelector('#fixtures div [data-d8a-group="retry-group"]') || document.querySelector('#fixtures [data-d8a-group="retry-group"]') || document.querySelector('[data-d8a-group="retry-group"]');
 
       setTimeout(function(){
@@ -173,7 +212,7 @@
       // Final aggregator after a bit more time
       setTimeout(function(){
         note('final', true, 'Manual-run tests completed; review individual PASS/FAIL lines above.');
-      }, 1200);
+      }, 1400);
 
     } catch (e) { note('runChecks', false, String(e)); }
   }
