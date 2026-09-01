@@ -37,6 +37,11 @@
         <div id="group-store" data-d8a-group="retry-group"></div>
       </form>
     </div>
+    <div>
+      <h3>Checkout group (checkout-group)</h3>
+      <!-- separate fixture for checkout testing -->
+      <div id="group-store" data-d8a-group="checkout-group"></div>
+    </div>
   </div>
 
   <script>
@@ -57,6 +62,10 @@
     var BASE = 'https://d8a.com';
     window.__testFetchCounts = {};
 
+    // For checkout testing: count POSTs and expose a promise that resolves on first POST.
+    window.__testCheckoutCount = 0;
+    window.__testCheckoutSeen = new Promise(function (res) { window.__resolveTestCheckoutSeen = res; });
+
     // Stateful behavior: retry-group first call fails, second call succeeds.
     var callState = { 'retry-group': 0 };
 
@@ -65,7 +74,7 @@
     }
 
     window.fetch = function (url, opts) {
-      // count
+      // count items fetches per group when present in query
       try {
         var m = url.match(/[?&]group=([^&]+)/);
         var g = m ? decodeURIComponent(m[1]) : null;
@@ -94,6 +103,11 @@
           return jsonResponse({ items: [], group: { name: 'Other', url: 'https://d8a.com/g/other-group' }, checkout: { enabled: false } }, true);
         }
 
+        // checkout-group: provide an item and enable checkout pointing at the checkout endpoint
+        if (g === 'checkout-group') {
+          return jsonResponse({ items: [ { id: 'c1', name: 'Checkout Tee', price: '$20', payUrl: 'https://d8a.com/g/checkout-group' } ], group: { name: 'Checkout', url: 'https://d8a.com/g/checkout-group' }, checkout: { enabled: true, url: BASE + '/api/v1/store/checkout' } }, true);
+        }
+
         // default fallback
         return jsonResponse({ items: [], group: { name: g, url: BASE + '/g/' + g }, checkout: { enabled: false } }, true);
       }
@@ -109,9 +123,18 @@
         return jsonResponse({ paid: false }, true);
       }
 
-      // checkout endpoint: return a benign url
+      // checkout endpoint: increment POST count and resolve seen-promise on first POST; return a benign empty response (no redirect url)
       if (url.indexOf('/api/v1/store/checkout') !== -1) {
-        return jsonResponse({ url: 'https://d8a.com/checkout' }, true);
+        try {
+          if (opts && opts.method === 'POST') {
+            window.__testCheckoutCount = (window.__testCheckoutCount || 0) + 1;
+            if (window.__testCheckoutCount === 1 && typeof window.__resolveTestCheckoutSeen === 'function') {
+              try { window.__resolveTestCheckoutSeen(); } catch (e) {}
+            }
+          }
+        } catch (e) {}
+        // Return an empty object so the widget does not perform a platform redirect (it will fall back to anchor href behavior)
+        return jsonResponse({}, true);
       }
 
       // anything else: passthrough to real fetch if available
@@ -148,7 +171,30 @@
         note('groupStoreVerify-paid', false, 'groupStoreVerify not found');
       }
 
-      // 4) Retry control: retry-group should show Retry button, clicking it should trigger a second network attempt and render items
+      // 4) Prevent duplicate checkout POSTs: find Buy anchor for checkout-group and click twice rapidly, then wait for the mocked POST to appear once
+      setTimeout(function() {
+        try {
+          var checkoutContainer = document.querySelector('#fixtures [data-d8a-group="checkout-group"]') || document.querySelector('[data-d8a-group="checkout-group"]');
+          var checkoutAnchor = checkoutContainer && checkoutContainer.querySelector('a[data-item]');
+          if (!checkoutAnchor) { note('prevent-duplicate-checkout', false, 'checkout anchor not found'); return; }
+
+          // Ensure counters are present
+          window.__testCheckoutCount = window.__testCheckoutCount || 0;
+          // Simulate two rapid clicks
+          checkoutAnchor.click(); checkoutAnchor.click();
+
+          // Wait for the mock to observe the POST, with a timeout
+          var seenPromise = window.__testCheckoutSeen || Promise.reject(new Error('no-watch'));
+          var timeout = new Promise(function(_, rej){ setTimeout(function(){ rej(new Error('timeout waiting for checkout POST')); }, 2000); });
+          Promise.race([seenPromise, timeout]).then(function(){
+            var okCount = (window.__testCheckoutCount === 1);
+            var exists = document.body.contains(checkoutAnchor);
+            note('prevent-duplicate-checkout', okCount && exists, 'checkout posts=' + window.__testCheckoutCount + ' anchorExists=' + exists);
+          }).catch(function(e){ note('prevent-duplicate-checkout', false, String(e)); });
+        } catch (e) { note('prevent-duplicate-checkout', false, String(e)); }
+      }, 300);
+
+      // 5) Retry control: retry-group should show Retry button, clicking it should trigger a second network attempt and render items
       var retryContainer = document.querySelector('#fixtures div [data-d8a-group="retry-group"]') || document.querySelector('#fixtures [data-d8a-group="retry-group"]') || document.querySelector('[data-d8a-group="retry-group"]');
 
       setTimeout(function(){
@@ -173,7 +219,7 @@
       // Final aggregator after a bit more time
       setTimeout(function(){
         note('final', true, 'Manual-run tests completed; review individual PASS/FAIL lines above.');
-      }, 1200);
+      }, 2200);
 
     } catch (e) { note('runChecks', false, String(e)); }
   }
