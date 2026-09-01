@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>payments-widget.js — browser test</title>
+  <style>
+    body{font-family:system-ui,Arial,sans-serif;padding:18px}
+    .ok{color:#059669}
+    .fail{color:#b91c1c}
+    .case{margin:8px 0}
+    #fixtures{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:12px}
+    #fixtures > div{border:1px dashed #e5e7eb;padding:10px;min-height:80px}
+  </style>
+</head>
+<body>
+  <h1>payments-widget.js — browser-run test page</h1>
+  <div id="results"></div>
+  <div id="fixtures">
+    <div>
+      <h3>Default group (batch-threadline)</h3>
+      <!-- default group: no data-d8a-group attr -->
+      <div id="group-store"></div>
+    </div>
+    <div>
+      <h3>Explicit same group (batch-threadline)</h3>
+      <!-- duplicate id intentionally to exercise multi-container handling -->
+      <div id="group-store" data-d8a-group="batch-threadline"></div>
+    </div>
+    <div>
+      <h3>Different group (other-group)</h3>
+      <div id="group-store" data-d8a-group="other-group"></div>
+    </div>
+    <div>
+      <h3>Retry group (retry-group)</h3>
+      <div id="group-store" data-d8a-group="retry-group"></div>
+    </div>
+  </div>
+
+  <script>
+  // Simple test harness
+  var resultsEl = document.getElementById('results');
+  function note(name, ok, msg) {
+    var d = document.createElement('div'); d.className = 'case';
+    var s = document.createElement('span'); s.textContent = (ok ? 'PASS' : 'FAIL') + ' — ' + name + ': ';
+    s.className = ok ? 'ok' : 'fail';
+    d.appendChild(s);
+    var m = document.createElement('span'); m.textContent = ' ' + (msg || ''); d.appendChild(m);
+    resultsEl.appendChild(d);
+    console[name==='final' ? (ok? 'log':'error') : (ok ? 'log' : 'error')](name, msg || '');
+  }
+
+  // Mock fetch to control network responses and count requests.
+  (function () {
+    var BASE = 'https://d8a.com';
+    window.__testFetchCounts = {};
+
+    // Stateful behavior: retry-group first call fails, second call succeeds.
+    var callState = { 'retry-group': 0 };
+
+    function jsonResponse(obj, ok) {
+      return Promise.resolve({ ok: !!ok, status: ok?200:500, json: function(){ return Promise.resolve(obj); } });
+    }
+
+    window.fetch = function (url, opts) {
+      // count
+      try {
+        var m = url.match(/[?&]group=([^&]+)/);
+        var g = m ? decodeURIComponent(m[1]) : null;
+        if (url.indexOf('/api/v1/store/items') !== -1 && g) {
+          window.__testFetchCounts[g] = (window.__testFetchCounts[g] || 0) + 1;
+        }
+      } catch (e) {}
+
+      // items endpoint
+      if (url.indexOf('/api/v1/store/items') !== -1) {
+        var g = (url.match(/[?&]group=([^&]+)/) || [])[1] || '';
+        g = decodeURIComponent(g);
+        // retry-group: first call fails (network reject), second succeeds
+        if (g === 'retry-group') {
+          callState['retry-group']++; if (callState['retry-group'] === 1) return Promise.reject(new Error('network'));
+          return jsonResponse({ items: [ { id: 'r1', name: 'Retry Tee', price: '$10', payUrl: 'https://d8a.com/pay/r1' } ], group: { name: 'Retry', url: 'https://d8a.com/g/retry-group' }, checkout: { enabled: false } }, true);
+        }
+
+        // batch-threadline: return a payload with one unsafe payUrl
+        if (g === 'batch-threadline') {
+          return jsonResponse({ items: [ { id: 'item-unsafe', name: 'Bad Link Tee', description: 'edge payUrl', price: '$12', payUrl: 'javascript:alert(1)' } ], group: { name: 'Threadline', url: 'https://d8a.com/g/batch-threadline' }, checkout: { enabled: false } }, true);
+        }
+
+        // other-group: empty list
+        if (g === 'other-group') {
+          return jsonResponse({ items: [], group: { name: 'Other', url: 'https://d8a.com/g/other-group' }, checkout: { enabled: false } }, true);
+        }
+
+        // default fallback
+        return jsonResponse({ items: [], group: { name: g, url: BASE + '/g/' + g }, checkout: { enabled: false } }, true);
+      }
+
+      // orders endpoint: verify order
+      if (url.indexOf('/api/v1/store/orders/') !== -1) {
+        var oid = (url.match(/\/api\/v1\/store\/orders\/([^?]+)/) || [])[1] || '';
+        oid = decodeURIComponent(oid);
+        // We accept 'paid-1' as a paid order for batch-threadline
+        if (oid === 'paid-1') {
+          return jsonResponse({ paid: true, order: { id: 'paid-1', itemName: 'T-Shirt', quantity: 1 } }, true);
+        }
+        return jsonResponse({ paid: false }, true);
+      }
+
+      // checkout endpoint: return a benign url
+      if (url.indexOf('/api/v1/store/checkout') !== -1) {
+        return jsonResponse({ url: 'https://d8a.com/checkout' }, true);
+      }
+
+      // anything else: passthrough to real fetch if available
+      if (typeof window.__origFetch === 'function') return window.__origFetch(url, opts);
+      return Promise.reject(new Error('unmocked'));
+    };
+  })();
+  </script>
+
+  <script src="payments-widget.js"></script>
+
+  <script>
+  // Run assertions after a short delay to allow the widget to initialize.
+  function runChecks() {
+    try {
+      // 1) Shared in-memory cache used for same group: batch-threadline
+      var counts = window.__testFetchCounts || {};
+      var sharedOk = (counts['batch-threadline'] === 1);
+      note('shared-cache-used', sharedOk, 'items fetch count for batch-threadline = ' + (counts['batch-threadline']||0));
+
+      // 2) Safe href fallback for unsafe payUrl: item-unsafe should have href https://d8a.com/g/batch-threadline
+      var anchors = Array.prototype.slice.call(document.querySelectorAll('#group-store a[data-item="item-unsafe"]'));
+      var a = anchors.length ? anchors[0] : null;
+      var hrefOk = !!a && a.getAttribute('href') === 'https://d8a.com/g/batch-threadline';
+      note('safe-href-fallback', hrefOk, a ? ('href=' + a.getAttribute('href')) : 'anchor not found');
+
+      // 3) groupStoreVerify resolves to paid order when orders endpoint returns paid
+      if (typeof window.groupStoreVerify === 'function') {
+        window.groupStoreVerify('paid-1').then(function (o) {
+          var ok = o && o.id === 'paid-1' && o._d8a_group === 'batch-threadline';
+          note('groupStoreVerify-paid', ok, ok ? ('id='+o.id+', group='+o._d8a_group) : JSON.stringify(o));
+        }).catch(function (e) { note('groupStoreVerify-paid', false, String(e)); });
+      } else {
+        note('groupStoreVerify-paid', false, 'groupStoreVerify not found');
+      }
+
+      // 4) Retry control: retry-group should show Retry button, clicking it should trigger a second network attempt and render items
+      var retryContainer = document.querySelector('#fixtures div [data-d8a-group="retry-group"]') || document.querySelector('#fixtures [data-d8a-group="retry-group"]') || document.querySelector('[data-d8a-group="retry-group"]');
+
+      setTimeout(function(){
+        var btn = retryContainer && retryContainer.querySelector('[data-d8a-retry]');
+        var hadBtn = !!btn;
+        note('retry-button-present', hadBtn, hadBtn ? 'found retry button' : 'no retry button');
+        if (!btn) return;
+        var before = (window.__testFetchCounts && window.__testFetchCounts['retry-group']) || 0;
+        btn.click();
+        // wait for retry to finish
+        setTimeout(function(){
+          var after = (window.__testFetchCounts && window.__testFetchCounts['retry-group']) || 0;
+          var increased = after > before;
+          var hasItem = !!retryContainer.querySelector('a[data-item="r1"]');
+          note('retry-clears-cache-and-retries', increased && hasItem, 'requests before=' + before + ' after=' + after + ' hasItem=' + hasItem);
+        }, 600);
+      }, 200);
+
+      // Final aggregator after a bit more time
+      setTimeout(function(){
+        note('final', true, 'Manual-run tests completed; review individual PASS/FAIL lines above.');
+      }, 1200);
+
+    } catch (e) { note('runChecks', false, String(e)); }
+  }
+
+  // Kick off checks once a short time after load.
+  setTimeout(runChecks, 400);
+  </script>
+</body>
+</html>
