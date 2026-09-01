@@ -42,6 +42,11 @@
       <!-- Dedicated fixture for the checkout test: avoids adding another #group-store id -->
       <div id="group-store-checkout" data-d8a-group="checkout-group"></div>
     </div>
+    <div>
+      <h3>Secondary checkout container (checkout-group)</h3>
+      <!-- Additional #group-store that resolves to the same checkout-group to test cross-container dedupe -->
+      <div id="group-store" data-d8a-group="checkout-group"></div>
+    </div>
   </div>
 
   <script>
@@ -196,20 +201,19 @@
       }, 200);
 
       // 5) Prevent duplicate checkout POSTs when Buy is clicked twice quickly
-      // Find the Buy anchor inside the dedicated checkout fixture and click twice.
-      var checkoutAnchor = document.querySelector('#group-store-checkout a[data-item]') || document.querySelector('[data-d8a-group="checkout-group"] a[data-item]');
-      // If not present yet, wait a short while and retry once.
+      // Find the Buy anchors inside both checkout fixtures and click them rapidly.
       function runCheckoutDupTest() {
-        var anchor = document.querySelector('#group-store-checkout a[data-item]') || document.querySelector('[data-d8a-group="checkout-group"] a[data-item]');
-        if (!anchor) {
+        var anchorA = document.querySelector('#group-store-checkout a[data-item]');
+        var anchorB = document.querySelector('#group-store[data-d8a-group="checkout-group"] a[data-item]');
+        if (!anchorA || !anchorB) {
           // give the widget a bit more time
           setTimeout(function() { runCheckoutDupTest(); }, 300);
           return;
         }
         try {
-          // Simulate two rapid clicks
-          anchor.click();
-          anchor.click();
+          // Simulate two rapid clicks across the two containers
+          anchorA.click();
+          anchorB.click();
         } catch (e) {}
 
         // Wait up to 2000ms for the mocked checkout POST to be observed.
@@ -217,29 +221,23 @@
         var timeout = new Promise(function (resolve) { setTimeout(function () { resolve('timeout'); }, 2000); });
         Promise.race([seenPromise, timeout]).then(function (res) {
           var count = window.__testCheckoutCount || 0;
-          var stillInDOM = !!(document.querySelector('#group-store-checkout a[data-item]') || document.querySelector('[data-d8a-group="checkout-group"] a[data-item]'));
+          // Check that only one POST was observed and that at least one anchor remains in the DOM
+          var stillInDOM = !!(document.querySelector('#group-store-checkout a[data-item]') || document.querySelector('#group-store[data-d8a-group="checkout-group"] a[data-item]'));
           var ok = (count === 1) && stillInDOM;
-          note('prevent-duplicate-checkout', ok, 'checkout POSTs=' + count + ' anchorPresent=' + stillInDOM + ' waited=' + String(res));
-        }).catch(function (e) {
-          var count = window.__testCheckoutCount || 0;
-          var stillInDOM = !!(document.querySelector('#group-store-checkout a[data-item]') || document.querySelector('[data-d8a-group="checkout-group"] a[data-item]'));
-          note('prevent-duplicate-checkout', false, 'error waiting for checkout count: ' + String(e) + ' count=' + count + ' anchorPresent=' + stillInDOM);
-        });
+          note('prevent-duplicate-checkout', ok, 'count=' + count);
+        }).catch(function (e) { note('prevent-duplicate-checkout', false, String(e)); });
       }
 
-      // Kick off the checkout test after a short delay to allow item rendering.
-      setTimeout(runCheckoutDupTest, 500);
+      runCheckoutDupTest();
 
-      // Final aggregator after a bit more time
-      setTimeout(function(){
-        note('final', true, 'Manual-run tests completed; review individual PASS/FAIL lines above.');
-      }, 1600);
-
-    } catch (e) { note('runChecks', false, String(e)); }
+    } catch (e) {
+      note('final', false, String(e));
+    }
   }
 
-  // Kick off checks once a short time after load.
-  setTimeout(runChecks, 400);
+  // Give the widget some time to initialize then run checks.
+  setTimeout(runChecks, 600);
   </script>
+
 </body>
 </html>
