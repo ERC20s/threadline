@@ -6,7 +6,7 @@
   var BASE = "https://d8a.com";
   var GROUP = "batch-threadline";
   var esc = function (s) {
-    return String(s).replace(/[&<>"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; });
+    return String(s).replace(/[&<>\"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; });
   };
 
   var els = Array.prototype.slice.call(document.querySelectorAll('#group-store'));
@@ -25,18 +25,27 @@
     if (!o) return;
     window.groupStorePaid = o;
     els.forEach(function (el) {
-      if (el && el.parentNode) {
-        var p = document.createElement("p");
-        p.setAttribute("data-paid", o.id);
-        p.style.cssText = "font:13px system-ui,sans-serif;color:#059669";
-        p.innerHTML = "Paid: " + esc(o.itemName) + (o.quantity > 1 ? " \u00d7" + o.quantity : "") + " \u2014 order " + esc(o.id);
-        el.parentNode.insertBefore(p, el);
-      }
+      if (!el) return;
+      // Ensure the container is an aria-live region so announcements are made.
+      if (!el.hasAttribute('aria-live')) el.setAttribute('aria-live', 'polite');
+      // Skip if we've already shown this paid message inside this container.
+      if (el.querySelector('[data-paid="' + o.id + '"]')) return;
+      var p = document.createElement("p");
+      p.setAttribute("data-paid", o.id);
+      // role=status helps some ATs treat the content as an assertion inside the live region.
+      p.setAttribute('role', 'status');
+      p.style.cssText = "font:13px system-ui,sans-serif;color:#059669";
+      p.innerHTML = "Paid: " + esc(o.itemName) + (o.quantity > 1 ? " \u00d7" + o.quantity : "") + " \u2014 order " + esc(o.id);
+      // Insert inside the live region so it is announced; add to the start so it is visible above the items.
+      try { el.insertBefore(p, el.firstChild); } catch (e) { el.appendChild(p); }
     });
     document.dispatchEvent(new CustomEvent("group-store:paid", { detail: o }));
   });
 
   // Load items, render widget into every matching container. If the network or API fails, show a friendly message.
+  // Mark containers busy while fetching so assistive tech knows content is loading.
+  if (els.length) els.forEach(function (el) { if (!el.hasAttribute('aria-live')) el.setAttribute('aria-live', 'polite'); el.setAttribute('aria-busy', 'true'); });
+
   fetch(BASE + "/api/v1/store/items?group=" + encodeURIComponent(GROUP))
     .then(function (r) { return r.json(); })
     .then(function (s) {
@@ -44,6 +53,7 @@
       els.forEach(function (el) {
         if (!s.items.length) {
           el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now.</p>';
+          el.removeAttribute('aria-busy');
           return;
         }
         el.innerHTML = s.items.map(function (it) {
@@ -53,6 +63,9 @@
             '<span>' + esc(it.price) + '</span>' +
             '<a href="' + esc(it.payUrl) + '" data-item="' + esc(it.id) + '" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a></div>';
         }).join("") + '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group.url) + '" style="color:#7c5cff">' + esc(s.group.name) + '</a></p>';
+
+        // Clear busy now that we've rendered.
+        el.removeAttribute('aria-busy');
 
         // Avoid attaching the listener multiple times to the same element in case this file is executed more than once in contexts
         // where the guard might not apply; mark attached containers.
@@ -74,5 +87,10 @@
         }
       });
     })
-    .catch(function () { if (els.length) els.forEach(function (el) { el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now.</p>'; }); });
+    .catch(function () {
+      if (els.length) els.forEach(function (el) {
+        el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now.</p>';
+        el.removeAttribute('aria-busy');
+      });
+    });
 })();
