@@ -11,6 +11,11 @@
 
   var els = Array.prototype.slice.call(document.querySelectorAll('#group-store'));
 
+  // Ensure each container is an aria-live region before we do anything.
+  els.forEach(function (el) {
+    if (!el.getAttribute('aria-live')) el.setAttribute('aria-live', 'polite');
+  });
+
   // The handshake: an order id is only proof once the platform says so.
   var verify = function (id) {
     return fetch(BASE + "/api/v1/store/orders/" + encodeURIComponent(id) + "?group=" + encodeURIComponent(GROUP))
@@ -25,23 +30,39 @@
     if (!o) return;
     window.groupStorePaid = o;
     els.forEach(function (el) {
-      if (el && el.parentNode) {
-        var p = document.createElement("p");
-        p.setAttribute("data-paid", o.id);
-        p.style.cssText = "font:13px system-ui,sans-serif;color:#059669";
-        p.innerHTML = "Paid: " + esc(o.itemName) + (o.quantity > 1 ? " \u00d7" + o.quantity : "") + " \u2014 order " + esc(o.id);
-        el.parentNode.insertBefore(p, el);
+      if (!el) return;
+      // Suppress duplicates: skip if this container already contains a receipt for this order id.
+      if (el.querySelector('[data-paid="' + o.id + '"]')) return;
+      var p = document.createElement("p");
+      p.setAttribute("data-paid", o.id);
+      p.setAttribute("role", "status");
+      p.style.cssText = "font:13px system-ui,sans-serif;color:#059669";
+      p.innerHTML = "Paid: " + esc(o.itemName) + (o.quantity > 1 ? " \u00d7" + o.quantity : "") + " \u2014 order " + esc(o.id);
+      // Insert inside the store container so assistive tech hears it as part of the live region.
+      try {
+        el.insertBefore(p, el.firstChild);
+      } catch (e) {
+        // Fallback: append if insertBefore isn't available for some reason.
+        el.appendChild(p);
       }
     });
     document.dispatchEvent(new CustomEvent("group-store:paid", { detail: o }));
   });
 
+  // Before loading items mark the containers busy and ensure aria-live is present.
+  if (els.length) els.forEach(function (el) { el.setAttribute('aria-live', el.getAttribute('aria-live') || 'polite'); el.setAttribute('aria-busy', 'true'); });
+
   // Load items, render widget into every matching container. If the network or API fails, show a friendly message.
   fetch(BASE + "/api/v1/store/items?group=" + encodeURIComponent(GROUP))
     .then(function (r) { return r.json(); })
     .then(function (s) {
-      if (!els.length || !s.items) return;
+      // We deliberately do not early-return here without allowing the final step to clear aria-busy.
+      if (!els.length) return s;
       els.forEach(function (el) {
+        if (!s || !s.items) {
+          el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now.</p>';
+          return;
+        }
         if (!s.items.length) {
           el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now.</p>';
           return;
@@ -73,6 +94,13 @@
           el.setAttribute('data-d8a-listener', '1');
         }
       });
+      return s;
     })
-    .catch(function () { if (els.length) els.forEach(function (el) { el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now.</p>'; }); });
+    .catch(function () {
+      if (els.length) els.forEach(function (el) { el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now.</p>'; });
+    })
+    .then(function () {
+      // Always clear aria-busy on every code path after the fetch completes.
+      if (els.length) els.forEach(function (el) { try { el.removeAttribute('aria-busy'); } catch (e) {} });
+    });
 })();
