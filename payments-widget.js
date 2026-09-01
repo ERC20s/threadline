@@ -147,28 +147,77 @@
   };
 
   // The handshake: an order id is only proof once the platform says so.
-  // Note: verify still uses the legacy GROUP constant. We only insert
-  // receipts into containers that resolve to that same group so pages that
-  // host multiple distinct stores won't receive mismatched receipts.
-  var verify = function (id) {
-    return doFetch(BASE + "/api/v1/store/orders/" + encodeURIComponent(id) + "?group=" + encodeURIComponent(GROUP), null, 10000)
+  // New: support multi-group verification. Expose window.groupStoreVerify(id[, group]).
+  var verifySingle = function (id, group) {
+    var g;
+    try { g = group && String(group).trim() ? String(group).trim() : GROUP; } catch (e) { g = GROUP; }
+    return doFetch(BASE + "/api/v1/store/orders/" + encodeURIComponent(id) + "?group=" + encodeURIComponent(g), null, 10000)
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) { return d && d.paid ? d.order : null; })
       .catch(function () { return null; });
   };
-  window.groupStoreVerify = verify;
+
+  var groupStoreVerify = function (id, group) {
+    if (!id) return Promise.resolve(null);
+    // If a specific group is requested, verify only that group.
+    if (typeof group === 'string' && group) {
+      return verifySingle(id, group);
+    }
+    // Otherwise, attempt verification across every distinct group resolved
+    // from #group-store elements on the page. Run sequentially and stop at
+    // the first match.
+    var seen = {};
+    var groups = [];
+    try {
+      els.forEach(function (el) {
+        try {
+          var g = getGroupForElement(el);
+          if (!seen[g]) { seen[g] = true; groups.push(g); }
+        } catch (e) {}
+      });
+    } catch (e) {}
+    if (!groups.length) groups.push(GROUP);
+
+    var found = null;
+    var foundGroup = null;
+    // Sequentially try each group, returning the order when found.
+    return groups.reduce(function (prev, g) {
+      return prev.then(function (res) {
+        if (res) return res; // already found
+        return verifySingle(id, g).then(function (o) {
+          if (o) {
+            found = o; foundGroup = g; return o;
+          }
+          return null;
+        });
+      });
+    }, Promise.resolve(null)).then(function (res) {
+      if (found) {
+        try { found._d8a_group = foundGroup; } catch (e) {}
+        return found;
+      }
+      return null;
+    });
+  };
+
+  window.groupStoreVerify = groupStoreVerify;
 
   var back = (location.search.match(/[?&]d8a_order=([A-Za-z0-9_-]+)/) || [])[1];
-  if (back) verify(back).then(function (o) {
+  if (back) groupStoreVerify(back).then(function (o) {
     if (!o) return;
+    // Preserve the original behavior of exposing the paid order object.
     window.groupStorePaid = o;
+    // Determine which group matched the verified order. If verification was
+    // run across groups the matched group is attached as _d8a_group; fall
+    // back to the legacy GROUP constant when absent.
+    var matchedGroup = (o && o._d8a_group) ? o._d8a_group : GROUP;
     els.forEach(function (el) {
       if (!el) return;
-      // Only insert the receipt into containers that resolve to the same
-      // group we used to verify the order (legacy GROUP). This avoids showing
-      // receipts in containers that represent other groups.
       var localGroup = getGroupForElement(el);
-      if (localGroup !== GROUP) return;
+      // Only insert the receipt into containers that resolve to the same
+      // group that verified the order. This avoids showing receipts for
+      // other groups on pages hosting multiple stores.
+      if (localGroup !== matchedGroup) return;
       // Suppress duplicates: skip if this container already contains a receipt for this order id.
       if (el.querySelector('[data-paid="' + o.id + '"]')) return;
       var p = document.createElement("p");
@@ -176,11 +225,9 @@
       p.setAttribute("role", "status");
       p.style.cssText = "font:13px system-ui,sans-serif;color:#059669";
       p.innerHTML = "Paid: " + esc(o.itemName) + (o.quantity > 1 ? " \u00d7" + o.quantity : "") + " \u2014 order " + esc(o.id);
-      // Insert inside the store container so assistive tech hears it as part of the live region.
       try {
         el.insertBefore(p, el.firstChild);
       } catch (e) {
-        // Fallback: append if insertBefore isn't available for some reason.
         el.appendChild(p);
       }
     });
