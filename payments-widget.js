@@ -262,8 +262,10 @@
   // Attach a per-container buy click listener that uses the container's stored store data.
   var ensureBuyListener = function (el) {
     if (el.getAttribute('data-d8a-listener')) return;
-    // We'll keep a set of anchors currently opening to prevent duplicate checkouts.
-    var opening = {};
+    // Use a shared, namespaced opening map on window so clicks across containers
+    // (including multiple containers resolving to the same group) are deduped.
+    window.__d8aPaymentsWidgetOpening = window.__d8aPaymentsWidgetOpening || {};
+    var opening = window.__d8aPaymentsWidgetOpening;
     el.addEventListener('click', function (e) {
       var a = e.target && e.target.closest ? e.target.closest('a[data-item]') : null;
       if (!a) return;
@@ -290,8 +292,9 @@
         }
       } catch (e) {}
 
-      // Prevent duplicate concurrent checkouts for the same anchor.
-      var key = itemId + '::' + qty;
+      // Prevent duplicate concurrent checkouts for the same group+item+qty across all containers.
+      var groupSlug = getGroupForElement(el);
+      var key = groupSlug + '::' + itemId + '::' + qty;
       if (opening[key]) return;
       opening[key] = true;
 
@@ -414,7 +417,8 @@
 
     var group = getGroupForElement(el);
     // Optimistically show a loading state
-    el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#6b7280">Loading…</p>';
+    el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#6b7280">Loading2
+6</p>';
 
     var promise = fetchStoreForGroup(group);
     promise.then(function (s) {
