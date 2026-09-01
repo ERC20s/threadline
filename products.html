@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Threadline — Products</title>
+  <style>
+    :root{--max-width:980px;--gap:18px;--accent:#7c5cff;--muted:#6b7280}
+    html,body{height:100%}
+    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;margin:0;padding:24px;box-sizing:border-box;color:#0f172a;background:#fff;display:flex;justify-content:center}
+    .wrap{width:100%;max-width:var(--max-width)}
+    header h1{font-size:1.25rem;margin:0 0 8px}
+    .note{margin:0 0 16px;color:var(--muted);font-size:0.95rem}
+    a{color:var(--accent);text-decoration:none}
+    a:focus{outline:3px solid rgba(124,92,255,0.18);outline-offset:3px}
+
+    .grid{display:grid;grid-template-columns:1fr;gap:18px}
+    .card{border:1px solid #eaeaea;border-radius:10px;overflow:hidden;background:#fff;display:flex;flex-direction:column}
+    .card a{color:inherit;text-decoration:none;display:block;padding:12px}
+    .thumb{background:linear-gradient(180deg,#f8f6ff,#fff);padding:12px;display:flex;align-items:center;justify-content:center}
+    .thumb svg{width:100%;height:auto;display:block;border-radius:8px}
+    .meta{padding:8px 12px}
+    .meta h3{margin:6px 0;font-size:1rem}
+    .price{font-weight:700;color:#111827}
+    .card-row{display:flex;justify-content:space-between;align-items:center;gap:12px}
+
+    @media(min-width:640px){.grid{grid-template-columns:repeat(2,1fr)}}
+    @media(min-width:980px){.grid{grid-template-columns:repeat(3,1fr)}}
+
+    .store-area{margin-top:28px;padding-top:12px;border-top:1px dashed #eef2ff}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <h1 id="page-heading">Threadline — Products</h1>
+      <p class="note">A simple, responsive product grid with inline SVG placeholders. Each card links to the product detail page; the live d8a payments widget below exposes the store and begins checkout from this listing.</p>
+    </header>
+
+    <section class="grid" aria-labelledby="page-heading">
+      <article class="card">
+        <a href="/product.html">
+          <div class="thumb" aria-hidden="true">
+            <svg viewBox="0 0 400 300" role="img" aria-label="Product image placeholder">
+              <defs>
+                <linearGradient id="g1" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0" stop-color="#f3f0ff"/>
+                  <stop offset="1" stop-color="#ffffff"/>
+                </linearGradient>
+              </defs>
+              <rect x="0" y="0" width="400" height="300" rx="8" fill="url(#g1)"/>
+              <g transform="translate(60,40) scale(0.6)" fill="#e6e6ea">
+                <path d="M160 0c-20 0-28 10-40 24-6 8-20 18-40 18s-34-10-40-18C0 10-8 0-28 0L0 40c10 14 20 20 36 34 20 20 44 36 76 36s56-16 76-36C450 60 470 46 480 34L508 0c-20 0-28 10-40 24-6 8-20 18-40 18s-34-10-40-18C360 10 352 0 332 0z"/>
+              </g>
+            </svg>
+          </div>
+          <div class="meta">
+            <div class="card-row">
+              <h3>Everyday Tee</h3>
+              <div class="price">$38</div>
+            </div>
+            <p style="margin:8px 0 0;color:var(--muted);font-size:0.95rem">A clean, everyday tee — tap to view details.</p>
+          </div>
+        </a>
+      </article>
+
+      <article class="card">
+        <a href="/product.html">
+          <div class="thumb" aria-hidden="true">
+            <svg viewBox="0 0 400 300" role="img" aria-label="Product image placeholder">
+              <rect x="0" y="0" width="400" height="300" rx="8" fill="url(#g1)"/>
+            </svg>
+          </div>
+          <div class="meta">
+            <div class="card-row">
+              <h3>Classic Sweat</h3>
+              <div class="price">$62</div>
+            </div>
+            <p style="margin:8px 0 0;color:var(--muted);font-size:0.95rem">Cozy medium-weight fleece, cut for everyday wear.</p>
+          </div>
+        </a>
+      </article>
+
+      <article class="card">
+        <a href="/product.html">
+          <div class="thumb" aria-hidden="true">
+            <svg viewBox="0 0 400 300" role="img" aria-label="Product image placeholder">
+              <rect x="0" y="0" width="400" height="300" rx="8" fill="url(#g1)"/>
+            </svg>
+          </div>
+          <div class="meta">
+            <div class="card-row">
+              <h3>Relaxed Jeans</h3>
+              <div class="price">$88</div>
+            </div>
+            <p style="margin:8px 0 0;color:var(--muted);font-size:0.95rem">A relaxed straight leg in durable denim.</p>
+          </div>
+        </a>
+      </article>
+
+      <article class="card">
+        <a href="/product.html">
+          <div class="thumb" aria-hidden="true">
+            <svg viewBox="0 0 400 300" role="img" aria-label="Product image placeholder">
+              <rect x="0" y="0" width="400" height="300" rx="8" fill="url(#g1)"/>
+            </svg>
+          </div>
+          <div class="meta">
+            <div class="card-row">
+              <h3>Work Shirt</h3>
+              <div class="price">$54</div>
+            </div>
+            <p style="margin:8px 0 0;color:var(--muted);font-size:0.95rem">A button-up in a breathable cotton blend.</p>
+          </div>
+        </a>
+      </article>
+
+      <article class="card">
+        <a href="/product.html">
+          <div class="thumb" aria-hidden="true">
+            <svg viewBox="0 0 400 300" role="img" aria-label="Product image placeholder">
+              <rect x="0" y="0" width="400" height="300" rx="8" fill="url(#g1)"/>
+            </svg>
+          </div>
+          <div class="meta">
+            <div class="card-row">
+              <h3>Cap</h3>
+              <div class="price">$24</div>
+            </div>
+            <p style="margin:8px 0 0;color:var(--muted);font-size:0.95rem">A low-profile cap with embroidered logo.</p>
+          </div>
+        </a>
+      </article>
+
+      <article class="card">
+        <a href="/product.html">
+          <div class="thumb" aria-hidden="true">
+            <svg viewBox="0 0 400 300" role="img" aria-label="Product image placeholder">
+              <rect x="0" y="0" width="400" height="300" rx="8" fill="url(#g1)"/>
+            </svg>
+          </div>
+          <div class="meta">
+            <div class="card-row">
+              <h3>Socks (3-pack)</h3>
+              <div class="price">$16</div>
+            </div>
+            <p style="margin:8px 0 0;color:var(--muted);font-size:0.95rem">A staple pack for everyday wear.</p>
+          </div>
+        </a>
+      </article>
+    </section>
+
+    <section class="store-area">
+      <h2 style="margin:0 0 8px">Shop</h2>
+      <p class="note">The live store widget appears here — it lists items set in the group's admin and starts checkout from this page.</p>
+
+      <!-- d8a payments widget: inserted from the repository .d8a payments block / product.html -->
+      <div id="group-store"></div>
+      <script>
+      (function () {
+        var BASE = "https://d8a.com";
+        var GROUP = "batch-threadline";
+        var esc = function (s) {
+          return String(s).replace(/[&<>\"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; });
+        };
+        var el = document.getElementById("group-store");
+        // The handshake: an order id is only proof once the platform says so.
+        var verify = function (id) {
+          return fetch(BASE + "/api/v1/store/orders/" + encodeURIComponent(id) + "?group=" + encodeURIComponent(GROUP))
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (d) { return d && d.paid ? d.order : null; })
+            .catch(function () { return null; });
+        };
+        window.groupStoreVerify = verify;
+        var back = (location.search.match(/[?&]d8a_order=([A-Za-z0-9_-]+)/) || [])[1];
+        if (back) verify(back).then(function (o) {
+          if (!o) return;
+          window.groupStorePaid = o;
+          if (el && el.parentNode) {
+            var p = document.createElement("p");
+            p.setAttribute("data-paid", o.id);
+            p.style.cssText = "font:13px system-ui,sans-serif;color:#059669";
+            p.innerHTML = "Paid: " + esc(o.itemName) + (o.quantity > 1 ? " \u00d7"+o.quantity : "") + " \u2014 order " + esc(o.id);
+            el.parentNode.insertBefore(p, el);
+          }
+          document.dispatchEvent(new CustomEvent("group-store:paid", { detail: o }));
+        });
+        fetch(BASE + "/api/v1/store/items?group=" + encodeURIComponent(GROUP))
+          .then(function (r) { return r.json(); })
+          .then(function (s) {
+            if (!el || !s.items) return;
+            if (!s.items.length) { el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now.</p>'; return; }
+            el.innerHTML = s.items.map(function (it) {
+              return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif">' +
+                '<div style="flex:1"><b>' + esc(it.name) + '</b>' +
+                (it.description ? '<div style="font-size:12px;color:#6b7280">' + esc(it.description) + '</div>' : '') + '</div>' +
+                '<span>' + esc(it.price) + '</span>' +
+                '<a href="' + esc(it.payUrl) + '" data-item="' + esc(it.id) + '" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a></div>';
+            }).join("") + '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group.url) + '" style="color:#7c5cff">' + esc(s.group.name) + '</a></p>';
+            el.addEventListener("click", function (e) {
+              var a = e.target && e.target.closest ? e.target.closest("a[data-item]") : null;
+              if (!a || !s.checkout.enabled) return;
+              e.preventDefault();
+              a.textContent = "Opening\u2026";
+              // Come back to this page — minus any earlier receipt on the URL.
+              var here = location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1");
+              fetch(s.checkout.url, { method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ group: GROUP, item: a.getAttribute("data-item"), quantity: 1, returnUrl: here }) })
+                .then(function (r) { return r.json(); })
+                .then(function (d) { if (d.url) { location.href = d.url; } else { a.textContent = "Buy"; location.href = a.href; } })
+                .catch(function () { location.href = a.href; });
+            });
+          });
+      })();
+      </script>
+    </section>
+  </main>
+</body>
+</html>
