@@ -385,13 +385,73 @@
       }
 
       if (!s.items.length) { el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now.</p>'; return; }
-      el.innerHTML = s.items.map(function (it) {
-        return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif">' +
-          '<div style="flex:1"><b>' + esc(it.name) + '</b>' +
-          (it.description ? '<div style="font-size:12px;color:#6b7280">' + esc(it.description) + '</div>' : '') + '</div>' +
-          '<span>' + esc(it.price) + '</span>' +
-          '<a href="' + esc(it.payUrl) + '" data-item="' + esc(it.id) + '" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a></div>';
-      }).join("") + '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group.url) + '" style="color:#7c5cff">' + esc(s.group.name) + '</a></p>';
+
+      // Build each item node with DOM APIs to avoid fragile string concatenation.
+      try {
+        el.innerHTML = '';
+        for (var i = 0; i < s.items.length; i++) {
+          try {
+            var it = s.items[i];
+            var itemDiv = document.createElement('div');
+            itemDiv.style.cssText = 'display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif';
+
+            var left = document.createElement('div');
+            left.style.cssText = 'flex:1';
+
+            var nameNode = document.createElement('b');
+            nameNode.textContent = it.name || '';
+            left.appendChild(nameNode);
+
+            if (it.description) {
+              var desc = document.createElement('div');
+              desc.style.cssText = 'font-size:12px;color:#6b7280';
+              desc.textContent = it.description;
+              left.appendChild(desc);
+            }
+
+            itemDiv.appendChild(left);
+
+            var price = document.createElement('span');
+            price.textContent = it.price || '';
+            itemDiv.appendChild(price);
+
+            var a = document.createElement('a');
+            var safePay = sanitizeUrl(it.payUrl) || (BASE + '/g/' + localGroup);
+            a.setAttribute('href', safePay);
+            try { a.setAttribute('data-item', String(it.id)); } catch (e) { a.setAttribute('data-item', it.id); }
+            a.style.cssText = 'background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none';
+            a.textContent = 'Buy';
+            try { a.setAttribute('rel', 'noopener noreferrer'); } catch (e) {}
+            itemDiv.appendChild(a);
+
+            try { el.appendChild(itemDiv); } catch (e) { /* best-effort */ }
+          } catch (e) { /* continue with other items */ }
+        }
+
+        // Add the sold-by line with a safe link to the group storefront.
+        try {
+          var soldp = document.createElement('p');
+          soldp.style.cssText = 'font:11px system-ui,sans-serif;color:#9ca3af';
+          soldp.textContent = 'Sold by ';
+          var solda = document.createElement('a');
+          var safeGroupHref = sanitizeUrl(s.group && s.group.url) || (BASE + '/g/' + localGroup);
+          solda.setAttribute('href', safeGroupHref);
+          solda.style.cssText = 'color:#7c5cff';
+          solda.textContent = (s.group && s.group.name) ? s.group.name : '';
+          try { solda.setAttribute('rel', 'noopener noreferrer'); } catch (e) {}
+          soldp.appendChild(solda);
+          el.appendChild(soldp);
+        } catch (e) { /* ignore sold-by failures */ }
+      } catch (e) {
+        // If DOM APIs fail for any reason, fall back to the previous safe innerHTML rendering using esc().
+        el.innerHTML = s.items.map(function (it) {
+          return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif">' +
+            '<div style="flex:1"><b>' + esc(it.name) + '</b>' +
+            (it.description ? '<div style="font-size:12px;color:#6b7280">' + esc(it.description) + '</div>' : '') + '</div>' +
+            '<span>' + esc(it.price) + '</span>' +
+            '<a href="' + esc(it.payUrl) + '" data-item="' + esc(it.id) + '" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a></div>';
+        }).join('') + '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group && s.group.url) + '" style="color:#7c5cff">' + esc(s.group && s.group.name) + '</a></p>';
+      }
 
       // Store a reference to the store payload on the container so the click handler can use it without another network roundtrip.
       try { el._d8a_store = s; } catch (e) { el._d8a_store = null; }
