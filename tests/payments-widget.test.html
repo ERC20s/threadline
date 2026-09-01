@@ -33,7 +33,10 @@
     </div>
     <div>
       <h3>Retry group (retry-group)</h3>
-      <div id="group-store" data-d8a-group="retry-group"></div>
+      <!-- Wrap the retry-group container in a form to simulate embedding inside a site form. -->
+      <form onsubmit="window._submitted = true; return false;">
+        <div id="group-store" data-d8a-group="retry-group"></div>
+      </form>
     </div>
   </div>
 
@@ -149,6 +152,9 @@
       // 4) Retry control: retry-group should show Retry button, clicking it should trigger a second network attempt and render items
       var retryContainer = document.querySelector('#fixtures div [data-d8a-group="retry-group"]') || document.querySelector('#fixtures [data-d8a-group="retry-group"]') || document.querySelector('[data-d8a-group="retry-group"]');
 
+      // Initialize the global flag that indicates whether an outer form submitted.
+      window._submitted = false;
+
       setTimeout(function(){
         var btn = retryContainer && retryContainer.querySelector('[data-d8a-retry]');
         var hadBtn = !!btn;
@@ -162,6 +168,10 @@
           var increased = after > before;
           var hasItem = !!retryContainer.querySelector('a[data-item="r1"]');
           note('retry-clears-cache-and-retries', increased && hasItem, 'requests before=' + before + ' after=' + after + ' hasItem=' + hasItem);
+
+          // New assertion: clicking the Retry control should not submit the enclosing form.
+          var notSubmitted = window._submitted !== true;
+          note('retry-does-not-submit-outer-form', notSubmitted, 'window._submitted=' + String(window._submitted));
         }, 600);
       }, 200);
 
