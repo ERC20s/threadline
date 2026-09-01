@@ -42,6 +42,73 @@
     });
   };
 
+  // Helper: doFetch — prefer native fetchWithTimeout, but fall back to an
+  // XMLHttpRequest implementation when fetch is not available. Returns a
+  // Promise that resolves to an object with the minimal shape consumers expect
+  // (ok boolean, status, statusText, json() -> Promise).
+  var doFetch = function (url, opts, timeoutMs) {
+    timeoutMs = typeof timeoutMs === 'number' ? timeoutMs : 10000;
+    if (typeof fetch !== 'undefined') {
+      // Native fetch available: delegate to fetchWithTimeout which already
+      // implements AbortController-based cancellation.
+      return fetchWithTimeout(url, opts, timeoutMs);
+    }
+
+    // XHR fallback
+    return new Promise(function (resolve, reject) {
+      try {
+        var xhr = new XMLHttpRequest();
+        var method = (opts && opts.method) ? opts.method : 'GET';
+        xhr.open(method, url, true);
+
+        // Apply headers if provided.
+        if (opts && opts.headers) {
+          try {
+            for (var h in opts.headers) {
+              if (Object.prototype.hasOwnProperty.call(opts.headers, h)) {
+                xhr.setRequestHeader(h, opts.headers[h]);
+              }
+            }
+          } catch (e) {}
+        }
+
+        var timer = setTimeout(function () {
+          try { xhr.abort(); } catch (e) {}
+          reject(new Error('timeout'));
+        }, timeoutMs);
+
+        xhr.onreadystatechange = function () {
+          if (xhr.readyState !== 4) return;
+          clearTimeout(timer);
+          var status = xhr.status === 1223 ? 204 : xhr.status; // IE quirk
+          var ok = status >= 200 && status < 300;
+          var res = {
+            ok: ok,
+            status: status,
+            statusText: xhr.statusText,
+            text: function () { return Promise.resolve(xhr.responseText); },
+            json: function () {
+              try { return Promise.resolve(JSON.parse(xhr.responseText)); }
+              catch (e) { return Promise.reject(e); }
+            }
+          };
+          resolve(res);
+        };
+
+        xhr.onerror = function () { clearTimeout(timer); reject(new Error('network')); };
+        // Send the provided body if present, otherwise null.
+        try {
+          xhr.send(opts && typeof opts.body !== 'undefined' ? opts.body : null);
+        } catch (e) {
+          clearTimeout(timer);
+          reject(e);
+        }
+      } catch (e) {
+        reject(e);
+      }
+    });
+  };
+
   // The handshake: an order id is only proof once the platform says so.
   var verify = function (id) {
     return fetchWithTimeout(BASE + "/api/v1/store/orders/" + encodeURIComponent(id) + "?group=" + encodeURIComponent(GROUP))
@@ -105,8 +172,9 @@
       e.preventDefault();
       a.textContent = "Opening\u2026";
       var here = location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1");
-      // Use fetchWithTimeout for the checkout POST as well so a hung request won't leave the UI stuck.
-      fetchWithTimeout(s.checkout.url, { method: "POST", headers: { "Content-Type": "application/json" },
+      // Use doFetch for the checkout POST so a hung request won't leave the UI stuck
+      // and so environments without fetch still work.
+      doFetch(s.checkout.url, { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ group: GROUP, item: a.getAttribute("data-item"), quantity: 1, returnUrl: here }) }, 10000)
         .then(function (r) { return r.json(); })
         .then(function (d) { if (d.url) { location.href = d.url; } else { a.textContent = "Buy"; location.href = a.href; } })
@@ -133,7 +201,8 @@
       el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Loading store\u2026</p>';
     }
 
-    fetchWithTimeout(BASE + "/api/v1/store/items?group=" + encodeURIComponent(GROUP))
+    // Use doFetch here so item loads work even when window.fetch is missing.
+    doFetch(BASE + "/api/v1/store/items?group=" + encodeURIComponent(GROUP))
       .then(function (r) { return r.json(); })
       .then(function (s) {
         // Store the fetched data on the element for the buy handler to use.
