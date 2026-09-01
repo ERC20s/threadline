@@ -9,6 +9,28 @@
     return String(s).replace(/[&<>\"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; });
   };
 
+  // Helper: sanitize/validate external URLs. Allow only:
+  // - absolute http: and https: URLs
+  // - protocol-relative URLs starting with //
+  // - same-origin absolute paths starting with /
+  // Return the original trimmed string when allowed, or null when unsafe.
+  var sanitizeUrl = function (u) {
+    try {
+      if (!u && u !== 0) return null;
+      var s = String(u).trim();
+      if (!s) return null;
+      // Reject any control characters or whitespace inside the URL
+      if (/\s/.test(s)) return null;
+      // Protocol-relative (//example.com/path)
+      if (/^\/\//.test(s)) return s;
+      // Absolute http(s)
+      if (/^https?:\/\//i.test(s)) return s;
+      // Absolute path on same origin (/path)
+      if (/^\//.test(s)) return s;
+      return null;
+    } catch (e) { return null; }
+  };
+
   // Promise cache for store item fetches keyed by GROUP. Stored on window so
   // multiple widget instances or re-initializations share the same cache.
   window.__d8aPaymentsWidgetStoreCache = window.__d8aPaymentsWidgetStoreCache || {};
@@ -199,25 +221,41 @@
       try { a.textContent = "Opening\u2026"; } catch (e) {}
       try { el.setAttribute('aria-busy', 'true'); } catch (e) {}
 
+      // Validate the checkout URL before posting. If the checkout URL is not a
+      // recognized safe form, skip the POST and fall back to a safe redirect.
+      var rawCheckout = s.checkout && s.checkout.url ? s.checkout.url : null;
+      var safeCheckout = sanitizeUrl(rawCheckout);
+      if (!safeCheckout) {
+        // Checkout URL is unsafe: go to the item's href if it's safe, otherwise to the storefront.
+        var fallbackHref = sanitizeUrl(a.getAttribute('href')) || (BASE + '/g/' + GROUP);
+        try { a.textContent = prevText || "Buy"; } catch (e) {}
+        try { el.removeAttribute('aria-busy'); } catch (e) {}
+        location.href = fallbackHref;
+        return;
+      }
+
       // Use doFetch for the checkout POST so a hung request won't leave the UI stuck
       // and so environments without fetch still work.
-      doFetch(s.checkout.url, { method: "POST", headers: { "Content-Type": "application/json" },
+      doFetch(safeCheckout, { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ group: GROUP, item: a.getAttribute("data-item"), quantity: q, returnUrl: location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1") }) }, 10000)
         .then(function (r) {
           // Try to parse JSON; if that fails, fall back to redirecting to the anchor href.
           return r.json ? r.json() : Promise.resolve(null);
         })
         .then(function (d) {
-          if (d && d.url) {
+          // If the checkout response includes a URL, validate it before following.
+          if (d && d.url && sanitizeUrl(d.url)) {
             location.href = d.url;
-          } else {
-            try { a.textContent = prevText || "Buy"; } catch (e) {}
-            location.href = a.href;
+            return;
           }
+          try { a.textContent = prevText || "Buy"; } catch (e) {}
+          var fallback = sanitizeUrl(a.getAttribute('href')) || (BASE + '/g/' + GROUP);
+          location.href = fallback;
         })
         .catch(function () {
           try { a.textContent = prevText || "Buy"; } catch (e) {}
-          location.href = a.href;
+          var fallback2 = sanitizeUrl(a.getAttribute('href')) || (BASE + '/g/' + GROUP);
+          location.href = fallback2;
         })
         .finally(function () {
           // Always clear busy state on the container when the flow finishes (if the page hasn't navigated away).
@@ -272,11 +310,14 @@
       }
 
       el.innerHTML = s.items.map(function (it) {
+        // Sanitize the per-item payUrl before inserting into an anchor href. If
+        // the item-provided URL is unsafe, use the storefront fallback instead.
+        var safeHref = sanitizeUrl(it.payUrl) || (BASE + '/g/' + GROUP);
         return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif">' +
           '<div style="flex:1"><b>' + esc(it.name) + '</b>' +
           (it.description ? '<div style="font-size:12px;color:#6b7280">' + esc(it.description) + '</div>' : '') + '</div>' +
           '<span>' + esc(it.price) + '</span>' +
-          '<a href="' + esc(it.payUrl) + '" data-item="' + esc(it.id) + '" aria-label="' + esc('Buy ' + it.name + ' for ' + it.price) + '" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a></div>';
+          '<a href="' + esc(safeHref) + '" data-item="' + esc(it.id) + '" aria-label="' + esc('Buy ' + it.name + ' for ' + it.price) + '" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a></div>';
       }).join('') + '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group.url) + '" style="color:#7c5cff">' + esc(s.group.name) + '</a></p>';
 
       ensureBuyListener(el);
