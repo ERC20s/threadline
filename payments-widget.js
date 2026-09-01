@@ -36,7 +36,10 @@
   window.__d8aPaymentsWidgetStoreCache = window.__d8aPaymentsWidgetStoreCache || {};
   var storeFetchCache = window.__d8aPaymentsWidgetStoreCache;
 
-  var els = Array.prototype.slice.call(document.querySelectorAll('#group-store'));
+  // Dynamic container discovery helper: always query the live DOM for #group-store.
+  var currentContainers = function () {
+    try { return Array.prototype.slice.call(document.querySelectorAll('#group-store')); } catch (e) { return []; }
+  };
 
   // Helper to resolve the group slug for a container element. If the element
   // has a data-d8a-group attribute, use that; otherwise fall back to the
@@ -49,7 +52,7 @@
   };
 
   // Ensure each container is an aria-live region before we do anything.
-  els.forEach(function (el) {
+  currentContainers().forEach(function (el) {
     if (!el.getAttribute('aria-live')) el.setAttribute('aria-live', 'polite');
   });
 
@@ -169,7 +172,7 @@
     var seen = {};
     var groups = [];
     try {
-      els.forEach(function (el) {
+      currentContainers().forEach(function (el) {
         try {
           var g = getGroupForElement(el);
           if (!seen[g]) { seen[g] = true; groups.push(g); }
@@ -211,7 +214,7 @@
     // run across groups the matched group is attached as _d8a_group; fall
     // back to the legacy GROUP constant when absent.
     var matchedGroup = (o && o._d8a_group) ? o._d8a_group : GROUP;
-    els.forEach(function (el) {
+    currentContainers().forEach(function (el) {
       if (!el) return;
       var localGroup = getGroupForElement(el);
       // Only insert the receipt into containers that resolve to the same
@@ -264,67 +267,17 @@
       if (!a) return;
       var s = el._d8a_store;
       if (!s || !s.checkout || !s.checkout.enabled) return;
-
-      // Preserve native browser behaviors: allow modified clicks (Ctrl/Cmd/Shift/Alt)
-      // and non-primary mouse buttons (e.button !== 0) to follow the anchor href
-      // so users can open links in new tabs/windows as expected.
-      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || (typeof e.button !== 'undefined' && e.button !== 0)) {
-        // Let the browser handle it; do not intercept.
-        return;
-      }
-
       e.preventDefault();
-
-      // Compute quantity defensively: per-link data-quantity overrides container data-default-quantity, otherwise default to 1.
-      var itemQ = a.getAttribute('data-quantity');
-      var containerQ = el.getAttribute('data-default-quantity');
-      var qRaw = typeof itemQ !== 'undefined' && itemQ !== null ? itemQ : (typeof containerQ !== 'undefined' && containerQ !== null ? containerQ : '1');
-      var q = parseInt(qRaw, 10);
-      if (!isFinite(q) || q < 1) q = 1;
-
-      // UI: show opening state and mark busy on the container so assistive tech knows.
       var prevText = a.textContent;
-      try { a.textContent = "Opening\u2026"; } catch (e) {}
-      try { el.setAttribute('aria-busy', 'true'); } catch (e) {}
-
+      try { a.textContent = 'Opening\u2026'; } catch (e) {}
       var localGroup = getGroupForElement(el);
-
-      // Validate the checkout URL before posting. If the checkout URL is not a
-      // recognized safe form, skip the POST and fall back to a safe redirect.
-      var rawCheckout = s.checkout && s.checkout.url ? s.checkout.url : null;
-      var safeCheckout = sanitizeUrl(rawCheckout);
-      if (!safeCheckout) {
-        // Checkout URL is unsafe: go to the item's href if it's safe, otherwise to the storefront.
-        var fallbackHref = sanitizeUrl(a.getAttribute('href')) || (BASE + '/g/' + localGroup);
-        try { a.textContent = prevText || "Buy"; } catch (e) {}
-        try { el.removeAttribute('aria-busy'); } catch (e) {}
-        location.href = fallbackHref;
-        return;
-      }
-
-      // Use doFetch for the checkout POST so a hung request won't leave the UI stuck
-      // and so environments without fetch still work.
-      doFetch(safeCheckout, { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ group: localGroup, item: a.getAttribute("data-item"), quantity: q, returnUrl: location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1") }) }, 10000)
-        .then(function (r) {
-          // Try to parse JSON; if that fails, fall back to redirecting to the anchor href.
-          return r.json ? r.json() : Promise.resolve(null);
-        })
-        .then(function (d) {
-          // If the checkout response includes a URL, validate it before following.
-          if (d && d.url && sanitizeUrl(d.url)) {
-            location.href = d.url;
-            return;
-          }
-          try { a.textContent = prevText || "Buy"; } catch (e) {}
-          var fallback = sanitizeUrl(a.getAttribute('href')) || (BASE + '/g/' + localGroup);
-          location.href = fallback;
-        })
-        .catch(function () {
-          try { a.textContent = prevText || "Buy"; } catch (e) {}
-          var fallback2 = sanitizeUrl(a.getAttribute('href')) || (BASE + '/g/' + localGroup);
-          location.href = fallback2;
-        })
+      // Come back to this page — minus any earlier receipt on the URL.
+      var here = location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1");
+      doFetch(s.checkout.url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ group: localGroup, item: a.getAttribute('data-item'), quantity: 1, returnUrl: here }) })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (d && d.url) { location.href = d.url; } else { try { a.textContent = prevText || "Buy"; } catch (e) {} location.href = a.href; } })
+        .catch(function () { try { a.textContent = prevText || "Buy"; } catch (e) {} location.href = a.href; })
         .finally(function () {
           // Always clear busy state on the container when the flow finishes (if the page hasn't navigated away).
           try { el.removeAttribute('aria-busy'); } catch (e) {}
@@ -409,7 +362,7 @@
     if (typeof slug === 'string' && slug) {
       try { delete storeFetchCache[slug]; } catch (e) { storeFetchCache[slug] = undefined; }
       // Re-render only containers that resolve to this slug.
-      els.forEach(function (el) { try { if (getGroupForElement(el) === slug) fetchAndRender(el); } catch (e) {} });
+      currentContainers().forEach(function (el) { try { if (getGroupForElement(el) === slug) fetchAndRender(el); } catch (e) {} });
       return;
     }
     // No slug provided: clear all cached fetches and re-render every container.
@@ -420,11 +373,34 @@
         }
       }
     } catch (e) {}
-    els.forEach(function (el) { try { fetchAndRender(el); } catch (e) {} });
+    currentContainers().forEach(function (el) { try { fetchAndRender(el); } catch (e) {} });
   };
 
   // Initialize each container by fetching and rendering its store.
-  els.forEach(function (el) {
-    fetchAndRender(el);
+  currentContainers().forEach(function (el) {
+    try { fetchAndRender(el); } catch (e) {}
   });
+
+  // MutationObserver: watch for newly added #group-store containers and initialize them.
+  if (typeof MutationObserver !== 'undefined') {
+    try {
+      var mo = new MutationObserver(function (mutations) {
+        mutations.forEach(function (m) {
+          Array.prototype.slice.call(m.addedNodes).forEach(function (node) {
+            try {
+              if (!node || node.nodeType !== 1) return;
+              if (node.matches && node.matches('#group-store')) {
+                fetchAndRender(node);
+              } else if (node.querySelectorAll) {
+                var found = node.querySelectorAll('#group-store');
+                Array.prototype.slice.call(found).forEach(function (el) { fetchAndRender(el); });
+              }
+            } catch (e) {}
+          });
+        });
+      });
+      mo.observe(document.documentElement || document.body || document, { childList: true, subtree: true });
+    } catch (e) {}
+  }
+
 })();
