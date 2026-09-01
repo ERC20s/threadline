@@ -262,8 +262,9 @@
   // Attach a per-container buy click listener that uses the container's stored store data.
   var ensureBuyListener = function (el) {
     if (el.getAttribute('data-d8a-listener')) return;
-    // We'll keep a set of anchors currently opening to prevent duplicate checkouts.
-    var opening = {};
+    // Use a shared, namespaced opening map on window so concurrent clicks across different containers can be deduplicated.
+    window.__d8aPaymentsWidgetOpening = window.__d8aPaymentsWidgetOpening || {};
+    var opening = window.__d8aPaymentsWidgetOpening;
     el.addEventListener('click', function (e) {
       var a = e.target && e.target.closest ? e.target.closest('a[data-item]') : null;
       if (!a) return;
@@ -290,8 +291,9 @@
         }
       } catch (e) {}
 
-      // Prevent duplicate concurrent checkouts for the same anchor.
-      var key = itemId + '::' + qty;
+      // Build a dedupe key that includes the resolved group slug so clicks across different containers for the same group+item+qty are deduped.
+      var theGroup = getGroupForElement(el);
+      var key = theGroup + '::' + itemId + '::' + qty;
       if (opening[key]) return;
       opening[key] = true;
 
@@ -307,7 +309,7 @@
       doFetch((store && store.checkout && store.checkout.url) ? store.checkout.url : (BASE + '/api/v1/store/checkout'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body }, 10000)
         .then(function (r) { return r.json ? r.json() : null; })
         .then(function (d) {
-          opening[key] = false;
+          try { delete opening[key]; } catch (e) { opening[key] = false; }
           if (d && d.url) {
             location.href = d.url;
             return;
@@ -317,7 +319,7 @@
           var safe = sanitizeUrl(a.getAttribute('href')) || (store && store.group && store.group.url) || a.getAttribute('href');
           location.href = safe;
         }).catch(function () {
-          opening[key] = false;
+          try { delete opening[key]; } catch (e) { opening[key] = false; }
           try { a.textContent = originalText; } catch (e) {}
           var safe2 = sanitizeUrl(a.getAttribute('href')) || (store && store.group && store.group.url) || a.getAttribute('href');
           location.href = safe2;
