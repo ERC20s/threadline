@@ -6,7 +6,7 @@
   var BASE = "https://d8a.com";
   var GROUP = "batch-threadline";
   var esc = function (s) {
-    return String(s).replace(/[&<>"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; });
+    return String(s).replace(/[&<>\"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; });
   };
 
   var els = Array.prototype.slice.call(document.querySelectorAll('#group-store'));
@@ -93,7 +93,18 @@
     try { el.setAttribute('aria-live', el.getAttribute('aria-live') || 'polite'); } catch (e) {}
     try { el.setAttribute('aria-busy', 'true'); } catch (e) {}
     // Show a small loading message so users know something is happening.
-    el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Loading</p>';
+    try {
+      // Create a <p> element and set its textContent to avoid inserting control characters via innerHTML.
+      var p = document.createElement('p');
+      p.style.cssText = "font:13px system-ui,sans-serif;color:#9ca3af";
+      p.textContent = 'Loading store\u2026';
+      // Clear the container and insert the loading node.
+      el.innerHTML = '';
+      try { el.insertBefore(p, el.firstChild); } catch (e) { el.appendChild(p); }
+    } catch (e) {
+      // Fallback: if DOM creation fails, use a safe innerHTML literal with the ellipsis.
+      el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Loading store\u2026</p>';
+    }
 
     fetch(BASE + "/api/v1/store/items?group=" + encodeURIComponent(GROUP))
       .then(function (r) { return r.json(); })
