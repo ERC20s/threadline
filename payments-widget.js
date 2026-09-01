@@ -176,6 +176,15 @@
       if (!a) return;
       var s = el._d8a_store;
       if (!s || !s.checkout || !s.checkout.enabled) return;
+
+      // Preserve native browser behaviors: allow modified clicks (Ctrl/Cmd/Shift/Alt)
+      // and non-primary mouse buttons (e.button !== 0) to follow the anchor href
+      // so users can open links in new tabs/windows as expected.
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || (typeof e.button !== 'undefined' && e.button !== 0)) {
+        // Let the browser handle it; do not intercept.
+        return;
+      }
+
       e.preventDefault();
 
       // Compute quantity defensively: per-link data-quantity overrides container data-default-quantity, otherwise default to 1.
@@ -267,7 +276,7 @@
           '<div style="flex:1"><b>' + esc(it.name) + '</b>' +
           (it.description ? '<div style="font-size:12px;color:#6b7280">' + esc(it.description) + '</div>' : '') + '</div>' +
           '<span>' + esc(it.price) + '</span>' +
-          '<a href="' + esc(it.payUrl) + '" data-item="' + esc(it.id) + '" aria-label="' + esc('Buy ' + it.name + ' for ' + it.price) + '" role="button" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a></div>';
+          '<a href="' + esc(it.payUrl) + '" data-item="' + esc(it.id) + '" aria-label="' + esc('Buy ' + it.name + ' for ' + it.price) + '" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a></div>';
       }).join('') + '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group.url) + '" style="color:#7c5cff">' + esc(s.group.name) + '</a></p>';
 
       ensureBuyListener(el);
