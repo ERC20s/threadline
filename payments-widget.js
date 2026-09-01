@@ -16,9 +16,35 @@
     if (!el.getAttribute('aria-live')) el.setAttribute('aria-live', 'polite');
   });
 
+  // Helper: fetch with a timeout (defaults to 10s). On timeout the returned
+  // promise rejects (treat as a network failure). Uses AbortController when
+  // available to cancel the outstanding fetch.
+  var fetchWithTimeout = function (url, opts, timeoutMs) {
+    timeoutMs = typeof timeoutMs === 'number' ? timeoutMs : 10000;
+    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var signal = controller ? controller.signal : undefined;
+    var fetchOpts = opts ? Object.assign({}, opts) : {};
+    if (signal) fetchOpts.signal = signal;
+
+    return new Promise(function (resolve, reject) {
+      var timer = setTimeout(function () {
+        try { if (controller) controller.abort(); } catch (e) {}
+        reject(new Error('timeout'));
+      }, timeoutMs);
+
+      fetch(url, fetchOpts).then(function (r) {
+        clearTimeout(timer);
+        resolve(r);
+      }).catch(function (err) {
+        clearTimeout(timer);
+        reject(err);
+      });
+    });
+  };
+
   // The handshake: an order id is only proof once the platform says so.
   var verify = function (id) {
-    return fetch(BASE + "/api/v1/store/orders/" + encodeURIComponent(id) + "?group=" + encodeURIComponent(GROUP))
+    return fetchWithTimeout(BASE + "/api/v1/store/orders/" + encodeURIComponent(id) + "?group=" + encodeURIComponent(GROUP))
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) { return d && d.paid ? d.order : null; })
       .catch(function () { return null; });
@@ -79,8 +105,9 @@
       e.preventDefault();
       a.textContent = "Opening\u2026";
       var here = location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1");
-      fetch(s.checkout.url, { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ group: GROUP, item: a.getAttribute("data-item"), quantity: 1, returnUrl: here }) })
+      // Use fetchWithTimeout for the checkout POST as well so a hung request won't leave the UI stuck.
+      fetchWithTimeout(s.checkout.url, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ group: GROUP, item: a.getAttribute("data-item"), quantity: 1, returnUrl: here }) }, 10000)
         .then(function (r) { return r.json(); })
         .then(function (d) { if (d.url) { location.href = d.url; } else { a.textContent = "Buy"; location.href = a.href; } })
         .catch(function () { location.href = a.href; });
@@ -106,7 +133,7 @@
       el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Loading store\u2026</p>';
     }
 
-    fetch(BASE + "/api/v1/store/items?group=" + encodeURIComponent(GROUP))
+    fetchWithTimeout(BASE + "/api/v1/store/items?group=" + encodeURIComponent(GROUP))
       .then(function (r) { return r.json(); })
       .then(function (s) {
         // Store the fetched data on the element for the buy handler to use.
