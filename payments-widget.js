@@ -262,61 +262,30 @@
   // Attach a per-container buy click listener that uses the container's stored store data.
   var ensureBuyListener = function (el) {
     if (el.getAttribute('data-d8a-listener')) return;
-    el.addEventListener('click', function (e) {
-      var a = e.target && e.target.closest ? e.target.closest('a[data-item]') : null;
+    el.addEventL
+    istener('click', function (e) {
+      var a = e.target && e.target.closest ? e.target.closest("a[data-item]") : null;
       if (!a) return;
       var s = el._d8a_store;
       if (!s || !s.checkout || !s.checkout.enabled) return;
-
-      // Preserve native browser behaviors: allow modified clicks (Ctrl/Cmd/Shift/Alt)
-      // and non-primary mouse buttons (e.button !== 0) to follow the anchor href
-      // so users can open links in new tabs/windows as expected.
-      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || (typeof e.button !== 'undefined' && e.button !== 0)) {
-        // Let the browser handle it; do not intercept.
-        return;
-      }
-
-      // Prevent duplicate checkout requests: if this container is already
-      // performing a checkout, ignore subsequent clicks and do not re-run the
-      // flow. Also ensure the click does not navigate the page.
-      if (el.getAttribute('data-d8a-checkout-busy')) { try { e.preventDefault(); } catch (ex) {} ; return; }
+      // Only allow a single in-flight checkout per container.
+      try {
+        if (el.getAttribute('data-d8a-checkout-busy')) return;
+        el.setAttribute('data-d8a-checkout-busy', '1');
+        el.setAttribute('aria-busy', 'true');
+      } catch (e) {}
 
       e.preventDefault();
-
-      // Compute quantity defensively: per-link data-quantity overrides container data-default-quantity, otherwise default to 1.
-      var itemQ = a.getAttribute('data-quantity');
-      var containerQ = el.getAttribute('data-default-quantity');
-      var qRaw = typeof itemQ !== 'undefined' && itemQ !== null ? itemQ : (typeof containerQ !== 'undefined' && containerQ !== null ? containerQ : '1');
-      var q = parseInt(qRaw, 10);
-      if (!isFinite(q) || q < 1) q = 1;
-
-      // UI: show opening state and mark busy on the container so assistive tech knows.
+      // Preserve the anchor's displayed text while we open the checkout.
       var prevText = a.textContent;
       try { a.textContent = "Opening\u2026"; } catch (e) {}
-      try { el.setAttribute('aria-busy', 'true'); } catch (e) {}
 
       var localGroup = getGroupForElement(el);
 
-      // Validate the checkout URL before posting. If the checkout URL is not a
-      // recognized safe form, skip the POST and fall back to a safe redirect.
-      var rawCheckout = s.checkout && s.checkout.url ? s.checkout.url : null;
-      var safeCheckout = sanitizeUrl(rawCheckout);
-      if (!safeCheckout) {
-        // Checkout URL is unsafe: go to the item's href if it's safe, otherwise to the storefront.
-        var fallbackHref = sanitizeUrl(a.getAttribute('href')) || (BASE + '/g/' + localGroup);
-        try { a.textContent = prevText || "Buy"; } catch (e) {}
-        try { el.removeAttribute('aria-busy'); } catch (e) {}
-        location.href = fallbackHref;
-        return;
-      }
-
-      // Mark this container busy to prevent duplicate checkout requests.
-      try { el.setAttribute('data-d8a-checkout-busy', '1'); } catch (e) {}
-
-      // Use doFetch for the checkout POST so a hung request won't leave the UI stuck
-      // and so environments without fetch still work.
-      doFetch(safeCheckout, { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ group: localGroup, item: a.getAttribute("data-item"), quantity: q, returnUrl: location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1") }) }, 10000)
+      // Come back to this page — minus any earlier receipt on the URL.
+      var here = location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1");
+      fetch(s.checkout.url, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ group: GROUP, item: a.getAttribute("data-item"), quantity: 1, returnUrl: here }) })
         .then(function (r) {
           // Try to parse JSON; if that fails, fall back to redirecting to the anchor href.
           return r.json ? r.json() : Promise.resolve(null);
@@ -386,12 +355,15 @@
 
       if (!s.items.length) { el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now.</p>'; return; }
       el.innerHTML = s.items.map(function (it) {
+        // Compute a safe href for each item before inserting into the DOM. If the
+        // store-provided payUrl is unsafe, fall back to the safe storefront URL.
+        var safeHref = sanitizeUrl(it.payUrl) || (BASE + '/g/' + localGroup);
         return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif">' +
           '<div style="flex:1"><b>' + esc(it.name) + '</b>' +
           (it.description ? '<div style="font-size:12px;color:#6b7280">' + esc(it.description) + '</div>' : '') + '</div>' +
           '<span>' + esc(it.price) + '</span>' +
-          '<a href="' + esc(it.payUrl) + '" data-item="' + esc(it.id) + '" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a></div>';
-      }).join("") + '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group.url) + '" style="color:#7c5cff">' + esc(s.group.name) + '</a></p>';
+          '<a href="' + esc(safeHref) + '" data-item="' + esc(it.id) + '" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none" rel="noopener noreferrer">Buy</a></div>';
+      }).join("") + '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group.url) + '" style="color:#7c5cff" rel="noopener noreferrer">' + esc(s.group.name) + '</a></p>';
 
       // Store a reference to the store payload on the container so the click handler can use it without another network roundtrip.
       try { el._d8a_store = s; } catch (e) { el._d8a_store = null; }

@@ -31,6 +31,22 @@ payments:
     var esc = function (s) {
       return String(s).replace(/[&<>"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; });
     };
+
+    // Local sanitize implementation mirroring payments-widget.js: allow only
+    // absolute http(s), protocol-relative (//) and same-origin absolute paths (/)
+    var sanitizeUrl = function (u) {
+      try {
+        if (!u && u !== 0) return null;
+        var s = String(u).trim();
+        if (!s) return null;
+        if (/\s/.test(s)) return null;
+        if (/^\/\//.test(s)) return s;
+        if (/^https?:\/\//i.test(s)) return s;
+        if (/^\//.test(s)) return s;
+        return null;
+      } catch (e) { return null; }
+    };
+
     var el = document.getElementById("group-store");
     // The handshake: an order id is only proof once the platform says so.
     var verify = function (id) {
@@ -59,23 +75,24 @@ payments:
         if (!el || !s.items) return;
         if (!s.items.length) { el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now.</p>'; return; }
         el.innerHTML = s.items.map(function (it) {
+          // Compute a safe href for each item before inserting into the DOM.
+          var safeHref = sanitizeUrl(it.payUrl) || (BASE + '/g/' + GROUP);
           return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif">' +
             '<div style="flex:1"><b>' + esc(it.name) + '</b>' +
             (it.description ? '<div style="font-size:12px;color:#6b7280">' + esc(it.description) + '</div>' : '') + '</div>' +
             '<span>' + esc(it.price) + '</span>' +
-            '<a href="' + esc(it.payUrl) + '" data-item="' + esc(it.id) + '" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a></div>';
-        }).join("") + '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group.url) + '" style="color:#7c5cff">' + esc(s.group.name) + '</a></p>';
+            '<a href="' + esc(safeHref) + '" data-item="' + esc(it.id) + '" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none" rel="noopener noreferrer">Buy</a></div>';
+        }).join("") + '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group.url) + '" style="color:#7c5cff" rel="noopener noreferrer">' + esc(s.group.name) + '</a></p>';
         el.addEventListener("click", function (e) {
           var a = e.target && e.target.closest ? e.target.closest("a[data-item]") : null;
           if (!a || !s.checkout.enabled) return;
           e.preventDefault();
           a.textContent = "Opening\u2026";
-          // Come back to this page — minus any earlier receipt on the URL.
           var here = location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1");
           fetch(s.checkout.url, { method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ group: GROUP, item: a.getAttribute("data-item"), quantity: 1, returnUrl: here }) })
-            .then(function (r) { return r.json(); })
-            .then(function (d) { if (d.url) { location.href = d.url; } else { a.textContent = "Buy"; location.href = a.href; } })
+            .then(function (r) { return r.json ? r.json() : Promise.resolve(null); })
+            .then(function (d) { if (d && d.url && sanitizeUrl(d.url)) { location.href = d.url; } else { a.textContent = "Buy"; location.href = a.href; } })
             .catch(function () { location.href = a.href; });
         });
       });
