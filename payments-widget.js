@@ -31,12 +31,22 @@
     } catch (e) { return null; }
   };
 
-  // Promise cache for store item fetches keyed by GROUP. Stored on window so
+  // Promise cache for store item fetches keyed by group slug. Stored on window so
   // multiple widget instances or re-initializations share the same cache.
   window.__d8aPaymentsWidgetStoreCache = window.__d8aPaymentsWidgetStoreCache || {};
   var storeFetchCache = window.__d8aPaymentsWidgetStoreCache;
 
   var els = Array.prototype.slice.call(document.querySelectorAll('#group-store'));
+
+  // Helper to resolve the group slug for a container element. If the element
+  // has a data-d8a-group attribute, use that; otherwise fall back to the
+  // legacy GROUP constant.
+  var getGroupForElement = function (el) {
+    try {
+      var attr = el && el.getAttribute ? el.getAttribute('data-d8a-group') : null;
+      return (attr && String(attr).trim()) ? String(attr).trim() : GROUP;
+    } catch (e) { return GROUP; }
+  };
 
   // Ensure each container is an aria-live region before we do anything.
   els.forEach(function (el) {
@@ -137,6 +147,9 @@
   };
 
   // The handshake: an order id is only proof once the platform says so.
+  // Note: verify still uses the legacy GROUP constant. We only insert
+  // receipts into containers that resolve to that same group so pages that
+  // host multiple distinct stores won't receive mismatched receipts.
   var verify = function (id) {
     return doFetch(BASE + "/api/v1/store/orders/" + encodeURIComponent(id) + "?group=" + encodeURIComponent(GROUP), null, 10000)
       .then(function (r) { return r.ok ? r.json() : null; })
@@ -151,6 +164,11 @@
     window.groupStorePaid = o;
     els.forEach(function (el) {
       if (!el) return;
+      // Only insert the receipt into containers that resolve to the same
+      // group we used to verify the order (legacy GROUP). This avoids showing
+      // receipts in containers that represent other groups.
+      var localGroup = getGroupForElement(el);
+      if (localGroup !== GROUP) return;
       // Suppress duplicates: skip if this container already contains a receipt for this order id.
       if (el.querySelector('[data-paid="' + o.id + '"]')) return;
       var p = document.createElement("p");
@@ -182,8 +200,9 @@
       var btn = e.target && e.target.closest ? e.target.closest('[data-d8a-retry]') : null;
       if (!btn) return;
       e.preventDefault();
-      // Clear the shared in-memory store fetch cache for this group so Retry always forces a fresh network request.
-      try { delete storeFetchCache[GROUP]; } catch (err) { storeFetchCache[GROUP] = undefined; }
+      // Clear the shared in-memory store fetch cache for this container's group so Retry always forces a fresh network request.
+      var localGroup = getGroupForElement(el);
+      try { delete storeFetchCache[localGroup]; } catch (err) { storeFetchCache[localGroup] = undefined; }
       // Re-run the fetch/render flow for only this container.
       fetchAndRender(el);
     });
@@ -221,13 +240,15 @@
       try { a.textContent = "Opening\u2026"; } catch (e) {}
       try { el.setAttribute('aria-busy', 'true'); } catch (e) {}
 
+      var localGroup = getGroupForElement(el);
+
       // Validate the checkout URL before posting. If the checkout URL is not a
       // recognized safe form, skip the POST and fall back to a safe redirect.
       var rawCheckout = s.checkout && s.checkout.url ? s.checkout.url : null;
       var safeCheckout = sanitizeUrl(rawCheckout);
       if (!safeCheckout) {
         // Checkout URL is unsafe: go to the item's href if it's safe, otherwise to the storefront.
-        var fallbackHref = sanitizeUrl(a.getAttribute('href')) || (BASE + '/g/' + GROUP);
+        var fallbackHref = sanitizeUrl(a.getAttribute('href')) || (BASE + '/g/' + localGroup);
         try { a.textContent = prevText || "Buy"; } catch (e) {}
         try { el.removeAttribute('aria-busy'); } catch (e) {}
         location.href = fallbackHref;
@@ -237,7 +258,7 @@
       // Use doFetch for the checkout POST so a hung request won't leave the UI stuck
       // and so environments without fetch still work.
       doFetch(safeCheckout, { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ group: GROUP, item: a.getAttribute("data-item"), quantity: q, returnUrl: location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1") }) }, 10000)
+        body: JSON.stringify({ group: localGroup, item: a.getAttribute("data-item"), quantity: q, returnUrl: location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1") }) }, 10000)
         .then(function (r) {
           // Try to parse JSON; if that fails, fall back to redirecting to the anchor href.
           return r.json ? r.json() : Promise.resolve(null);
@@ -249,12 +270,12 @@
             return;
           }
           try { a.textContent = prevText || "Buy"; } catch (e) {}
-          var fallback = sanitizeUrl(a.getAttribute('href')) || (BASE + '/g/' + GROUP);
+          var fallback = sanitizeUrl(a.getAttribute('href')) || (BASE + '/g/' + localGroup);
           location.href = fallback;
         })
         .catch(function () {
           try { a.textContent = prevText || "Buy"; } catch (e) {}
-          var fallback2 = sanitizeUrl(a.getAttribute('href')) || (BASE + '/g/' + GROUP);
+          var fallback2 = sanitizeUrl(a.getAttribute('href')) || (BASE + '/g/' + localGroup);
           location.href = fallback2;
         })
         .finally(function () {
@@ -284,11 +305,12 @@
     }
 
     // Use a shared in-memory promise cache so multiple containers reuse the same
-    // in-flight request and avoid duplicate network traffic.
-    var cacheKey = GROUP;
+    // in-flight request and avoid duplicate network traffic. Keyed by group slug.
+    var localGroup = getGroupForElement(el);
+    var cacheKey = localGroup;
     var fetchPromise = storeFetchCache[cacheKey];
     if (!fetchPromise) {
-      fetchPromise = doFetch(BASE + "/api/v1/store/items?group=" + encodeURIComponent(GROUP))
+      fetchPromise = doFetch(BASE + "/api/v1/store/items?group=" + encodeURIComponent(localGroup))
         .then(function (r) { return r.json(); });
       storeFetchCache[cacheKey] = fetchPromise;
     }
@@ -297,13 +319,13 @@
       // Store the fetched data on the element for the buy handler to use.
       el._d8a_store = s;
       if (!s || !s.items) {
-        renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now. <a href="' + esc(BASE + '/g/' + GROUP) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>');
+        renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now. <a href="' + esc(BASE + '/g/' + localGroup) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>');
         ensureRetryListener(el);
         ensureBuyListener(el);
         return;
       }
       if (!s.items.length) {
-        renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now. <a href="' + esc(BASE + '/g/' + GROUP) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>');
+        renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now. <a href="' + esc(BASE + '/g/' + localGroup) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>');
         ensureRetryListener(el);
         ensureBuyListener(el);
         return;
@@ -312,7 +334,7 @@
       el.innerHTML = s.items.map(function (it) {
         // Sanitize the per-item payUrl before inserting into an anchor href. If
         // the item-provided URL is unsafe, use the storefront fallback instead.
-        var safeHref = sanitizeUrl(it.payUrl) || (BASE + '/g/' + GROUP);
+        var safeHref = sanitizeUrl(it.payUrl) || (BASE + '/g/' + localGroup);
         return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif">' +
           '<div style="flex:1"><b>' + esc(it.name) + '</b>' +
           (it.description ? '<div style="font-size:12px;color:#6b7280">' + esc(it.description) + '</div>' : '') + '</div>' +
@@ -325,7 +347,7 @@
     }).catch(function () {
       // Clear the cached promise on failure so a subsequent Retry gets a fresh attempt.
       try { delete storeFetchCache[cacheKey]; } catch (e) { storeFetchCache[cacheKey] = undefined; }
-      renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now. <a href="' + esc(BASE + '/g/' + GROUP) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>');
+      renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now. <a href="' + esc(BASE + '/g/' + localGroup) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>');
       ensureRetryListener(el);
       ensureBuyListener(el);
     }).finally(function () {
@@ -333,13 +355,24 @@
     });
   };
 
-  // Public API: programmatically clear the in-memory store cache for this group
-  // and re-run fetch/render for every #group-store container on the page.
-  // Note: this only clears the in-memory cache stored on window; it does not
-  // affect any server-side state or persistent storage.
-  window.groupStoreRefresh = function () {
-    try { delete storeFetchCache[GROUP]; } catch (e) { storeFetchCache[GROUP] = undefined; }
-    // Re-render every container so callers don't need to manage elements.
+  // Public API: programmatically clear the in-memory store cache for a group
+  // and re-run fetch/render for matching #group-store containers on the page.
+  // Calling without an argument clears all groups and re-renders all containers.
+  window.groupStoreRefresh = function (slug) {
+    if (typeof slug === 'string' && slug) {
+      try { delete storeFetchCache[slug]; } catch (e) { storeFetchCache[slug] = undefined; }
+      // Re-render only containers that resolve to this slug.
+      els.forEach(function (el) { try { if (getGroupForElement(el) === slug) fetchAndRender(el); } catch (e) {} });
+      return;
+    }
+    // No slug provided: clear all cached fetches and re-render every container.
+    try {
+      for (var k in storeFetchCache) {
+        if (Object.prototype.hasOwnProperty.call(storeFetchCache, k)) {
+          try { delete storeFetchCache[k]; } catch (e) { storeFetchCache[k] = undefined; }
+        }
+      }
+    } catch (e) {}
     els.forEach(function (el) { try { fetchAndRender(el); } catch (e) {} });
   };
 
