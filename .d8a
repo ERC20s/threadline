@@ -82,10 +82,9 @@ payments:
   })();
   </script>
 
-# url: https://example.com   — where it runs live; shown as a globe once set.
+url: https://verkl.com
 # run: — how to run it. Yours to edit; VS Code's ▶ (the VSD8A extension) launches each entry.
 run:
   {
-    "// no site yet": "README only - add the page files at the root, then delete the # below",
-    "// site": { "cmd": "npx --yes serve -l 5004 .", "port": 5004 }
+    "site": { "cmd": "npx --yes serve -l 5004 .", "port": 5004 }
   }
