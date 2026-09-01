@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Threadline — Product</title>
+  <style>
+    :root{--max-width:980px;--gap:18px;--accent:#7c5cff;--muted:#6b7280}
+    html,body{height:100%}
+    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;margin:0;padding:24px;box-sizing:border-box;color:#0f172a;background:#fff;display:flex;justify-content:center}
+    .wrap{width:100%;max-width:var(--max-width)}
+    header h1{font-size:1.25rem;margin:0 0 8px}
+    .note{margin:0 0 16px;color:var(--muted);font-size:0.95rem}
+    a{color:var(--accent);text-decoration:none}
+    a:focus{outline:3px solid rgba(124,92,255,0.18);outline-offset:3px}
+
+    .product{display:grid;gap:var(--gap)}
+    /* Mobile-first: image then details stacked */
+    .media{width:100%}
+    .media svg{width:100%;height:auto;display:block;border-radius:8px;background:linear-gradient(180deg,#f8f6ff,#fff);}
+    .meta{padding:6px 2px}
+    .price{font-weight:700;font-size:1.1rem;margin:6px 0;color:#111827}
+    .description{color:var(--muted);margin:8px 0 12px}
+
+    .sizes{display:flex;gap:8px;flex-wrap:wrap}
+    .size{display:inline-flex;align-items:center;justify-content:center;padding:8px 12px;border-radius:999px;border:1px solid #e6e6e6;background:#fff;color:#111827;font-weight:600;min-width:44px;text-align:center}
+    .size[aria-disabled="true"]{opacity:0.7}
+
+    .actions{margin-top:18px}
+
+    /* Wider: two-column layout */
+    @media(min-width:800px){
+      .product{grid-template-columns:1fr 360px;align-items:start}
+      .media{order:0}
+      .meta{order:1}
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <h1 id="page-heading">Threadline — Product</h1>
+      <p class="note">This is a static, responsive product detail placeholder. Replace copy, price and the SVG with real assets before publishing.</p>
+    </header>
+
+    <section class="product" aria-labelledby="page-heading">
+      <div class="media" aria-hidden="false">
+        <!-- Inline SVG placeholder: responsive product block -->
+        <svg viewBox="0 0 800 800" role="img" aria-label="Product image placeholder">
+          <defs>
+            <linearGradient id="g" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0" stop-color="#f3f0ff"/>
+              <stop offset="1" stop-color="#ffffff"/>
+            </linearGradient>
+          </defs>
+          <rect x="0" y="0" width="800" height="800" fill="url(#g)" rx="12"/>
+          <!-- simple garment silhouette -->
+          <g transform="translate(200,160) scale(0.8)" fill="#e6e6ea">
+            <path d="M160 0c-20 0-28 10-40 24-6 8-20 18-40 18s-34-10-40-18C0 10-8 0-28 0L0 40c10 14 20 20 36 34 20 20 44 36 76 36s56-16 76-36C450 60 470 46 480 34L508 0c-20 0-28 10-40 24-6 8-20 18-40 18s-34-10-40-18C360 10 352 0 332 0z"/>
+          </g>
+          <!-- product badge -->
+          <g transform="translate(520,560)">
+            <rect x="0" y="0" width="220" height="60" rx="10" fill="#7c5cff"/>
+            <text x="110" y="38" fill="#fff" font-size="20" font-family="system-ui,Arial" text-anchor="middle" font-weight="700">FEATURE</text>
+          </g>
+        </svg>
+      </div>
+
+      <div class="meta">
+        <h2 style="margin:0 0 6px">Everyday Tee</h2>
+        <div class="price">$38</div>
+        <p class="description">A clean, everyday tee in soft cotton. Cut for a modern relaxed fit — pairs with all your wardrobe staples.</p>
+
+        <div>
+          <label style="display:block;font-weight:600;margin-bottom:8px">Sizes</label>
+          <div class="sizes" role="list">
+            <span class="size" role="listitem" aria-disabled="true">XS</span>
+            <span class="size" role="listitem" aria-disabled="true">S</span>
+            <span class="size" role="listitem" aria-disabled="true">M</span>
+            <span class="size" role="listitem" aria-disabled="true">L</span>
+            <span class="size" role="listitem" aria-disabled="true">XL</span>
+          </div>
+        </div>
+
+        <p class="actions"><a href="/products.html">Back to products</a></p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
