@@ -239,7 +239,7 @@
 
   // Helper: render an error / empty message with a Retry control into a container.
   var renderMessageWithRetry = function (el, htmlMessage) {
-    var retryBtn = '<button data-d8a-retry style="margin-left:10px;background:transparent;border:1px solid #e5e7eb;padding:6px 10px;border-radius:6px;color:#111;cursor:pointer">Retry</button>';
+    var retryBtn = '<button type="button" data-d8a-retry style="margin-left:10px;background:transparent;border:1px solid #e5e7eb;padding:6px 10px;border-radius:6px;color:#111;cursor:pointer">Retry</button>';
     el.innerHTML = htmlMessage + retryBtn;
   };
 
@@ -267,197 +267,50 @@
       if (!a) return;
       var s = el._d8a_store;
       if (!s || !s.checkout || !s.checkout.enabled) return;
-
-      // Preserve native browser behaviors: allow modified clicks (Ctrl/Cmd/Shift/Alt)
-      // and non-primary mouse buttons (e.button !== 0) to follow the anchor href
-      // so users can open links in new tabs/windows as expected.
-      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || (typeof e.button !== 'undefined' && e.button !== 0)) {
-        // Let the browser handle it; do not intercept.
-        return;
-      }
-
-      // Prevent duplicate checkout requests: if this container is already
-      // performing a checkout, ignore subsequent clicks and do not re-run the
-      // flow. Also ensure the click does not navigate the page.
-      if (el.getAttribute('data-d8a-checkout-busy')) { try { e.preventDefault(); } catch (ex) {} ; return; }
-
       e.preventDefault();
-
-      // Compute quantity defensively: per-link data-quantity overrides container data-default-quantity, otherwise default to 1.
-      var itemQ = a.getAttribute('data-quantity');
-      var containerQ = el.getAttribute('data-default-quantity');
-      var qRaw = typeof itemQ !== 'undefined' && itemQ !== null ? itemQ : (typeof containerQ !== 'undefined' && containerQ !== null ? containerQ : '1');
-      var q = parseInt(qRaw, 10);
-      if (!isFinite(q) || q < 1) q = 1;
-
-      // UI: show opening state and mark busy on the container so assistive tech knows.
-      var prevText = a.textContent;
-      try { a.textContent = "Opening\u2026"; } catch (e) {}
-      try { el.setAttribute('aria-busy', 'true'); } catch (e) {}
-
-      var localGroup = getGroupForElement(el);
-
-      // Validate the checkout URL before posting. If the checkout URL is not a
-      // recognized safe form, skip the POST and fall back to a safe redirect.
-      var rawCheckout = s.checkout && s.checkout.url ? s.checkout.url : null;
-      var safeCheckout = sanitizeUrl(rawCheckout);
-      if (!safeCheckout) {
-        // Checkout URL is unsafe: go to the item's href if it's safe, otherwise to the storefront.
-        var fallbackHref = sanitizeUrl(a.getAttribute('href')) || (BASE + '/g/' + localGroup);
-        try { a.textContent = prevText || "Buy"; } catch (e) {}
-        try { el.removeAttribute('aria-busy'); } catch (e) {}
-        location.href = fallbackHref;
-        return;
-      }
-
-      // Mark this container busy to prevent duplicate checkout requests.
+      // Guard against duplicate checkout clicks originating from the same container.
+      if (el.getAttribute('data-d8a-checkout-busy')) return;
       try { el.setAttribute('data-d8a-checkout-busy', '1'); } catch (e) {}
-
-      // Use doFetch for the checkout POST so a hung request won't leave the UI stuck
-      // and so environments without fetch still work.
-      doFetch(safeCheckout, { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ group: localGroup, item: a.getAttribute("data-item"), quantity: q, returnUrl: location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1") }) }, 10000)
-        .then(function (r) {
-          // Try to parse JSON; if that fails, fall back to redirecting to the anchor href.
-          return r.json ? r.json() : Promise.resolve(null);
-        })
-        .then(function (d) {
-          // If the checkout response includes a URL, validate it before following.
-          if (d && d.url && sanitizeUrl(d.url)) {
-            location.href = d.url;
-            return;
-          }
-          try { a.textContent = prevText || "Buy"; } catch (e) {}
-          var fallback = sanitizeUrl(a.getAttribute('href')) || (BASE + '/g/' + localGroup);
-          location.href = fallback;
-        })
-        .catch(function () {
-          try { a.textContent = prevText || "Buy"; } catch (e) {}
-          var fallback2 = sanitizeUrl(a.getAttribute('href')) || (BASE + '/g/' + localGroup);
-          location.href = fallback2;
-        })
-        .finally(function () {
-          // Always clear busy state on the container when the flow finishes (if the page hasn't navigated away).
-          try { el.removeAttribute('aria-busy'); } catch (e) {}
-          try { el.removeAttribute('data-d8a-checkout-busy'); } catch (e) {}
-        });
+      var oldText = a.textContent;
+      try { a.textContent = 'Opening\u2026'; } catch (e) {}
+      // Come back to this page — minus any earlier receipt on the URL.
+      var here = location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1");
+      var body = { group: getGroupForElement(el), item: a.getAttribute('data-item'), quantity: 1, returnUrl: here };
+      var opts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+      // Prefer the configured checkout.url, but fall back to the platform checkout endpoint when absent.
+      var checkoutUrl = (s.checkout && s.checkout.url) ? s.checkout.url : (BASE + '/api/v1/store/checkout');
+      doFetch(checkoutUrl, opts, 10000).then(function (r) { return r.json(); }).then(function (d) {
+        try { a.textContent = oldText; } catch (e) {}
+        try { el.removeAttribute('data-d8a-checkout-busy'); } catch (e) {}
+        if (d && d.url) { location.href = d.url; return; }
+        // No returned URL: navigate to the safe payUrl on the item link.
+        try { location.href = a.href; } catch (e) {}
+      }).catch(function () {
+        try { a.textContent = oldText; } catch (e) {}
+        try { el.removeAttribute('data-d8a-checkout-busy'); } catch (e) {}
+        try { location.href = a.href; } catch (e) {}
+      });
     });
     el.setAttribute('data-d8a-listener', '1');
   };
 
-  // Fetch and render only for a specific container.
+  // Core: fetch the store payload for the group and render it into a container.
   var fetchAndRender = function (el) {
-    try { el.setAttribute('aria-live', el.getAttribute('aria-live') || 'polite'); } catch (e) {}
+    if (!el) return;
     try { el.setAttribute('aria-busy', 'true'); } catch (e) {}
-    // Show a small loading message so users know something is happening.
-    try {
-      // Create a <p> element and set its textContent to avoid inserting control characters via innerHTML.
-      var p = document.createElement('p');
-      p.style.cssText = "font:13px system-ui,sans-serif;color:#9ca3af";
-      p.textContent = 'Loading store\u2026';
-      // Clear the container and insert the loading node.
-      el.innerHTML = '';
-      try { el.insertBefore(p, el.firstChild); } catch (e) { el.appendChild(p); }
-    } catch (e) {
-      // Fallback: if DOM creation fails, use a safe innerHTML literal with the ellipsis.
-      el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Loading store\u2026</p>';
-    }
-
-    // Use a shared in-memory promise cache so multiple containers reuse the same
-    // in-flight request and avoid duplicate network traffic. Keyed by group slug.
     var localGroup = getGroupForElement(el);
-    var cacheKey = localGroup;
-    var p = null;
-    try { p = storeFetchCache[cacheKey]; } catch (e) { p = null; }
-    if (!p) {
-      p = doFetch(BASE + "/api/v1/store/items?group=" + encodeURIComponent(localGroup), null, 10000)
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .catch(function () { return null; });
-      try { storeFetchCache[cacheKey] = p; } catch (e) {}
-    }
 
-    p.then(function (s) {
-      if (!s || !s.items) {
-        renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now.</p>');
-        ensureRetryListener(el);
-        ensureBuyListener(el);
-        return;
+    // If a cached promise exists for this slug, reuse it — callers may share the same network request.
+    try {
+      if (storeFetchCache[localGroup]) {
+        return storeFetchCache[localGroup].then(function (s) { try { renderStoreInto(el, s, localGroup); } catch (e) {} });
       }
+    } catch (e) {}
 
-      if (!s.items.length) { el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now.</p>'; return; }
-
-      // Build each item node with DOM APIs to avoid fragile string concatenation.
-      try {
-        el.innerHTML = '';
-        for (var i = 0; i < s.items.length; i++) {
-          try {
-            var it = s.items[i];
-            var itemDiv = document.createElement('div');
-            itemDiv.style.cssText = 'display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif';
-
-            var left = document.createElement('div');
-            left.style.cssText = 'flex:1';
-
-            var nameNode = document.createElement('b');
-            nameNode.textContent = it.name || '';
-            left.appendChild(nameNode);
-
-            if (it.description) {
-              var desc = document.createElement('div');
-              desc.style.cssText = 'font-size:12px;color:#6b7280';
-              desc.textContent = it.description;
-              left.appendChild(desc);
-            }
-
-            itemDiv.appendChild(left);
-
-            var price = document.createElement('span');
-            price.textContent = it.price || '';
-            itemDiv.appendChild(price);
-
-            var a = document.createElement('a');
-            var safePay = sanitizeUrl(it.payUrl) || (BASE + '/g/' + localGroup);
-            a.setAttribute('href', safePay);
-            try { a.setAttribute('data-item', String(it.id)); } catch (e) { a.setAttribute('data-item', it.id); }
-            a.style.cssText = 'background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none';
-            a.textContent = 'Buy';
-            try { a.setAttribute('rel', 'noopener noreferrer'); } catch (e) {}
-            itemDiv.appendChild(a);
-
-            try { el.appendChild(itemDiv); } catch (e) { /* best-effort */ }
-          } catch (e) { /* continue with other items */ }
-        }
-
-        // Add the sold-by line with a safe link to the group storefront.
-        try {
-          var soldp = document.createElement('p');
-          soldp.style.cssText = 'font:11px system-ui,sans-serif;color:#9ca3af';
-          soldp.textContent = 'Sold by ';
-          var solda = document.createElement('a');
-          var safeGroupHref = sanitizeUrl(s.group && s.group.url) || (BASE + '/g/' + localGroup);
-          solda.setAttribute('href', safeGroupHref);
-          solda.style.cssText = 'color:#7c5cff';
-          solda.textContent = (s.group && s.group.name) ? s.group.name : '';
-          try { solda.setAttribute('rel', 'noopener noreferrer'); } catch (e) {}
-          soldp.appendChild(solda);
-          el.appendChild(soldp);
-        } catch (e) { /* ignore sold-by failures */ }
-      } catch (e) {
-        // If DOM APIs fail for any reason, fall back to the previous safe innerHTML rendering using esc().
-        el.innerHTML = s.items.map(function (it) {
-          return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif">' +
-            '<div style="flex:1"><b>' + esc(it.name) + '</b>' +
-            (it.description ? '<div style="font-size:12px;color:#6b7280">' + esc(it.description) + '</div>' : '') + '</div>' +
-            '<span>' + esc(it.price) + '</span>' +
-            '<a href="' + esc(it.payUrl) + '" data-item="' + esc(it.id) + '" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a></div>';
-        }).join('') + '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group && s.group.url) + '" style="color:#7c5cff">' + esc(s.group && s.group.name) + '</a></p>';
-      }
-
-      // Store a reference to the store payload on the container so the click handler can use it without another network roundtrip.
-      try { el._d8a_store = s; } catch (e) { el._d8a_store = null; }
-
-      ensureRetryListener(el);
-      ensureBuyListener(el);
+    var promise = doFetch(BASE + '/api/v1/store/items?group=' + encodeURIComponent(localGroup), null, 10000).then(function (r) { return r.json(); });
+    try { storeFetchCache[localGroup] = promise; } catch (e) {}
+    promise.then(function (s) {
+      renderStoreInto(el, s, localGroup);
     }).catch(function () {
       renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now.</p>');
       ensureRetryListener(el);
@@ -466,6 +319,88 @@
       try { el.removeAttribute('aria-busy'); } catch (e) {}
       try { el.removeAttribute('data-d8a-checkout-busy'); } catch (e) {}
     });
+  };
+
+  var renderStoreInto = function (el, s, localGroup) {
+    if (!el) return;
+    try { el.innerHTML = ''; } catch (e) {}
+    try {
+      if (!s || !s.items || !s.items.length) {
+        renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now.</p>');
+        ensureRetryListener(el);
+        ensureBuyListener(el);
+        return;
+      }
+
+      for (var i = 0; i < s.items.length; i++) {
+        try {
+          var it = s.items[i];
+          var itemDiv = document.createElement('div');
+          itemDiv.style.cssText = 'display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif';
+
+          var left = document.createElement('div');
+          left.style.cssText = 'flex:1';
+
+          var nameNode = document.createElement('b');
+          nameNode.textContent = it.name || '';
+          left.appendChild(nameNode);
+
+          if (it.description) {
+            var desc = document.createElement('div');
+            desc.style.cssText = 'font-size:12px;color:#6b7280';
+            desc.textContent = it.description;
+            left.appendChild(desc);
+          }
+
+          itemDiv.appendChild(left);
+
+          var price = document.createElement('span');
+          price.textContent = it.price || '';
+          itemDiv.appendChild(price);
+
+          var a = document.createElement('a');
+          var safePay = sanitizeUrl(it.payUrl) || (BASE + '/g/' + localGroup);
+          a.setAttribute('href', safePay);
+          try { a.setAttribute('data-item', String(it.id)); } catch (e) { a.setAttribute('data-item', it.id); }
+          a.style.cssText = 'background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none';
+          a.textContent = 'Buy';
+          try { a.setAttribute('rel', 'noopener noreferrer'); } catch (e) {}
+          itemDiv.appendChild(a);
+
+          try { el.appendChild(itemDiv); } catch (e) { /* best-effort */ }
+        } catch (e) { /* continue with other items */ }
+      }
+
+      // Add the sold-by line with a safe link to the group storefront.
+      try {
+        var soldp = document.createElement('p');
+        soldp.style.cssText = 'font:11px system-ui,sans-serif;color:#9ca3af';
+        soldp.textContent = 'Sold by ';
+        var solda = document.createElement('a');
+        var safeGroupHref = sanitizeUrl(s.group && s.group.url) || (BASE + '/g/' + localGroup);
+        solda.setAttribute('href', safeGroupHref);
+        solda.style.cssText = 'color:#7c5cff';
+        solda.textContent = (s.group && s.group.name) ? s.group.name : '';
+        try { solda.setAttribute('rel', 'noopener noreferrer'); } catch (e) {}
+        soldp.appendChild(solda);
+        el.appendChild(soldp);
+      } catch (e) { /* ignore sold-by failures */ }
+    } catch (e) {
+      // If DOM APIs fail for any reason, fall back to the previous safe innerHTML rendering using esc().
+      el.innerHTML = s.items.map(function (it) {
+        return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif">' +
+          '<div style="flex:1"><b>' + esc(it.name) + '</b>' +
+          (it.description ? '<div style="font-size:12px;color:#6b7280">' + esc(it.description) + '</div>' : '') + '</div>' +
+          '<span>' + esc(it.price) + '</span>' +
+          '<a href="' + esc(it.payUrl) + '" data-item="' + esc(it.id) + '" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a></div>';
+      }).join('') + '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group && s.group.url) + '" style="color:#7c5cff">' + esc(s.group && s.group.name) + '</a></p>';
+    }
+
+    // Store a reference to the store payload on the container so the click handler can use it without another network roundtrip.
+    try { el._d8a_store = s; } catch (e) { el._d8a_store = null; }
+
+    ensureRetryListener(el);
+    ensureBuyListener(el);
   };
 
   // Public API: programmatically clear the in-memory store cache for a group
