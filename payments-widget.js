@@ -111,7 +111,7 @@
 
   // The handshake: an order id is only proof once the platform says so.
   var verify = function (id) {
-    return fetchWithTimeout(BASE + "/api/v1/store/orders/" + encodeURIComponent(id) + "?group=" + encodeURIComponent(GROUP))
+    return doFetch(BASE + "/api/v1/store/orders/" + encodeURIComponent(id) + "?group=" + encodeURIComponent(GROUP), null, 10000)
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) { return d && d.paid ? d.order : null; })
       .catch(function () { return null; });
@@ -236,12 +236,10 @@
         ensureRetryListener(el);
         ensureBuyListener(el);
       })
-      .then(function () {
-        try { el.removeAttribute('aria-busy'); } catch (e) {}
-      });
+      .finally(function () { try { el.removeAttribute('aria-busy'); } catch (e) {} });
   };
 
-  // Kick off per-container loads so each one can be retried independently.
-  if (els.length) els.forEach(function (el) { fetchAndRender(el); });
+  // Initialise each container by running the fetch/render flow.
+  els.forEach(function (el) { fetchAndRender(el); });
 
 })();
