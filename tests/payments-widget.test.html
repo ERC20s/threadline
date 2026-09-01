@@ -33,7 +33,9 @@
     </div>
     <div>
       <h3>Retry group (retry-group)</h3>
-      <div id="group-store" data-d8a-group="retry-group"></div>
+      <form onsubmit="window._submitted=true;return false">
+        <div id="group-store" data-d8a-group="retry-group"></div>
+      </form>
     </div>
   </div>
 
@@ -49,6 +51,9 @@
     resultsEl.appendChild(d);
     console[name==='final' ? (ok? 'log':'error') : (ok ? 'log' : 'error')](name, msg || '');
   }
+
+  // Ensure we can detect accidental form submission from embedded widget controls
+  window._submitted = false;
 
   // Mock fetch to control network responses and count requests.
   (function () {
@@ -161,7 +166,8 @@
           var after = (window.__testFetchCounts && window.__testFetchCounts['retry-group']) || 0;
           var increased = after > before;
           var hasItem = !!retryContainer.querySelector('a[data-item="r1"]');
-          note('retry-clears-cache-and-retries', increased && hasItem, 'requests before=' + before + ' after=' + after + ' hasItem=' + hasItem);
+          var submitted = !!window._submitted;
+          note('retry-clears-cache-and-retries', increased && hasItem && !submitted, 'requests before=' + before + ' after=' + after + ' hasItem=' + hasItem + ' submitted=' + submitted);
         }, 600);
       }, 200);
 
