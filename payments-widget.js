@@ -60,11 +60,11 @@
       if (!els.length) return s;
       els.forEach(function (el) {
         if (!s || !s.items) {
-          el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now.</p>';
+          el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now. <a href="' + esc(BASE + '/g/' + GROUP) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>';
           return;
         }
         if (!s.items.length) {
-          el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now.</p>';
+          el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now. <a href="' + esc(BASE + '/g/' + GROUP) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>';
           return;
         }
         el.innerHTML = s.items.map(function (it) {
@@ -97,7 +97,7 @@
       return s;
     })
     .catch(function () {
-      if (els.length) els.forEach(function (el) { el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now.</p>'; });
+      if (els.length) els.forEach(function (el) { el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now. <a href="' + esc(BASE + '/g/' + GROUP) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>'; });
     })
     .then(function () {
       // Always clear aria-busy on every code path after the fetch completes.
