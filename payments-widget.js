@@ -36,7 +36,10 @@
   window.__d8aPaymentsWidgetStoreCache = window.__d8aPaymentsWidgetStoreCache || {};
   var storeFetchCache = window.__d8aPaymentsWidgetStoreCache;
 
-  var els = Array.prototype.slice.call(document.querySelectorAll('#group-store'));
+  // Helper: return the current set of #group-store containers on demand.
+  var currentContainers = function () {
+    try { return Array.prototype.slice.call(document.querySelectorAll('#group-store')); } catch (e) { return []; }
+  };
 
   // Helper to resolve the group slug for a container element. If the element
   // has a data-d8a-group attribute, use that; otherwise fall back to the
@@ -49,7 +52,7 @@
   };
 
   // Ensure each container is an aria-live region before we do anything.
-  els.forEach(function (el) {
+  currentContainers().forEach(function (el) {
     if (!el.getAttribute('aria-live')) el.setAttribute('aria-live', 'polite');
   });
 
@@ -169,7 +172,7 @@
     var seen = {};
     var groups = [];
     try {
-      els.forEach(function (el) {
+      currentContainers().forEach(function (el) {
         try {
           var g = getGroupForElement(el);
           if (!seen[g]) { seen[g] = true; groups.push(g); }
@@ -211,7 +214,7 @@
     // run across groups the matched group is attached as _d8a_group; fall
     // back to the legacy GROUP constant when absent.
     var matchedGroup = (o && o._d8a_group) ? o._d8a_group : GROUP;
-    els.forEach(function (el) {
+    currentContainers().forEach(function (el) {
       if (!el) return;
       var localGroup = getGroupForElement(el);
       // Only insert the receipt into containers that resolve to the same
@@ -409,7 +412,7 @@
     if (typeof slug === 'string' && slug) {
       try { delete storeFetchCache[slug]; } catch (e) { storeFetchCache[slug] = undefined; }
       // Re-render only containers that resolve to this slug.
-      els.forEach(function (el) { try { if (getGroupForElement(el) === slug) fetchAndRender(el); } catch (e) {} });
+      currentContainers().forEach(function (el) { try { if (getGroupForElement(el) === slug) fetchAndRender(el); } catch (e) {} });
       return;
     }
     // No slug provided: clear all cached fetches and re-render every container.
@@ -420,11 +423,46 @@
         }
       }
     } catch (e) {}
-    els.forEach(function (el) { try { fetchAndRender(el); } catch (e) {} });
+    currentContainers().forEach(function (el) { try { fetchAndRender(el); } catch (e) {} });
   };
 
+  // Optional MutationObserver: discover #group-store elements added after the
+  // script runs and render them on-demand. Feature guarded so pages without
+  // MutationObserver aren't affected.
+  if (typeof MutationObserver !== 'undefined') {
+    try {
+      var observer = new MutationObserver(function (mutations) {
+        mutations.forEach(function (m) {
+          if (!m.addedNodes || !m.addedNodes.length) return;
+          for (var i = 0; i < m.addedNodes.length; i++) {
+            var node = m.addedNodes[i];
+            try {
+              // If the added node itself is a matching container, render it.
+              if (node.nodeType === 1 && node.matches && node.matches('#group-store')) {
+                try { if (!node.getAttribute('aria-live')) node.setAttribute('aria-live', 'polite'); } catch (e) {}
+                fetchAndRender(node);
+                continue;
+              }
+              // Otherwise, if it contains matching containers, render each.
+              if (node.nodeType === 1 && node.querySelector) {
+                var found = node.querySelectorAll('#group-store');
+                for (var j = 0; j < found.length; j++) {
+                  try { if (!found[j].getAttribute('aria-live')) found[j].setAttribute('aria-live', 'polite'); } catch (e) {}
+                  fetchAndRender(found[j]);
+                }
+              }
+            } catch (e) {}
+          }
+        });
+      });
+      observer.observe(document.documentElement || document.body || document, { childList: true, subtree: true });
+      // Expose the observer only for debugging; it's not needed for normal use.
+      try { window.__d8aPaymentsWidgetObserver = observer; } catch (e) {}
+    } catch (e) {}
+  }
+
   // Initialize each container by fetching and rendering its store.
-  els.forEach(function (el) {
+  currentContainers().forEach(function (el) {
     fetchAndRender(el);
   });
 })();
