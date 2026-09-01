@@ -147,45 +147,89 @@
   };
 
   // The handshake: an order id is only proof once the platform says so.
-  // Note: verify still uses the legacy GROUP constant. We only insert
-  // receipts into containers that resolve to that same group so pages that
-  // host multiple distinct stores won't receive mismatched receipts.
-  var verify = function (id) {
-    return doFetch(BASE + "/api/v1/store/orders/" + encodeURIComponent(id) + "?group=" + encodeURIComponent(GROUP), null, 10000)
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (d) { return d && d.paid ? d.order : null; })
-      .catch(function () { return null; });
+  // We'll support verifying a single group (backwards-compatible) and a
+  // multi-group verification flow used when a returning buyer comes back
+  // with ?d8a_order=<id> on pages that host multiple #group-store containers.
+  var verifySingleGroup = function (id, group) {
+    try {
+      var g = (typeof group === 'string' && String(group).trim()) ? String(group).trim() : GROUP;
+      return doFetch(BASE + "/api/v1/store/orders/" + encodeURIComponent(id) + "?group=" + encodeURIComponent(g), null, 10000)
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) { return d && d.paid ? d.order : null; })
+        .catch(function () { return null; });
+    } catch (e) { return Promise.resolve(null); }
   };
-  window.groupStoreVerify = verify;
+
+  var verifyAcrossGroups = function (id) {
+    // Collect distinct groups found on the page's containers. Always include
+    // the legacy GROUP as a fallback so single-container pages keep working.
+    var seen = {};
+    els.forEach(function (el) {
+      try { seen[getGroupForElement(el)] = true; } catch (e) {}
+    });
+    seen[GROUP] = true;
+    var groups = Object.keys(seen);
+
+    // Try each group sequentially, stopping at the first paid order found.
+    var chain = Promise.resolve(null);
+    var result = null;
+    groups.forEach(function (g) {
+      chain = chain.then(function () {
+        if (result) return result;
+        return verifySingleGroup(id, g).then(function (o) {
+          if (o) { result = { order: o, group: g }; }
+          return result;
+        });
+      });
+    });
+    return chain.then(function () { return result; });
+  };
+
+  // Expose window.groupStoreVerify(id[, group]): when group is provided it
+  // verifies that single group and returns the order (old behaviour). When
+  // called without a group it will attempt verification across the groups
+  // present on the page and return the order (without exposing the group).
+  // For internal callers that need the matching group, use verifyAcrossGroups.
+  window.groupStoreVerify = function (id, group) {
+    if (typeof group === 'string' && String(group).trim()) return verifySingleGroup(id, group);
+    return verifyAcrossGroups(id).then(function (res) { return res ? res.order : null; });
+  };
 
   var back = (location.search.match(/[?&]d8a_order=([A-Za-z0-9_-]+)/) || [])[1];
-  if (back) verify(back).then(function (o) {
-    if (!o) return;
-    window.groupStorePaid = o;
-    els.forEach(function (el) {
-      if (!el) return;
-      // Only insert the receipt into containers that resolve to the same
-      // group we used to verify the order (legacy GROUP). This avoids showing
-      // receipts in containers that represent other groups.
-      var localGroup = getGroupForElement(el);
-      if (localGroup !== GROUP) return;
-      // Suppress duplicates: skip if this container already contains a receipt for this order id.
-      if (el.querySelector('[data-paid="' + o.id + '"]')) return;
-      var p = document.createElement("p");
-      p.setAttribute("data-paid", o.id);
-      p.setAttribute("role", "status");
-      p.style.cssText = "font:13px system-ui,sans-serif;color:#059669";
-      p.innerHTML = "Paid: " + esc(o.itemName) + (o.quantity > 1 ? " \u00d7" + o.quantity : "") + " \u2014 order " + esc(o.id);
-      // Insert inside the store container so assistive tech hears it as part of the live region.
-      try {
-        el.insertBefore(p, el.firstChild);
-      } catch (e) {
-        // Fallback: append if insertBefore isn't available for some reason.
-        el.appendChild(p);
-      }
+  if (back) {
+    // Use the multi-group flow so pages hosting multiple stores resolve which
+    // group the paid order belongs to and insert the receipt only into the
+    // matching container(s).
+    verifyAcrossGroups(back).then(function (res) {
+      if (!res || !res.order) return;
+      var o = res.order;
+      var matchedGroup = res.group;
+      window.groupStorePaid = o;
+      els.forEach(function (el) {
+        if (!el) return;
+        // Only insert the receipt into containers that resolve to the same
+        // group that matched the verified order. This avoids showing receipts
+        // in containers that represent other groups.
+        var localGroup = getGroupForElement(el);
+        if (localGroup !== matchedGroup) return;
+        // Suppress duplicates: skip if this container already contains a receipt for this order id.
+        if (el.querySelector('[data-paid="' + o.id + '"]')) return;
+        var p = document.createElement("p");
+        p.setAttribute("data-paid", o.id);
+        p.setAttribute("role", "status");
+        p.style.cssText = "font:13px system-ui,sans-serif;color:#059669";
+        p.innerHTML = "Paid: " + esc(o.itemName) + (o.quantity > 1 ? " \u00d7" + o.quantity : "") + " \u2014 order " + esc(o.id);
+        // Insert inside the store container so assistive tech hears it as part of the live region.
+        try {
+          el.insertBefore(p, el.firstChild);
+        } catch (e) {
+          // Fallback: append if insertBefore isn't available for some reason.
+          el.appendChild(p);
+        }
+      });
+      document.dispatchEvent(new CustomEvent("group-store:paid", { detail: o }));
     });
-    document.dispatchEvent(new CustomEvent("group-store:paid", { detail: o }));
-  });
+  }
 
   // Helper: render an error / empty message with a Retry control into a container.
   var renderMessageWithRetry = function (el, htmlMessage) {
@@ -247,137 +291,88 @@
       var rawCheckout = s.checkout && s.checkout.url ? s.checkout.url : null;
       var safeCheckout = sanitizeUrl(rawCheckout);
       if (!safeCheckout) {
-        // Checkout URL is unsafe: go to the item's href if it's safe, otherwise to the storefront.
-        var fallbackHref = sanitizeUrl(a.getAttribute('href')) || (BASE + '/g/' + localGroup);
-        try { a.textContent = prevText || "Buy"; } catch (e) {}
+        try { a.textContent = prevText; } catch (e) {}
         try { el.removeAttribute('aria-busy'); } catch (e) {}
-        location.href = fallbackHref;
+        // Fallback to a safe navigation using the anchor's href.
+        try { location.href = a.href; } catch (e) {}
         return;
       }
 
-      // Use doFetch for the checkout POST so a hung request won't leave the UI stuck
-      // and so environments without fetch still work.
-      doFetch(safeCheckout, { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ group: localGroup, item: a.getAttribute("data-item"), quantity: q, returnUrl: location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1") }) }, 10000)
-        .then(function (r) {
-          // Try to parse JSON; if that fails, fall back to redirecting to the anchor href.
-          return r.json ? r.json() : Promise.resolve(null);
-        })
+      // Come back to this page — minus any earlier receipt on the URL.
+      var here = location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1");
+
+      // POST to the checkout endpoint to create a payment session. If that
+      // fails we'll gracefully fall back to redirecting to the anchor's href.
+      var body = JSON.stringify({ group: localGroup, item: a.getAttribute('data-item'), quantity: q, returnUrl: here });
+      doFetch(s.checkout.url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body }, 10000)
+        .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (d) {
-          // If the checkout response includes a URL, validate it before following.
-          if (d && d.url && sanitizeUrl(d.url)) {
-            location.href = d.url;
-            return;
+          try {
+            if (d && d.url) { location.href = d.url; }
+            else { location.href = a.href; }
+          } catch (e) {
+            try { location.href = a.href; } catch (e) {}
           }
-          try { a.textContent = prevText || "Buy"; } catch (e) {}
-          var fallback = sanitizeUrl(a.getAttribute('href')) || (BASE + '/g/' + localGroup);
-          location.href = fallback;
         })
         .catch(function () {
-          try { a.textContent = prevText || "Buy"; } catch (e) {}
-          var fallback2 = sanitizeUrl(a.getAttribute('href')) || (BASE + '/g/' + localGroup);
-          location.href = fallback2;
+          try { location.href = a.href; } catch (e) {}
         })
         .finally(function () {
-          // Always clear busy state on the container when the flow finishes (if the page hasn't navigated away).
+          try { a.textContent = prevText; } catch (e) {}
           try { el.removeAttribute('aria-busy'); } catch (e) {}
         });
     });
     el.setAttribute('data-d8a-listener', '1');
   };
 
-  // Fetch and render only for a specific container.
+  // Fetch the store for a given group and render it into the provided container.
   var fetchAndRender = function (el) {
-    try { el.setAttribute('aria-live', el.getAttribute('aria-live') || 'polite'); } catch (e) {}
+    if (!el) return;
+    var group = getGroupForElement(el);
     try { el.setAttribute('aria-busy', 'true'); } catch (e) {}
-    // Show a small loading message so users know something is happening.
-    try {
-      // Create a <p> element and set its textContent to avoid inserting control characters via innerHTML.
-      var p = document.createElement('p');
-      p.style.cssText = "font:13px system-ui,sans-serif;color:#9ca3af";
-      p.textContent = 'Loading store\u2026';
-      // Clear the container and insert the loading node.
-      el.innerHTML = '';
-      try { el.insertBefore(p, el.firstChild); } catch (e) { el.appendChild(p); }
-    } catch (e) {
-      // Fallback: if DOM creation fails, use a safe innerHTML literal with the ellipsis.
-      el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Loading store\u2026</p>';
+
+    var p = storeFetchCache[group];
+    if (!p) {
+      p = doFetch(BASE + "/api/v1/store/items?group=" + encodeURIComponent(group), null, 10000)
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .catch(function () { return null; });
+      storeFetchCache[group] = p;
     }
 
-    // Use a shared in-memory promise cache so multiple containers reuse the same
-    // in-flight request and avoid duplicate network traffic. Keyed by group slug.
-    var localGroup = getGroupForElement(el);
-    var cacheKey = localGroup;
-    var fetchPromise = storeFetchCache[cacheKey];
-    if (!fetchPromise) {
-      fetchPromise = doFetch(BASE + "/api/v1/store/items?group=" + encodeURIComponent(localGroup))
-        .then(function (r) { return r.json(); });
-      storeFetchCache[cacheKey] = fetchPromise;
-    }
-
-    fetchPromise.then(function (s) {
-      // Store the fetched data on the element for the buy handler to use.
-      el._d8a_store = s;
+    p.then(function (s) {
+      try { el.removeAttribute('aria-busy'); } catch (e) {}
+      if (!el) return;
       if (!s || !s.items) {
-        renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now. <a href="' + esc(BASE + '/g/' + localGroup) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>');
+        renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Failed to load store.</p>');
         ensureRetryListener(el);
-        ensureBuyListener(el);
         return;
       }
+      el._d8a_store = s;
       if (!s.items.length) {
-        renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now. <a href="' + esc(BASE + '/g/' + localGroup) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>');
-        ensureRetryListener(el);
-        ensureBuyListener(el);
+        el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now.</p>';
         return;
       }
-
       el.innerHTML = s.items.map(function (it) {
-        // Sanitize the per-item payUrl before inserting into an anchor href. If
-        // the item-provided URL is unsafe, use the storefront fallback instead.
-        var safeHref = sanitizeUrl(it.payUrl) || (BASE + '/g/' + localGroup);
         return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif">' +
           '<div style="flex:1"><b>' + esc(it.name) + '</b>' +
           (it.description ? '<div style="font-size:12px;color:#6b7280">' + esc(it.description) + '</div>' : '') + '</div>' +
           '<span>' + esc(it.price) + '</span>' +
-          '<a href="' + esc(safeHref) + '" data-item="' + esc(it.id) + '" aria-label="' + esc('Buy ' + it.name + ' for ' + it.price) + '" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a></div>';
-      }).join('') + '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group.url) + '" style="color:#7c5cff">' + esc(s.group.name) + '</a></p>';
+          '<a href="' + esc(it.payUrl) + '" data-item="' + esc(it.id) + '" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a></div>';
+      }).join("") + '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group.url) + '" style="color:#7c5cff">' + esc(s.group.name) + '</a></p>';
 
+      // Attach listeners for Buy and Retry now that the markup is present.
       ensureBuyListener(el);
       ensureRetryListener(el);
     }).catch(function () {
-      // Clear the cached promise on failure so a subsequent Retry gets a fresh attempt.
-      try { delete storeFetchCache[cacheKey]; } catch (e) { storeFetchCache[cacheKey] = undefined; }
-      renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now. <a href="' + esc(BASE + '/g/' + localGroup) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>');
-      ensureRetryListener(el);
-      ensureBuyListener(el);
-    }).finally(function () {
       try { el.removeAttribute('aria-busy'); } catch (e) {}
+      renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Failed to load store.</p>');
+      ensureRetryListener(el);
     });
   };
 
-  // Public API: programmatically clear the in-memory store cache for a group
-  // and re-run fetch/render for matching #group-store containers on the page.
-  // Calling without an argument clears all groups and re-renders all containers.
-  window.groupStoreRefresh = function (slug) {
-    if (typeof slug === 'string' && slug) {
-      try { delete storeFetchCache[slug]; } catch (e) { storeFetchCache[slug] = undefined; }
-      // Re-render only containers that resolve to this slug.
-      els.forEach(function (el) { try { if (getGroupForElement(el) === slug) fetchAndRender(el); } catch (e) {} });
-      return;
-    }
-    // No slug provided: clear all cached fetches and re-render every container.
-    try {
-      for (var k in storeFetchCache) {
-        if (Object.prototype.hasOwnProperty.call(storeFetchCache, k)) {
-          try { delete storeFetchCache[k]; } catch (e) { storeFetchCache[k] = undefined; }
-        }
-      }
-    } catch (e) {}
-    els.forEach(function (el) { try { fetchAndRender(el); } catch (e) {} });
-  };
-
-  // Initialize each container by fetching and rendering its store.
+  // Initialize every container on the page.
   els.forEach(function (el) {
-    fetchAndRender(el);
+    try { fetchAndRender(el); } catch (e) {}
   });
+
 })();
