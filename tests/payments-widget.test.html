@@ -37,6 +37,11 @@
         <div id="group-store" data-d8a-group="retry-group"></div>
       </form>
     </div>
+    <div>
+      <h3>Checkout fixture (checkout-group)</h3>
+      <!-- Dedicated fixture for the checkout test: avoids adding another #group-store id -->
+      <div id="group-store-checkout" data-d8a-group="checkout-group"></div>
+    </div>
   </div>
 
   <script>
@@ -56,6 +61,10 @@
   (function () {
     var BASE = 'https://d8a.com';
     window.__testFetchCounts = {};
+
+    // Checkout-count helpers exposed for tests
+    window.__testCheckoutCount = 0;
+    window.__testCheckoutSeen = new Promise(function (resolve) { window.__resolveTestCheckoutSeen = resolve; });
 
     // Stateful behavior: retry-group first call fails, second call succeeds.
     var callState = { 'retry-group': 0 };
@@ -94,6 +103,11 @@
           return jsonResponse({ items: [], group: { name: 'Other', url: 'https://d8a.com/g/other-group' }, checkout: { enabled: false } }, true);
         }
 
+        // checkout-group: provide an item and enable checkout so Buy triggers a POST
+        if (g === 'checkout-group') {
+          return jsonResponse({ items: [ { id: 'c1', name: 'Checkout Tee', price: '$15', payUrl: 'https://d8a.com/pay/c1' } ], group: { name: 'Checkout', url: 'https://d8a.com/g/checkout-group' }, checkout: { enabled: true, url: 'https://d8a.com/api/v1/store/checkout' } }, true);
+        }
+
         // default fallback
         return jsonResponse({ items: [], group: { name: g, url: BASE + '/g/' + g }, checkout: { enabled: false } }, true);
       }
@@ -109,8 +123,19 @@
         return jsonResponse({ paid: false }, true);
       }
 
-      // checkout endpoint: return a benign url
+      // checkout endpoint: count POSTs by endpoint+method and return a benign url
       if (url.indexOf('/api/v1/store/checkout') !== -1) {
+        try {
+          var method = opts && opts.method ? String(opts.method).toUpperCase() : 'GET';
+          if (method === 'POST') {
+            window.__testCheckoutCount = (window.__testCheckoutCount || 0) + 1;
+            if (typeof window.__resolveTestCheckoutSeen === 'function') {
+              try { window.__resolveTestCheckoutSeen(window.__testCheckoutCount); } catch (e) {}
+              // only resolve once
+              window.__resolveTestCheckoutSeen = null;
+            }
+          }
+        } catch (e) {}
         return jsonResponse({ url: 'https://d8a.com/checkout' }, true);
       }
 
@@ -170,10 +195,45 @@
         }, 600);
       }, 200);
 
+      // 5) Prevent duplicate checkout POSTs when Buy is clicked twice quickly
+      // Find the Buy anchor inside the dedicated checkout fixture and click twice.
+      var checkoutAnchor = document.querySelector('#group-store-checkout a[data-item]') || document.querySelector('[data-d8a-group="checkout-group"] a[data-item]');
+      // If not present yet, wait a short while and retry once.
+      function runCheckoutDupTest() {
+        var anchor = document.querySelector('#group-store-checkout a[data-item]') || document.querySelector('[data-d8a-group="checkout-group"] a[data-item]');
+        if (!anchor) {
+          // give the widget a bit more time
+          setTimeout(function() { runCheckoutDupTest(); }, 300);
+          return;
+        }
+        try {
+          // Simulate two rapid clicks
+          anchor.click();
+          anchor.click();
+        } catch (e) {}
+
+        // Wait up to 2000ms for the mocked checkout POST to be observed.
+        var seenPromise = window.__testCheckoutSeen || Promise.resolve(null);
+        var timeout = new Promise(function (resolve) { setTimeout(function () { resolve('timeout'); }, 2000); });
+        Promise.race([seenPromise, timeout]).then(function (res) {
+          var count = window.__testCheckoutCount || 0;
+          var stillInDOM = !!(document.querySelector('#group-store-checkout a[data-item]') || document.querySelector('[data-d8a-group="checkout-group"] a[data-item]'));
+          var ok = (count === 1) && stillInDOM;
+          note('prevent-duplicate-checkout', ok, 'checkout POSTs=' + count + ' anchorPresent=' + stillInDOM + ' waited=' + String(res));
+        }).catch(function (e) {
+          var count = window.__testCheckoutCount || 0;
+          var stillInDOM = !!(document.querySelector('#group-store-checkout a[data-item]') || document.querySelector('[data-d8a-group="checkout-group"] a[data-item]'));
+          note('prevent-duplicate-checkout', false, 'error waiting for checkout count: ' + String(e) + ' count=' + count + ' anchorPresent=' + stillInDOM);
+        });
+      }
+
+      // Kick off the checkout test after a short delay to allow item rendering.
+      setTimeout(runCheckoutDupTest, 500);
+
       // Final aggregator after a bit more time
       setTimeout(function(){
         note('final', true, 'Manual-run tests completed; review individual PASS/FAIL lines above.');
-      }, 1200);
+      }, 1600);
 
     } catch (e) { note('runChecks', false, String(e)); }
   }
