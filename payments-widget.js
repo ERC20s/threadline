@@ -168,17 +168,45 @@
       var a = e.target && e.target.closest ? e.target.closest('a[data-item]') : null;
       if (!a) return;
       var s = el._d8a_store;
-      if (!s || !s.checkout.enabled) return;
+      if (!s || !s.checkout || !s.checkout.enabled) return;
       e.preventDefault();
-      a.textContent = "Opening\u2026";
-      var here = location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1");
+
+      // Compute quantity defensively: per-link data-quantity overrides container data-default-quantity, otherwise default to 1.
+      var itemQ = a.getAttribute('data-quantity');
+      var containerQ = el.getAttribute('data-default-quantity');
+      var qRaw = typeof itemQ !== 'undefined' && itemQ !== null ? itemQ : (typeof containerQ !== 'undefined' && containerQ !== null ? containerQ : '1');
+      var q = parseInt(qRaw, 10);
+      if (!isFinite(q) || q < 1) q = 1;
+
+      // UI: show opening state and mark busy on the container so assistive tech knows.
+      var prevText = a.textContent;
+      try { a.textContent = "Opening\u2026"; } catch (e) {}
+      try { el.setAttribute('aria-busy', 'true'); } catch (e) {}
+
       // Use doFetch for the checkout POST so a hung request won't leave the UI stuck
       // and so environments without fetch still work.
       doFetch(s.checkout.url, { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ group: GROUP, item: a.getAttribute("data-item"), quantity: 1, returnUrl: here }) }, 10000)
-        .then(function (r) { return r.json(); })
-        .then(function (d) { if (d.url) { location.href = d.url; } else { a.textContent = "Buy"; location.href = a.href; } })
-        .catch(function () { location.href = a.href; });
+        body: JSON.stringify({ group: GROUP, item: a.getAttribute("data-item"), quantity: q, returnUrl: location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1") }) }, 10000)
+        .then(function (r) {
+          // Try to parse JSON; if that fails, fall back to redirecting to the anchor href.
+          return r.json ? r.json() : Promise.resolve(null);
+        })
+        .then(function (d) {
+          if (d && d.url) {
+            location.href = d.url;
+          } else {
+            try { a.textContent = prevText || "Buy"; } catch (e) {}
+            location.href = a.href;
+          }
+        })
+        .catch(function () {
+          try { a.textContent = prevText || "Buy"; } catch (e) {}
+          location.href = a.href;
+        })
+        .finally(function () {
+          // Always clear busy state on the container when the flow finishes (if the page hasn't navigated away).
+          try { el.removeAttribute('aria-busy'); } catch (e) {}
+        });
     });
     el.setAttribute('data-d8a-listener', '1');
   };
@@ -236,10 +264,13 @@
         ensureRetryListener(el);
         ensureBuyListener(el);
       })
-      .finally(function () { try { el.removeAttribute('aria-busy'); } catch (e) {} });
+      .finally(function () {
+        try { el.removeAttribute('aria-busy'); } catch (e) {}
+      });
   };
 
-  // Initialise each container by running the fetch/render flow.
-  els.forEach(function (el) { fetchAndRender(el); });
-
+  // Initialize each container by fetching and rendering its store.
+  els.forEach(function (el) {
+    fetchAndRender(el);
+  });
 })();
