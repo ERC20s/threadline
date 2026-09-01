@@ -160,6 +160,8 @@
       var btn = e.target && e.target.closest ? e.target.closest('[data-d8a-retry]') : null;
       if (!btn) return;
       e.preventDefault();
+      // Clear the shared in-memory store fetch cache for this group so Retry always forces a fresh network request.
+      try { delete storeFetchCache[GROUP]; } catch (err) { storeFetchCache[GROUP] = undefined; }
       // Re-run the fetch/render flow for only this container.
       fetchAndRender(el);
     });
@@ -279,6 +281,16 @@
     }).finally(function () {
       try { el.removeAttribute('aria-busy'); } catch (e) {}
     });
+  };
+
+  // Public API: programmatically clear the in-memory store cache for this group
+  // and re-run fetch/render for every #group-store container on the page.
+  // Note: this only clears the in-memory cache stored on window; it does not
+  // affect any server-side state or persistent storage.
+  window.groupStoreRefresh = function () {
+    try { delete storeFetchCache[GROUP]; } catch (e) { storeFetchCache[GROUP] = undefined; }
+    // Re-render every container so callers don't need to manage elements.
+    els.forEach(function (el) { try { fetchAndRender(el); } catch (e) {} });
   };
 
   // Initialize each container by fetching and rendering its store.
