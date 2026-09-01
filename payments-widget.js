@@ -9,6 +9,11 @@
     return String(s).replace(/[&<>\"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; });
   };
 
+  // Promise cache for store item fetches keyed by GROUP. Stored on window so
+  // multiple widget instances or re-initializations share the same cache.
+  window.__d8aPaymentsWidgetStoreCache = window.__d8aPaymentsWidgetStoreCache || {};
+  var storeFetchCache = window.__d8aPaymentsWidgetStoreCache;
+
   var els = Array.prototype.slice.call(document.querySelectorAll('#group-store'));
 
   // Ensure each container is an aria-live region before we do anything.
@@ -229,44 +234,51 @@
       el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Loading store\u2026</p>';
     }
 
-    // Use doFetch here so item loads work even when window.fetch is missing.
-    doFetch(BASE + "/api/v1/store/items?group=" + encodeURIComponent(GROUP))
-      .then(function (r) { return r.json(); })
-      .then(function (s) {
-        // Store the fetched data on the element for the buy handler to use.
-        el._d8a_store = s;
-        if (!s || !s.items) {
-          renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now. <a href="' + esc(BASE + '/g/' + GROUP) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>');
-          ensureRetryListener(el);
-          ensureBuyListener(el);
-          return;
-        }
-        if (!s.items.length) {
-          renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now. <a href="' + esc(BASE + '/g/' + GROUP) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>');
-          ensureRetryListener(el);
-          ensureBuyListener(el);
-          return;
-        }
+    // Use a shared in-memory promise cache so multiple containers reuse the same
+    // in-flight request and avoid duplicate network traffic.
+    var cacheKey = GROUP;
+    var fetchPromise = storeFetchCache[cacheKey];
+    if (!fetchPromise) {
+      fetchPromise = doFetch(BASE + "/api/v1/store/items?group=" + encodeURIComponent(GROUP))
+        .then(function (r) { return r.json(); });
+      storeFetchCache[cacheKey] = fetchPromise;
+    }
 
-        el.innerHTML = s.items.map(function (it) {
-          return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif">' +
-            '<div style="flex:1"><b>' + esc(it.name) + '</b>' +
-            (it.description ? '<div style="font-size:12px;color:#6b7280">' + esc(it.description) + '</div>' : '') + '</div>' +
-            '<span>' + esc(it.price) + '</span>' +
-            '<a href="' + esc(it.payUrl) + '" data-item="' + esc(it.id) + '" aria-label="' + esc('Buy ' + it.name + ' for ' + it.price) + '" role="button" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a></div>';
-        }).join('') + '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group.url) + '" style="color:#7c5cff">' + esc(s.group.name) + '</a></p>';
-
-        ensureBuyListener(el);
-        ensureRetryListener(el);
-      })
-      .catch(function () {
+    fetchPromise.then(function (s) {
+      // Store the fetched data on the element for the buy handler to use.
+      el._d8a_store = s;
+      if (!s || !s.items) {
         renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now. <a href="' + esc(BASE + '/g/' + GROUP) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>');
         ensureRetryListener(el);
         ensureBuyListener(el);
-      })
-      .finally(function () {
-        try { el.removeAttribute('aria-busy'); } catch (e) {}
-      });
+        return;
+      }
+      if (!s.items.length) {
+        renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now. <a href="' + esc(BASE + '/g/' + GROUP) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>');
+        ensureRetryListener(el);
+        ensureBuyListener(el);
+        return;
+      }
+
+      el.innerHTML = s.items.map(function (it) {
+        return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif">' +
+          '<div style="flex:1"><b>' + esc(it.name) + '</b>' +
+          (it.description ? '<div style="font-size:12px;color:#6b7280">' + esc(it.description) + '</div>' : '') + '</div>' +
+          '<span>' + esc(it.price) + '</span>' +
+          '<a href="' + esc(it.payUrl) + '" data-item="' + esc(it.id) + '" aria-label="' + esc('Buy ' + it.name + ' for ' + it.price) + '" role="button" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a></div>';
+      }).join('') + '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group.url) + '" style="color:#7c5cff">' + esc(s.group.name) + '</a></p>';
+
+      ensureBuyListener(el);
+      ensureRetryListener(el);
+    }).catch(function () {
+      // Clear the cached promise on failure so a subsequent Retry gets a fresh attempt.
+      try { delete storeFetchCache[cacheKey]; } catch (e) { storeFetchCache[cacheKey] = undefined; }
+      renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now. <a href="' + esc(BASE + '/g/' + GROUP) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>');
+      ensureRetryListener(el);
+      ensureBuyListener(el);
+    }).finally(function () {
+      try { el.removeAttribute('aria-busy'); } catch (e) {}
+    });
   };
 
   // Initialize each container by fetching and rendering its store.
