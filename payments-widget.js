@@ -172,10 +172,22 @@
       e.preventDefault();
       a.textContent = "Opening\u2026";
       var here = location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1");
+
+      // Compute quantity using precedence: per-item data-quantity, container data-default-quantity, otherwise 1.
+      // Treat non-numeric or <1 values as 1.
+      try {
+        var qtyAttr = a.getAttribute('data-quantity');
+        var defaultQtyAttr = el.getAttribute('data-default-quantity');
+        var qty = parseInt(qtyAttr || defaultQtyAttr || '1', 10);
+        if (isNaN(qty) || qty < 1) qty = 1;
+      } catch (e) {
+        var qty = 1;
+      }
+
       // Use doFetch for the checkout POST so a hung request won't leave the UI stuck
       // and so environments without fetch still work.
       doFetch(s.checkout.url, { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ group: GROUP, item: a.getAttribute("data-item"), quantity: 1, returnUrl: here }) }, 10000)
+        body: JSON.stringify({ group: GROUP, item: a.getAttribute("data-item"), quantity: qty, returnUrl: here }) }, 10000)
         .then(function (r) { return r.json(); })
         .then(function (d) { if (d.url) { location.href = d.url; } else { a.textContent = "Buy"; location.href = a.href; } })
         .catch(function () { location.href = a.href; });
@@ -232,14 +244,9 @@
         ensureRetryListener(el);
       })
       .catch(function () {
-        renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now. <a href="' + esc(BASE + '/g/' + GROUP) + '" target="_blank" rel="noopener noreferrer" style="color:#7c5cff">Visit the storefront</a></p>');
-        ensureRetryListener(el);
-        ensureBuyListener(el);
-      })
-      .finally(function () { try { el.removeAttribute('aria-busy'); } catch (e) {} });
+        renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Unable to load store right now. <a href="' + esc(BASE + '/g/' + GROUP) + '" targ');
   };
 
-  // Initialise each container by running the fetch/render flow.
-  els.forEach(function (el) { fetchAndRender(el); });
-
+  // Initial run: fetch + render for each matching container.
+  els.forEach(function (el) { try { fetchAndRender(el); } catch (e) {} });
 })();

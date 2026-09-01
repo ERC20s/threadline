@@ -154,7 +154,9 @@
 
       <div class="actions">
         <!-- d8a payments widget: copied from the repository .d8a payments block / product.html -->
-        <div id="group-store" aria-live="polite"><p>Loading store…</p></div>
+        <!-- Example: set data-default-quantity on the #group-store element to change the page default.
+             Individual buy links returned by the platform can include data-quantity="3" to override per-item. -->
+        <div id="group-store" data-default-quantity="1" aria-live="polite"><p>Loading store</p></div>
         <noscript><p>Shop: <a href="https://d8a.com/g/batch-threadline">https://d8a.com/g/batch-threadline</a></p></noscript>
         <script src="payments-widget.js"></script>
       </div>

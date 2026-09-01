@@ -17,7 +17,7 @@
     .product{display:grid;gap:var(--gap)}
     /* Mobile-first: image then details stacked */
     .media{width:100%}
-    .media svg{width:100%;height:auto;display:block;border-radius:8px;background:linear-gradient(180deg,#f8f6ff,#fff);}
+    .media svg{width:100%;height:auto;display:block;border-radius:8px;background:linear-gradient(180deg,#f8f6ff,#fff);}    
     .meta{padding:6px 2px}
     .price{font-weight:700;font-size:1.1rem;margin:6px 0;color:#111827}
     .description{color:var(--muted);margin:8px 0 12px}
@@ -85,7 +85,9 @@
         <p class="actions"><a href="/products.html">Back to products</a></p>
 
         <!-- d8a payments widget: inserted from the repository .d8a payments: block -->
-        <div id="group-store" aria-live="polite"><p>Loading store…</p></div>
+        <!-- Example: set data-default-quantity on the #group-store element to change the page default.
+             Individual buy links returned by the platform can include data-quantity="3" to override per-item. -->
+        <div id="group-store" data-default-quantity="1" aria-live="polite"><p>Loading store</p></div>
         <noscript><p>Shop: <a href="https://d8a.com/g/batch-threadline">https://d8a.com/g/batch-threadline</a></p></noscript>
         <script src="payments-widget.js"></script>
       </div>
