@@ -33,7 +33,9 @@
     </div>
     <div>
       <h3>Retry group (retry-group)</h3>
-      <div id="group-store" data-d8a-group="retry-group"></div>
+      <form onsubmit="window._submitted = true; return false;">
+        <div id="group-store" data-d8a-group="retry-group"></div>
+      </form>
     </div>
   </div>
 
@@ -76,7 +78,7 @@
       if (url.indexOf('/api/v1/store/items') !== -1) {
         var g = (url.match(/[?&]group=([^&]+)/) || [])[1] || '';
         g = decodeURIComponent(g);
-        // retry-group: first call fails (network reject), second succeeds
+        // retry-group: first call fails (network reject), second call succeeds
         if (g === 'retry-group') {
           callState['retry-group']++; if (callState['retry-group'] === 1) return Promise.reject(new Error('network'));
           return jsonResponse({ items: [ { id: 'r1', name: 'Retry Tee', price: '$10', payUrl: 'https://d8a.com/pay/r1' } ], group: { name: 'Retry', url: 'https://d8a.com/g/retry-group' }, checkout: { enabled: false } }, true);
@@ -162,6 +164,9 @@
           var increased = after > before;
           var hasItem = !!retryContainer.querySelector('a[data-item="r1"]');
           note('retry-clears-cache-and-retries', increased && hasItem, 'requests before=' + before + ' after=' + after + ' hasItem=' + hasItem);
+          // New assertion: clicking Retry should not submit an enclosing form
+          var notSubmitted = (window._submitted !== true);
+          note('retry-does-not-submit-outer-form', notSubmitted, 'window._submitted=' + String(window._submitted));
         }, 600);
       }, 200);
 
