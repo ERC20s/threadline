@@ -28,7 +28,22 @@
       <h1 id="page-heading">Size guide</h1>
       <p class="note">Our pieces are cut relaxed. If you are between sizes and want a closer fit, take the smaller one. Measurements are in inches; the values below are illustrative and should be replaced with the brand's measured specification before launch.</p>
 
-      <section class="section" aria-labelledby="body-heading">
+      <!-- Jump list. The ids below (body, tops, bottoms, dresses, outerwear,
+           one-size, how) are linked to from product.html: each catalogue entry in
+           scripts/products.js may name one in its `sizeGuide` field, and the
+           product page builds "Open the size guide" as size-guide.html#<id>.
+           Renaming a section id breaks those links — change both together. -->
+      <nav class="guide-jump" aria-label="Sections of the size guide">
+        <a href="#body">Body measurements</a>
+        <a href="#tops">Tops and shirts</a>
+        <a href="#bottoms">Bottoms</a>
+        <a href="#dresses">Dresses</a>
+        <a href="#outerwear">Outerwear and knitwear</a>
+        <a href="#one-size">One size</a>
+        <a href="#how">How to measure</a>
+      </nav>
+
+      <section class="section" id="body" aria-labelledby="body-heading">
         <h2 id="body-heading">Body measurements</h2>
         <div class="table-wrap">
           <table>
@@ -53,11 +68,11 @@
         </div>
       </section>
 
-      <section class="section" aria-labelledby="garment-heading">
+      <section class="section" id="tops" aria-labelledby="garment-heading">
         <h2 id="garment-heading">Garment measurements — tops and shirts</h2>
         <div class="table-wrap">
           <table>
-            <caption>Measured flat, seam to seam. Chest is doubled for the full circumference.</caption>
+            <caption>The Everyday Tee, Relaxed Shirt, Woven Shirt and Ribbed Longsleeve, measured flat, seam to seam. Chest is doubled for the full circumference. The Ribbed Longsleeve is a close rib: it measures roughly 1&Prime; narrower in the chest and stretches to fit.</caption>
             <thead>
               <tr>
                 <th scope="col">Size</th>
@@ -78,7 +93,7 @@
         </div>
       </section>
 
-      <section class="section" aria-labelledby="bottoms-heading">
+      <section class="section" id="bottoms" aria-labelledby="bottoms-heading">
         <h2 id="bottoms-heading">Garment measurements — bottoms</h2>
         <div class="table-wrap">
           <table>
@@ -103,13 +118,76 @@
         </div>
       </section>
 
-      <section class="section" aria-labelledby="how-heading">
+      <section class="section" id="dresses" aria-labelledby="dresses-heading">
+        <h2 id="dresses-heading">Garment measurements — dresses</h2>
+        <div class="table-wrap">
+          <table>
+            <caption>The Linen Summer Dress, measured flat and doubled for the full circumference. Cut long and loose: the hem falls mid-calf on a 5&prime;7&Prime; frame.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Size</th>
+                <th scope="col">Bust (flat)</th>
+                <th scope="col">Waist (flat)</th>
+                <th scope="col">Hip (flat)</th>
+                <th scope="col">Front length</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><th scope="row">XS</th><td>18&Prime;</td><td>18&Prime;</td><td>20&Prime;</td><td>45&Prime;</td></tr>
+              <tr><th scope="row">S</th><td>19&Prime;</td><td>19&Prime;</td><td>21&Prime;</td><td>46&Prime;</td></tr>
+              <tr><th scope="row">M</th><td>20.5&Prime;</td><td>20.5&Prime;</td><td>22.5&Prime;</td><td>47&Prime;</td></tr>
+              <tr><th scope="row">L</th><td>22&Prime;</td><td>22&Prime;</td><td>24&Prime;</td><td>48&Prime;</td></tr>
+              <tr><th scope="row">XL</th><td>23.5&Prime;</td><td>23.5&Prime;</td><td>25.5&Prime;</td><td>49&Prime;</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note">Washed linen relaxes with wear and shrinks a little on a hot wash — wash cold and the measurements above hold.</p>
+      </section>
+
+      <section class="section" id="outerwear" aria-labelledby="outerwear-heading">
+        <h2 id="outerwear-heading">Garment measurements — outerwear and knitwear</h2>
+        <div class="table-wrap">
+          <table>
+            <caption>The Canvas Overshirt, Rigid Denim Jacket, Merino Crew Knit and Lightweight Hoodie, measured flat. These are cut to layer: they carry roughly 2&Prime; more across the chest than the tops table, so take your usual size to wear one over a knit.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Size</th>
+                <th scope="col">Chest (flat)</th>
+                <th scope="col">Body length</th>
+                <th scope="col">Shoulder</th>
+                <th scope="col">Sleeve length</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><th scope="row">XS</th><td>21&Prime;</td><td>26&Prime;</td><td>18&Prime;</td><td>24&Prime;</td></tr>
+              <tr><th scope="row">S</th><td>22&Prime;</td><td>27&Prime;</td><td>19&Prime;</td><td>24.5&Prime;</td></tr>
+              <tr><th scope="row">M</th><td>23.5&Prime;</td><td>28&Prime;</td><td>20&Prime;</td><td>25&Prime;</td></tr>
+              <tr><th scope="row">L</th><td>25&Prime;</td><td>29&Prime;</td><td>21&Prime;</td><td>25.5&Prime;</td></tr>
+              <tr><th scope="row">XL</th><td>26.5&Prime;</td><td>30&Prime;</td><td>22&Prime;</td><td>26&Prime;</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note">The Rigid Denim Jacket is unwashed 12oz denim: expect it to shrink about half a size on the first wash and to feel stiff for a few wears. If you want it fitted from day one, take the smaller size; if you plan to layer a knit under it, take your usual one. The Merino Crew Knit is fine-gauge and sits closer than the canvas and denim pieces.</p>
+      </section>
+
+      <section class="section" id="one-size" aria-labelledby="one-size-heading">
+        <h2 id="one-size-heading">One size</h2>
+        <p class="note">Two pieces are made in a single size, so there is nothing to choose at checkout.</p>
+        <ul class="details">
+          <li>Classic Cap — unstructured six-panel, 22&Prime;&ndash;24&Prime; head circumference on the brass slider, crown depth 4.5&Prime;, brim 2.75&Prime;.</li>
+          <li>Lambswool Scarf — 180cm x 30cm (71&Prime; x 12&Prime;) plus a hand-tied fringe of about 6cm at each end.</li>
+        </ul>
+      </section>
+
+      <section class="section" id="how" aria-labelledby="how-heading">
         <h2 id="how-heading">How to measure</h2>
         <ol class="measure-steps">
           <li>Chest or bust: around the fullest part, tape level under the arms, arms down.</li>
           <li>Waist: around the narrowest part of the torso, one finger under the tape.</li>
           <li>Hips: around the fullest part, roughly 8&Prime; below the waist.</li>
           <li>Sleeve: from the centre back of the neck, over the shoulder, to the wrist.</li>
+          <li>Front length (dresses): from the highest point of the shoulder straight down to the hem.</li>
+          <li>Head (the cap): around the forehead, just above the ears.</li>
           <li>Compare against a garment you already own and like — flat measurements are the fastest check.</li>
         </ol>
         <p class="note">Still unsure? Email <a href="mailto:hello@threadline.example">hello@threadline.example</a> with your usual size in another brand and we will tell you what we would send.</p>

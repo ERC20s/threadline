@@ -21,7 +21,7 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
 | `products.html` | The catalogue: all pieces in a responsive grid with a category filter, each card links to `product.html?id=<id>` |
 | `product.html` | One piece, chosen with the `?id=` query parameter: photo, description, details, size selection, Buy |
 | `lookbook.html` | Six looks, each linking to the piece it shows |
-| `size-guide.html` | Body measurements, garment measurements and how to measure |
+| `size-guide.html` | Body measurements, garment measurements (tops, bottoms, dresses, outerwear and knitwear), the one-size pieces and how to measure |
 
 ## How it fits together
 
@@ -29,6 +29,24 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
   (`products`, `byId`, `featured`, `money`, `renderGrid`). Add, remove or reprice
   a garment there and every page follows. Images are placeholder URLs
   (picsum.photos, seeded) — replace the `image` values with real photography.
+- Sizing help is part of the catalogue. Every entry in `scripts/products.js` may
+  carry two optional fields: `sizeGuide`, the id of a section in
+  `size-guide.html` (`body`, `tops`, `bottoms`, `dresses`, `outerwear`,
+  `one-size`, `how`), and `fitNote`, one short sentence about how that piece
+  fits. `product.html` rewrites the hint above the size buttons from them —
+  the note, then a link to `size-guide.html#<sizeGuide>` — and falls back to
+  "Fits run relaxed." plus a plain `size-guide.html` link when a piece names
+  neither, so nothing breaks if the fields are dropped. An unknown `sizeGuide`
+  value is treated as "no value". A one-size piece (Classic Cap, Lambswool
+  Scarf) shows the label "One size" instead of "Choose a size" and links "See
+  the one-size measurements". The section ids in `size-guide.html` are the
+  contract between the two files: rename a section there and update the
+  `sizeGuide` values here in the same change. `size-guide.html` also carries a
+  jump list (`.guide-jump`) linking the same ids, and the dresses, outerwear /
+  knitwear and one-size sections cover the Linen Summer Dress, the Canvas
+  Overshirt, the Rigid Denim Jacket, the Merino Crew Knit and the two one-size
+  pieces. As on the older tables, the numbers are illustrative — the note at
+  the top of the page says so and must stay until real specs replace them.
 - `styles/main.css` is the only stylesheet; every page links it. No frameworks.
   `styles/size-guide.css` is retired and simply imports `main.css`.
 - `payments-widget.js` is the group's shop widget. Pages that sell carry the
