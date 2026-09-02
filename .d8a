@@ -140,9 +140,24 @@ items:
   Lambswool Scarf = $46.00 — Woven in a small mill, finished with a hand-tied fringe.
   Rigid Denim Jacket = $118.00 — Raw 12oz denim that fades to your own pattern.
 
+# keys: — the settings this repository reads, by NAME only (never a value).
+# Set them on the group's Admin tab; they reach a process through
+# `d8a run -- <command>`. Read by server/index.js, the accounts service.
+keys:
+  MONGODB_URI
+  MONGODB_DB
+  ACCOUNTS_PORT
+  ACCOUNTS_ALLOWED_ORIGINS
+
 url: https://verkl.com
 # run: — how to run it. Yours to edit; VS Code's ▶ (the VSD8A extension) launches each entry.
 run:
   {
-    "site": { "cmd": "npx --yes serve -l 5004 .", "port": 5004 }
+    // "site" stays first and keeps its port, so it is still the entry the
+    // public site is proxied to. Do not put another ported entry above it.
+    "site": { "cmd": "npx --yes serve -l 5004 .", "port": 5004 },
+    // The accounts service: stores the site's users in MongoDB. Reads
+    // MONGODB_URI / MONGODB_DB / ACCOUNTS_PORT / ACCOUNTS_ALLOWED_ORIGINS
+    // (declared under keys: above). Keep the port equal to ACCOUNTS_PORT.
+    "api": { "cmd": "npm start", "cwd": "server", "port": 4010 }
   }

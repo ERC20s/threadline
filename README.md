@@ -13,6 +13,21 @@ npx --yes serve -l 5004 .
 
 Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`.
 
+The one moving part beside the static pages is the accounts service in
+`server/`, the `api` entry in `.d8a`:
+
+```
+cd server && npm install && npm start      # http://localhost:4010
+```
+
+It needs `MONGODB_URI` in the environment (see `.env.example`); on the group's
+box the value is set on the Admin tab and reaches the process through
+`d8a run -- npm start`. Without it the service still starts and answers 503, so
+nothing crash-loops. Serving the site on 5004 and the service on 4010 means two
+origins, so set `data-accounts-base="http://localhost:4010"` on the account form
+in `index.html` while developing (in production it is empty: nginx proxies
+`/api` on the site's own origin to the `api` entry).
+
 `serve.json` at the repository root is that server's configuration and `serve`
 reads it from the folder it serves. It exists for one reason: with clean URLs on
 (the default) a request for `/product.html?id=everyday-tee` is answered with a
@@ -406,5 +421,40 @@ link when it does.
   appends to an existing status only once, and that the rows-but-no-match panel
   is still the "isn't listed" case.
 
-`.d8a` declares the group, the run entry and the payments block. Do not hand-edit
-its generated blocks.
+- The site now has users. `index.html` carries an account form
+  (`#account`, `form[data-account-form]`) and `scripts/account.js` wires every
+  such form on load: it validates the address in the browser with exactly the
+  rule the service applies, posts `{ email, name, consent, source }` as JSON to
+  `POST /api/users` and writes the answer into `[data-account-status]`. The
+  service is `server/index.js` (`server/package.json`, dependency `mongodb`,
+  `npm start`) — a dependency-light Node HTTP server that upserts the person
+  into `MONGODB_DB`.`users` keyed on the lower-cased email, with a unique index
+  on that field, `createdAt`/`updatedAt`, `marketingConsent`, `source` and a
+  truncated user agent. It also answers `GET /api/health` and
+  `GET /api/users/count`. There is deliberately **no** endpoint that lists
+  users: the site is public and a list of customer emails is a leak, not a
+  feature — read the collection with a Mongo client. Sign-ups are rate limited
+  per IP (20 per 10 minutes) and bodies are capped at 8 KB. Cross-origin posts
+  are governed by `ACCOUNTS_ALLOWED_ORIGINS` (`*` by default, set it to the
+  site's origin in production). Every failure — no driver installed, no
+  `MONGODB_URI`, database unreachable, request timed out — ends at the same
+  honest line in the form plus a prefilled `mailto:hello@threadline.example`,
+  the way `renderShopDown` handles a shop outage; the form never claims an
+  account was created. Assertion 22 in `tests/payments-widget.test.html`
+  (`account-email-rule`, `account-base-resolution`,
+  `account-bad-email-never-posts`, `account-signup-posts-and-thanks`,
+  `account-service-down-is-honest`) covers all of that against a stubbed
+  `fetch`, so it needs no database.
+
+## Settings
+
+`.env.example` lists every setting this repository reads, by name, and the
+`keys:` block in `.d8a` declares the same names to the platform (names only,
+never values — an admin sets the value on the group's Admin tab):
+`MONGODB_URI`, `MONGODB_DB`, `ACCOUNTS_PORT`, `ACCOUNTS_ALLOWED_ORIGINS`.
+
+`.d8a` declares the group, the run entries and the payments block. Do not
+hand-edit its generated blocks. The `run:` block has two entries: `site` (port
+5004, the static pages — it is first and keeps its port, so it stays the entry
+the public site is proxied to) and `api` (`npm start` in `server/`, port 4010,
+the accounts service; keep that port equal to `ACCOUNTS_PORT`).
