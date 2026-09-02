@@ -264,18 +264,11 @@
       var priceEl = document.getElementById("product-price");
       var priceNote = document.getElementById("price-source");
 
-      /* "$38" vs "$38.00" vs "38" is the same money. Only a real difference is
-         worth repainting the price. */
-      var samePrice = function (a, b) {
-        var x = String(a || "").replace(/\s+/g, "").toLowerCase();
-        var y = String(b || "").replace(/\s+/g, "").toLowerCase();
-        if (x === y) return true;
-        var nx = (x.match(/-?\d+(\.\d+)?/) || [])[0];
-        var ny = (y.match(/-?\d+(\.\d+)?/) || [])[0];
-        if (nx === undefined || ny === undefined) return false;
-        /* Same number and same currency mark (or neither carries one). */
-        var cx = x.replace(/[\d.,\s]/g, ""), cy = y.replace(/[\d.,\s]/g, "");
-        return Number(nx) === Number(ny) && (!cx || !cy || cx === cy);
+      /* "$38" vs "$38.00" vs "38" is the same money: the tolerant compare now
+         lives in scripts/checkout-intent.js, shared with the products.html
+         grid. The fallback only matters if that file failed to load. */
+      var samePrice = T.samePrice || function (a, b) {
+        return String(a || "").trim() === String(b || "").trim();
       };
 
       var showShopPrice = function (anchor) {

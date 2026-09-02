@@ -64,12 +64,24 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
   disables Buy and says it is not listed. If the panel fails or times out the
   page is left exactly as written and the queued-click path still applies.
   Prices are set on the group's Admin tab, so the shop always wins.
+- `products.html` does the same for the whole grid. It loads
+  `scripts/checkout-intent.js` too, waits for the panel, then builds
+  `Threadline.shopPriceIndex(panel)` once — a lookup keyed on the normalised
+  platform item id and on the row title, so every card can be matched without
+  searching the DOM per card. Cards carry `data-product-id` (set in
+  `card()` in `scripts/products.js`); a card whose piece the shop prices
+  differently is repainted with the shop's price, and a card with no matching
+  row gets a soft "Not in the shop yet." note plus a count in the status line.
+  The card link is never disabled and the grid is repainted after every filter
+  click, because `renderGrid` rebuilds the cards each time. The tolerant price
+  compare (`Threadline.samePrice`) is shared with `product.html`.
 - `tests/payments-widget.test.html` is the browser test for the widget; open it
   at http://localhost:5004/tests/payments-widget.test.html while the site is
   served. Its `intent-group` fixture answers late on purpose, to prove a queued
   Buy intent still opens exactly one checkout; the `checkout-group` fixture is
-  also read (not clicked) to check `buyRowPrice` and the "rows, but not this
-  piece" case.
+  also read (not clicked) to check `buyRowPrice`, the "rows, but not this
+  piece" case, `shopPriceIndex` (matched by id and by name, unlisted piece,
+  empty panel) and `samePrice`'s tolerance.
 
 `.d8a` declares the group, the run entry and the payments block. Do not hand-edit
 its generated blocks.

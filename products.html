@@ -92,6 +92,10 @@
   </div>
 
   <script src="scripts/products.js"></script>
+  <!-- Shared shop helpers (whenBuyAnchor, shopPriceIndex, samePrice): loaded
+       after products.js, which owns the window.Threadline namespace, and before
+       payments-widget.js, which fills #group-store. -->
+  <script src="scripts/checkout-intent.js"></script>
   <script src="payments-widget.js"></script>
   <script>
     (function () {
@@ -106,19 +110,90 @@
         if (categories.indexOf(p.category) === -1) categories.push(p.category);
       });
 
+      /* ---- reconcile the grid with the live shop ----
+         The prices in scripts/products.js are ours; the money is taken by
+         payments-widget.js from the items set on the group's Admin tab. Once
+         the panel below has rendered its rows we make every card agree with it:
+         the shop's price where the two disagree, and a soft "Not in the shop
+         yet" note where the shop has no row for the piece. The card link is
+         never disabled — the product page and the shop panel are still there.
+         If the panel fails or times out we change nothing. */
+      var panel = document.getElementById("group-store");
+      var samePrice = T.samePrice || function (a, b) {
+        return String(a || "").trim() === String(b || "").trim();
+      };
+
+      /* Built once the panel has rows; null means "the shop has not spoken",
+         which is what every paint below treats as "leave the grid alone". */
+      var shopIndex = null;
+
+      var setNote = function (cardEl, text) {
+        var body = cardEl.querySelector(".card-body") || cardEl;
+        var note = cardEl.querySelector("[data-shop-note]");
+        if (!text) {
+          if (note && note.parentNode) note.parentNode.removeChild(note);
+          return;
+        }
+        if (!note) {
+          note = document.createElement("p");
+          note.className = "hint";
+          note.setAttribute("data-shop-note", "");
+          body.appendChild(note);
+        }
+        note.textContent = text;
+      };
+
+      var paintCard = function (cardEl) {
+        var product = T.byId(cardEl.dataset.productId || "");
+        if (!product) return false;
+        var row = shopIndex.lookup(product.id, product.name);
+        var priceEl = cardEl.querySelector(".price");
+
+        if (!row) {
+          setNote(cardEl, "Not in the shop yet.");
+          return true;
+        }
+        if (priceEl && row.price && !samePrice(row.price, priceEl.textContent)) {
+          priceEl.textContent = row.price;
+          setNote(cardEl, "Price from the group shop.");
+        } else {
+          setNote(cardEl, "");
+        }
+        return false;
+      };
+
+      var paintGrid = function () {
+        if (!shopIndex || !shopIndex.size) return 0;
+        var unlisted = 0;
+        Array.prototype.forEach.call(grid.querySelectorAll(".card"), function (cardEl) {
+          if (paintCard(cardEl)) unlisted++;
+        });
+        return unlisted;
+      };
+
       var show = function (category) {
         var list = category === "All" ? T.products : T.products.filter(function (p) {
           return p.category === category;
         });
         T.renderGrid(grid, list);
+        /* renderGrid rebuilds the cards on every filter click, so the live
+           prices and notes have to be painted again each time. */
+        var unlisted = paintGrid();
         if (status) {
           status.textContent = list.length + (list.length === 1 ? " piece" : " pieces") +
-            (category === "All" ? " in the collection." : " in " + category + ".");
+            (category === "All" ? " in the collection." : " in " + category + ".") +
+            (unlisted ? " " + unlisted + (unlisted === 1 ? " is" : " are") + " not in the shop yet." : "");
         }
         Array.prototype.forEach.call(filters.querySelectorAll("button"), function (b) {
           b.setAttribute("aria-pressed", b.dataset.category === category ? "true" : "false");
         });
+        /* The filter buttons are the current category's; remember it so the
+           reconcile pass below can repaint the grid it is actually showing. */
+        current = category;
       };
+
+      /* The category on screen, so the shop's answer repaints the right list. */
+      var current = "All";
 
       categories.forEach(function (c) {
         var b = document.createElement("button");
@@ -132,6 +207,21 @@
       });
 
       show("All");
+
+      /* Wait for the shop panel — no matchFn, so this resolves as soon as
+         payments-widget.js has rendered any row — then index it once and
+         repaint the category on screen. A panel that fails, times out or
+         renders no rows leaves the grid exactly as written. */
+      if (panel && T.whenBuyAnchor && T.shopPriceIndex) {
+        T.whenBuyAnchor(panel, null, T.BUY_ANCHOR_TIMEOUT || 12000)
+          .then(function () {
+            var index = T.shopPriceIndex(panel);
+            if (!index || !index.size) return;
+            shopIndex = index;
+            show(current);
+          })
+          .catch(function () { /* nothing to reconcile against */ });
+      }
     })();
   </script>
 </body>

@@ -13,6 +13,8 @@
  *   Threadline.storePanelFailed(container)                -> boolean
  *   Threadline.whenBuyAnchor(container, matchFn, timeout) -> Promise<anchor>
  *   Threadline.buyRowPrice(anchor)                        -> string ("" if none)
+ *   Threadline.samePrice(a, b)                            -> boolean
+ *   Threadline.shopPriceIndex(container)                  -> index (see below)
  *
  * whenBuyAnchor resolves with the first matching `a[data-item]` already inside
  * the container, otherwise it watches the container (MutationObserver, with a
@@ -36,6 +38,23 @@
  * reshuffled we fall back to the first <span> in the row. The text is returned
  * exactly as the platform sent it (whitespace collapsed) — no parsing, no
  * currency guessing.
+ *
+ * samePrice is the tolerant compare a page needs before repainting its own
+ * price: "$38", "38", "$38.00" are the same money, "$38" and "€38" are not.
+ *
+ * shopPriceIndex(container) reads every rendered row once and returns
+ *
+ *   { size, rows: [ { anchor, id, name, price } ],
+ *     byId: {…}, byName: {…},
+ *     lookup(id, name) -> row | null,
+ *     priceFor(id, name) -> string ("" when unmatched or priceless) }
+ *
+ * keyed on the normalised platform item id and on the normalised row title
+ * (the row's <b>). products.html builds it once when the panel has rendered and
+ * repaints the whole grid from it: id first, name only as a fallback, and no
+ * match at all means "not in the shop yet". A container with no rows gives
+ * size 0, which callers must read as "the shop said nothing" — never as
+ * "nothing is on sale".
  *
  * It never posts to checkout itself: the caller clicks the widget's own Buy
  * link, so payments-widget.js keeps ownership of the checkout POST and of its
@@ -95,6 +114,83 @@
     return String(text).replace(/\s+/g, " ").trim();
   };
 
+  /* "$38" vs "$38.00" vs "38" is the same money. Only a real difference is
+     worth repainting a price the page already shows. Two prices that carry
+     different currency marks are never "the same"; a price with no mark at all
+     is compared on the number only. */
+  var samePrice = function (a, b) {
+    var x = String(a || "").replace(/\s+/g, "").toLowerCase();
+    var y = String(b || "").replace(/\s+/g, "").toLowerCase();
+    if (x === y) return true;
+    var nx = (x.match(/-?\d+(\.\d+)?/) || [])[0];
+    var ny = (y.match(/-?\d+(\.\d+)?/) || [])[0];
+    if (nx === undefined || ny === undefined) return false;
+    var cx = x.replace(/[\d.,\s]/g, ""), cy = y.replace(/[\d.,\s]/g, "");
+    return Number(nx) === Number(ny) && (!cx || !cy || cx === cy);
+  };
+
+  /* Ids and names are compared the way product.html compares them: case and
+     punctuation are noise ("Everyday Tee" === "everyday-tee"). */
+  var normaliseKey = function (s) {
+    return String(s == null ? "" : s).toLowerCase().replace(/[^a-z0-9]+/g, "");
+  };
+
+  /* The row title payments-widget.js renders as <b> next to the Buy link. */
+  var buyRowName = function (anchor) {
+    try {
+      var row = anchor ? anchor.parentNode : null;
+      var label = (row && row.querySelector) ? row.querySelector("b") : null;
+      var text = (label && label.textContent) ? label.textContent : "";
+      return String(text).replace(/\s+/g, " ").trim();
+    } catch (e) { return ""; }
+  };
+
+  /* One pass over the panel's rendered rows -> a lookup a whole grid can be
+     repainted from without searching the DOM per card. */
+  var shopPriceIndex = function (container) {
+    var list = anchorsIn(container);
+    var rows = [];
+    var byId = {};
+    var byName = {};
+
+    for (var i = 0; i < list.length; i++) {
+      var anchor = list[i];
+      var entry = {
+        anchor: anchor,
+        id: anchor.getAttribute ? (anchor.getAttribute("data-item") || "") : "",
+        name: buyRowName(anchor),
+        price: buyRowPrice(anchor)
+      };
+      rows.push(entry);
+      var idKey = normaliseKey(entry.id);
+      if (idKey && !byId[idKey]) byId[idKey] = entry;
+      var nameKey = normaliseKey(entry.name);
+      /* First row wins: two rows sharing a title must not make a page flip
+         between two prices on re-render. */
+      if (nameKey && !byName[nameKey]) byName[nameKey] = entry;
+    }
+
+    var lookup = function (id, name) {
+      var idKey = normaliseKey(id);
+      if (idKey && byId[idKey]) return byId[idKey];
+      var nameKey = normaliseKey(name);
+      if (nameKey && byName[nameKey]) return byName[nameKey];
+      return null;
+    };
+
+    return {
+      size: rows.length,
+      rows: rows,
+      byId: byId,
+      byName: byName,
+      lookup: lookup,
+      priceFor: function (id, name) {
+        var hit = lookup(id, name);
+        return hit ? hit.price : "";
+      }
+    };
+  };
+
   var whenBuyAnchor = function (container, matchFn, timeoutMs) {
     var limit = (typeof timeoutMs === "number" && timeoutMs > 0) ? timeoutMs : DEFAULT_TIMEOUT;
 
@@ -147,6 +243,10 @@
 
   ns.findBuyAnchor = findBuyAnchor;
   ns.buyRowPrice = buyRowPrice;
+  ns.buyRowName = buyRowName;
+  ns.samePrice = samePrice;
+  ns.shopPriceIndex = shopPriceIndex;
+  ns.normaliseKey = normaliseKey;
   ns.storePanelFailed = storePanelFailed;
   ns.whenBuyAnchor = whenBuyAnchor;
   ns.BUY_ANCHOR_TIMEOUT = DEFAULT_TIMEOUT;
