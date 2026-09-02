@@ -57,6 +57,15 @@
            it uses the shared #group-store id. -->
       <div id="group-store" data-d8a-group="intent-group"></div>
     </div>
+    <div>
+      <h3>Size guard (guard-group)</h3>
+      <!-- Two rows for the sized-checkout guard: "Guarded Tee" is a sized
+           garment in the stub catalogue below and must never reach checkout
+           from the panel; "Guarded Cap" is one size and must still buy in one
+           POST. It carries the shared #group-store id, like the intent fixture,
+           because that is how payments-widget.js finds a container to fill. -->
+      <div id="group-store" data-d8a-group="guard-group"></div>
+    </div>
   </div>
 
   <script>
@@ -131,6 +140,16 @@
           });
         }
 
+        // guard-group: one sized garment and one one-size piece, checkout
+        // enabled, so the sized-checkout guard can be shown to stop the first
+        // and let the second through.
+        if (g === 'guard-group') {
+          return jsonResponse({ items: [
+            { id: 'g-sized', name: 'Guarded Tee', price: '$30', payUrl: 'https://d8a.com/pay/g-sized' },
+            { id: 'g-onesize', name: 'Guarded Cap', price: '$20', payUrl: 'https://d8a.com/pay/g-onesize' }
+          ], group: { name: 'Guard', url: 'https://d8a.com/g/guard-group' }, checkout: { enabled: true, url: 'https://d8a.com/api/v1/store/checkout' } }, true);
+        }
+
         // checkout-group: provide an item and enable checkout so Buy triggers a POST
         if (g === 'checkout-group') {
           return jsonResponse({ items: [ { id: 'c1', name: 'Checkout Tee', price: '$15', payUrl: 'https://d8a.com/pay/c1' } ], group: { name: 'Checkout', url: 'https://d8a.com/g/checkout-group' }, checkout: { enabled: true, url: 'https://d8a.com/api/v1/store/checkout' } }, true);
@@ -189,6 +208,20 @@
   <script src="../payments-widget.js"></script>
 
   <script>
+  // The container the read-only checkout-group assertions (7 and 8) inspect.
+  // payments-widget.js only fills elements it finds with #group-store, so the
+  // #group-store-checkout box is only usable once it has rows; otherwise fall
+  // back to whichever checkout-group container the widget did render.
+  function checkoutFixture() {
+    var own = document.getElementById('group-store-checkout');
+    if (own && own.querySelector('a[data-item]')) return own;
+    var live = document.querySelectorAll('#fixtures [data-d8a-group="checkout-group"]');
+    for (var i = 0; i < live.length; i++) {
+      if (live[i].querySelector('a[data-item]')) return live[i];
+    }
+    return own;
+  }
+
   // Run assertions after a short delay to allow the widget to initialize.
   function runChecks() {
     try {
@@ -316,7 +349,7 @@
       // duplicate-checkout counts above.
       setTimeout(function runShopPriceTest(attempt) {
         var T = window.Threadline;
-        var container = document.getElementById('group-store-checkout');
+        var container = checkoutFixture();
         var anchor = container && container.querySelector('a[data-item="c1"]');
 
         if (!anchor && (attempt || 0) < 8) {
@@ -353,7 +386,7 @@
       // Tee", "$15"), so it cannot disturb the checkout counts above.
       setTimeout(function runShopIndexTest(attempt) {
         var T = window.Threadline;
-        var container = document.getElementById('group-store-checkout');
+        var container = checkoutFixture();
         var anchor = container && container.querySelector('a[data-item="c1"]');
 
         if (!anchor && (attempt || 0) < 8) {
@@ -404,6 +437,71 @@
         note('same-price-tolerance', tolerant && strict,
           'tolerant=' + tolerant + ' strict=' + strict);
       }, 750);
+
+      // 9) Sized-garment guard (Threadline.guardBuyClicks): a panel row whose
+      // catalogue piece is made in sizes must not start a checkout — the click
+      // is stopped before payments-widget.js sees it — while a one-size row
+      // still posts exactly once. Uses its own guard-group fixture, so the
+      // checkout-group and intent-group counts above are untouched.
+      setTimeout(function runGuardTest(attempt) {
+        var T = window.Threadline;
+        var container = document.querySelector('#fixtures [data-d8a-group="guard-group"]');
+        var sized = container && container.querySelector('a[data-item="g-sized"]');
+        var oneSize = container && container.querySelector('a[data-item="g-onesize"]');
+
+        if ((!sized || !oneSize) && (attempt || 0) < 8) {
+          setTimeout(function () { runGuardTest((attempt || 0) + 1); }, 150);
+          return;
+        }
+        if (!T || typeof T.guardBuyClicks !== 'function' || typeof T.productForAnchor !== 'function') {
+          note('guard-blocks-sized-row', false, 'Threadline.guardBuyClicks/productForAnchor missing');
+          return;
+        }
+        if (!sized || !oneSize) {
+          note('guard-blocks-sized-row', false, 'guard fixture rendered no Buy anchors');
+          return;
+        }
+
+        // The catalogue normally comes from scripts/products.js, which this page
+        // does not load. Stub just the two entries the guard reasons about;
+        // their names are unique, so no other fixture's row can match them.
+        T.products = [
+          { id: 'g-sized', name: 'Guarded Tee', sizes: ['S', 'M', 'L'] },
+          { id: 'g-onesize', name: 'Guarded Cap', sizes: ['One size'] }
+        ];
+
+        var matchedSized = T.productForAnchor(sized);
+        var matchedOne = T.productForAnchor(oneSize);
+        var strayRow = T.productForAnchor(document.querySelector('[data-d8a-group="checkout-group"] a[data-item]'));
+        note('guard-matches-catalogue',
+          !!matchedSized && matchedSized.id === 'g-sized' && T.needsSize(matchedSized) === true &&
+          !!matchedOne && matchedOne.id === 'g-onesize' && T.needsSize(matchedOne) === false &&
+          strayRow === null,
+          'sized=' + (matchedSized ? matchedSized.id : 'null') + ' oneSize=' + (matchedOne ? matchedOne.id : 'null') +
+          ' unmatchedRow=' + String(strayRow));
+
+        var blocked = [];
+        T.guardBuyClicks(container, function (info) {
+          if (info.product && info.needsSize) { blocked.push(info.product.id); return true; }
+          return false;
+        });
+
+        sized.click();
+        setTimeout(function () {
+          var posts = (window.__testCheckoutByGroup && window.__testCheckoutByGroup['guard-group']) || 0;
+          note('guard-blocks-sized-row',
+            blocked.length === 1 && blocked[0] === 'g-sized' && posts === 0 && sized.textContent === 'Buy',
+            'blocked=' + JSON.stringify(blocked) + ' checkout POSTs=' + posts + ' anchorText=' + JSON.stringify(sized.textContent));
+
+          // The one-size row is not the guard's business: it must still buy.
+          oneSize.click();
+          setTimeout(function () {
+            var after = (window.__testCheckoutByGroup && window.__testCheckoutByGroup['guard-group']) || 0;
+            note('guard-allows-one-size-row', after === 1 && blocked.length === 1,
+              'checkout POSTs for guard-group=' + after + ' blocked=' + JSON.stringify(blocked));
+          }, 350);
+        }, 350);
+      }, 900);
 
       // Final aggregator after a bit more time
       setTimeout(function(){

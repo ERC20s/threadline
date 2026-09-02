@@ -75,13 +75,33 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
   The card link is never disabled and the grid is repainted after every filter
   click, because `renderGrid` rebuilds the cards each time. The tolerant price
   compare (`Threadline.samePrice`) is shared with `product.html`.
+- No sized garment can be bought without a size, from either page. The panel's
+  own Buy links post a checkout for the platform item alone, so a click there
+  used to pay for an Everyday Tee with no size on the order and none in the
+  return URL. `Threadline.guardBuyClicks(container, decide)` (in
+  `scripts/checkout-intent.js`) attaches a **capture-phase** click listener to
+  `#group-store`, so it runs before `payments-widget.js`'s own bubbling handler;
+  when `decide` returns true it calls `preventDefault()` and `stopPropagation()`
+  and the checkout is never posted. `Threadline.productForAnchor(anchor)` maps a
+  row back to the catalogue (normalised item id first, row title second) and
+  `Threadline.needsSize(product)` is true when `product.sizes.length > 1`.
+  `products.html` sends a sized row to `product.html?id=…`; `product.html` says
+  "Choose a size first." and focuses the size buttons for this piece, sends
+  another sized piece to its own page, and lets the click through once a size is
+  chosen — so the Buy button's own path is unchanged. One-size pieces (Classic
+  Cap, Lambswool Scarf) and rows with no catalogue match behave exactly as
+  before, and modified clicks (ctrl/cmd/shift/alt, middle click, `target=_blank`)
+  are always passed through.
 - `tests/payments-widget.test.html` is the browser test for the widget; open it
   at http://localhost:5004/tests/payments-widget.test.html while the site is
   served. Its `intent-group` fixture answers late on purpose, to prove a queued
   Buy intent still opens exactly one checkout; the `checkout-group` fixture is
   also read (not clicked) to check `buyRowPrice`, the "rows, but not this
   piece" case, `shopPriceIndex` (matched by id and by name, unlisted piece,
-  empty panel) and `samePrice`'s tolerance.
+  empty panel) and `samePrice`'s tolerance. Its `guard-group` fixture lists one
+  sized row and one one-size row against a stub catalogue: the sized row must
+  produce no checkout POST and leave the anchor untouched, the one-size row must
+  still post exactly once.
 
 `.d8a` declares the group, the run entry and the payments block. Do not hand-edit
 its generated blocks.
