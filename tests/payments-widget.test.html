@@ -48,6 +48,15 @@
       <!-- Second container resolving to the same checkout-group to exercise cross-container deduplication -->
       <div id="group-store" data-d8a-group="checkout-group"></div>
     </div>
+    <div>
+      <h3>Slow render (intent-group)</h3>
+      <!-- The items response for intent-group is deliberately delayed so a Buy
+           intent can be queued while the panel is still empty — the race
+           scripts/checkout-intent.js exists to fix. Not an id="group-store"
+           duplicate of the checkout fixtures: the widget finds it by id too, so
+           it uses the shared #group-store id. -->
+      <div id="group-store" data-d8a-group="intent-group"></div>
+    </div>
   </div>
 
   <script>
@@ -70,6 +79,7 @@
 
     // Checkout-count helpers exposed for tests
     window.__testCheckoutCount = 0;
+    window.__testCheckoutByGroup = {};
     window.__testCheckoutSeen = new Promise(function (resolve) { window.__resolveTestCheckoutSeen = resolve; });
 
     // Stateful behavior: retry-group first call fails, second call succeeds.
@@ -109,6 +119,18 @@
           return jsonResponse({ items: [], group: { name: 'Other', url: 'https://d8a.com/g/other-group' }, checkout: { enabled: false } }, true);
         }
 
+        // intent-group: same shape as checkout-group but the answer arrives late,
+        // so the container is still empty when the Buy intent is queued.
+        if (g === 'intent-group') {
+          return new Promise(function (resolve) {
+            setTimeout(function () {
+              resolve({ ok: true, status: 200, json: function () {
+                return Promise.resolve({ items: [ { id: 'i1', name: 'Everyday Tee', price: '$38', payUrl: 'https://d8a.com/pay/i1' } ], group: { name: 'Intent', url: 'https://d8a.com/g/intent-group' }, checkout: { enabled: true, url: 'https://d8a.com/api/v1/store/checkout' } });
+              } });
+            }, 900);
+          });
+        }
+
         // checkout-group: provide an item and enable checkout so Buy triggers a POST
         if (g === 'checkout-group') {
           return jsonResponse({ items: [ { id: 'c1', name: 'Checkout Tee', price: '$15', payUrl: 'https://d8a.com/pay/c1' } ], group: { name: 'Checkout', url: 'https://d8a.com/g/checkout-group' }, checkout: { enabled: true, url: 'https://d8a.com/api/v1/store/checkout' } }, true);
@@ -129,11 +151,17 @@
         return jsonResponse({ paid: false }, true);
       }
 
-      // checkout endpoint: count POSTs by endpoint+method and return a benign url
+      // checkout endpoint: count POSTs by endpoint+method (and by the group in
+      // the posted body, so fixtures cannot contaminate each other's counts).
       if (url.indexOf('/api/v1/store/checkout') !== -1) {
         try {
           var method = opts && opts.method ? String(opts.method).toUpperCase() : 'GET';
           if (method === 'POST') {
+            var bodyGroup = null;
+            try { bodyGroup = JSON.parse(opts.body).group; } catch (e) {}
+            if (bodyGroup) {
+              window.__testCheckoutByGroup[bodyGroup] = (window.__testCheckoutByGroup[bodyGroup] || 0) + 1;
+            }
             window.__testCheckoutCount = (window.__testCheckoutCount || 0) + 1;
             if (typeof window.__resolveTestCheckoutSeen === 'function') {
               try { window.__resolveTestCheckoutSeen(window.__testCheckoutCount); } catch (e) {}
@@ -142,7 +170,10 @@
             }
           }
         } catch (e) {}
-        return jsonResponse({ url: 'https://d8a.com/checkout' }, true);
+        // Deliberately never settles: the widget sets location.href from the
+        // checkout answer, which would navigate the test page away before the
+        // results could be read. The POST has already been counted above.
+        return new Promise(function () {});
       }
 
       // anything else: passthrough to real fetch if available
@@ -152,7 +183,10 @@
   })();
   </script>
 
-  <script src="payments-widget.js"></script>
+  <!-- Paths are relative to the repository root: open this page from the root
+       (e.g. the `site` entry in .d8a) so both scripts resolve. -->
+  <script src="../scripts/checkout-intent.js"></script>
+  <script src="../payments-widget.js"></script>
 
   <script>
   // Run assertions after a short delay to allow the widget to initialize.
@@ -225,13 +259,13 @@
         var seenPromise = window.__testCheckoutSeen || Promise.resolve(null);
         var timeout = new Promise(function (resolve) { setTimeout(function () { resolve('timeout'); }, 2000); });
         Promise.race([seenPromise, timeout]).then(function (res) {
-          var count = window.__testCheckoutCount || 0;
+          var count = (window.__testCheckoutByGroup && window.__testCheckoutByGroup['checkout-group']) || 0;
           // ensure at least one of the anchors is still present in the DOM
           var stillInDOM = !!(document.querySelector('#group-store-checkout a[data-item]') || document.querySelectorAll('#fixtures [data-d8a-group="checkout-group"] a[data-item]').length);
           var ok = (count === 1) && stillInDOM;
           note('prevent-duplicate-checkout', ok, 'checkout POSTs=' + count + ' anchorPresent=' + stillInDOM + ' waited=' + String(res));
         }).catch(function (e) {
-          var count = window.__testCheckoutCount || 0;
+          var count = (window.__testCheckoutByGroup && window.__testCheckoutByGroup['checkout-group']) || 0;
           var stillInDOM = !!(document.querySelector('#group-store-checkout a[data-item]') || document.querySelectorAll('#fixtures [data-d8a-group="checkout-group"] a[data-item]').length);
           note('prevent-duplicate-checkout', false, 'error waiting for checkout count: ' + String(e) + ' count=' + count + ' anchorPresent=' + stillInDOM);
         });
@@ -239,6 +273,42 @@
 
       // Kick off the checkout test after a short delay to allow item rendering.
       setTimeout(runCheckoutDupTest, 500);
+
+      // 6) Queued Buy intent: the intent-group items answer is delayed, so the
+      // container is still empty here. Threadline.whenBuyAnchor must wait for
+      // the anchor instead of failing, and clicking the resolved anchor must
+      // produce exactly one checkout POST for that group.
+      (function runQueuedIntentTest() {
+        var container = document.querySelector('[data-d8a-group="intent-group"]');
+        if (!container || !window.Threadline || typeof window.Threadline.whenBuyAnchor !== 'function') {
+          note('queued-buy-intent', false, 'container or Threadline.whenBuyAnchor missing');
+          return;
+        }
+
+        // Precondition: nothing to click yet — this is the early-click race.
+        var emptyAtQueueTime = !container.querySelector('a[data-item]');
+        note('intent-panel-empty-when-queued', emptyAtQueueTime, emptyAtQueueTime ? 'no Buy anchor rendered yet' : 'anchor already present — test is not exercising the race');
+
+        // Count clicks on Buy anchors inside this container.
+        var clicks = 0;
+        container.addEventListener('click', function (e) {
+          var a = e.target && e.target.closest ? e.target.closest('a[data-item]') : null;
+          if (a) clicks++;
+        }, true);
+
+        var matchFn = function (a) { return a.getAttribute('data-item') === 'i1'; };
+
+        window.Threadline.whenBuyAnchor(container, matchFn, 3000).then(function (anchor) {
+          anchor.click();
+          setTimeout(function () {
+            var posts = (window.__testCheckoutByGroup && window.__testCheckoutByGroup['intent-group']) || 0;
+            var ok = !!anchor && anchor.getAttribute('data-item') === 'i1' && clicks === 1 && posts === 1;
+            note('queued-buy-intent', ok, 'resolved item=' + anchor.getAttribute('data-item') + ' clicks=' + clicks + ' checkout POSTs=' + posts);
+          }, 250);
+        }).catch(function (err) {
+          note('queued-buy-intent', false, 'whenBuyAnchor rejected: ' + String(err && err.message ? err.message : err));
+        });
+      })();
 
       // Final aggregator after a bit more time
       setTimeout(function(){

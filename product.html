@@ -106,6 +106,8 @@
   </div>
 
   <script src="scripts/products.js"></script>
+  <!-- Queues a Buy click until payments-widget.js has rendered #group-store. -->
+  <script src="scripts/checkout-intent.js"></script>
   <script src="payments-widget.js"></script>
   <script>
     (function () {
@@ -194,40 +196,75 @@
         return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
       };
 
-      var widgetAnchorFor = function (name) {
-        var wanted = normalise(name);
-        var anchors = document.querySelectorAll("#group-store a[data-item]");
-        for (var i = 0; i < anchors.length; i++) {
-          var row = anchors[i].parentNode;
-          var label = row && row.querySelector ? row.querySelector("b") : null;
-          var text = label ? label.textContent : "";
-          if (normalise(text) === wanted || normalise(anchors[i].getAttribute("data-item")) === normalise(product.id)) {
-            return anchors[i];
-          }
-        }
-        return null;
+      /* Does this widget row sell this piece? Either the platform item id
+         matches our catalogue id, or the row's title matches the product name. */
+      var matchesProduct = function (anchor) {
+        if (normalise(anchor.getAttribute("data-item")) === normalise(product.id)) return true;
+        var row = anchor.parentNode;
+        var label = row && row.querySelector ? row.querySelector("b") : null;
+        return !!label && normalise(label.textContent) === normalise(product.name);
       };
 
+      var panel = document.getElementById("group-store");
       var buy = document.getElementById("buy");
+      var STORE_URL = "https://d8a.com/g/d8aaaa-batch_threadline";
+
+      /* The failure line, with a way out: the group's own storefront. */
+      var sayNotListed = function () {
+        say("This piece isn't listed in the shop panel yet. Pick it in Checkout below, or email hello@threadline.example and we'll reserve size " + chosenSize + ".", "error");
+        if (status) {
+          status.appendChild(document.createTextNode(" "));
+          var link = document.createElement("a");
+          link.href = STORE_URL;
+          link.textContent = "Open the shop on d8a.com";
+          status.appendChild(link);
+        }
+        if (panel && panel.scrollIntoView) panel.scrollIntoView({ behavior: "smooth", block: "center" });
+      };
+
+      /* payments-widget.js listens on the #group-store container and owns the
+         checkout POST (including its duplicate-click guard), so we click its own
+         link rather than posting a second time from here. */
+      var openCheckout = function (anchor) {
+        say("Opening checkout for " + product.name + ", size " + chosenSize + "…");
+        anchor.click();
+      };
+
+      /* One queued intent at a time: while we wait for the panel, Buy is
+         disabled so a second click cannot start a second checkout. */
+      var pending = false;
+
       buy.addEventListener("click", function () {
+        if (pending) return;
         if (!chosenSize) {
           say("Choose a size first.", "error");
           var first = sizeBox.querySelector("button");
           if (first) first.focus();
           return;
         }
-        var anchor = widgetAnchorFor(product.name);
-        if (anchor) {
-          say("Opening checkout for " + product.name + ", size " + chosenSize + "…");
-          /* payments-widget.js listens on the #group-store container and owns the
-             checkout POST (including its duplicate-click guard), so we click its
-             own link rather than posting a second time from here. */
-          anchor.click();
-          return;
-        }
-        say("This piece isn't listed in the shop panel yet. Pick it in Checkout below, or email hello@threadline.example and we'll reserve size " + chosenSize + ".", "error");
-        var panel = document.getElementById("group-store");
-        if (panel && panel.scrollIntoView) panel.scrollIntoView({ behavior: "smooth", block: "center" });
+
+        /* Already rendered — the common case — goes straight through. */
+        var ready = T.findBuyAnchor ? T.findBuyAnchor(panel, matchesProduct) : null;
+        if (ready) { openCheckout(ready); return; }
+
+        if (!T.whenBuyAnchor || !panel) { sayNotListed(); return; }
+
+        /* The panel is still loading (payments-widget.js fills it only after its
+           items request returns). Queue the click instead of failing early. */
+        pending = true;
+        buy.disabled = true;
+        buy.setAttribute("aria-busy", "true");
+        say("Fetching the shop — checkout will open in a moment…");
+
+        var release = function () {
+          pending = false;
+          buy.disabled = false;
+          buy.removeAttribute("aria-busy");
+        };
+
+        T.whenBuyAnchor(panel, matchesProduct, T.BUY_ANCHOR_TIMEOUT || 12000)
+          .then(function (anchor) { release(); openCheckout(anchor); })
+          .catch(function () { release(); sayNotListed(); });
       });
 
       /* ---- receipt: the widget fires this once the platform confirms payment ---- */
