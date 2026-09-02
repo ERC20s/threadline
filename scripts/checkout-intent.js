@@ -12,12 +12,30 @@
  *   Threadline.findBuyAnchor(container, matchFn)          -> anchor | null
  *   Threadline.storePanelFailed(container)                -> boolean
  *   Threadline.whenBuyAnchor(container, matchFn, timeout) -> Promise<anchor>
+ *   Threadline.buyRowPrice(anchor)                        -> string ("" if none)
  *
  * whenBuyAnchor resolves with the first matching `a[data-item]` already inside
  * the container, otherwise it watches the container (MutationObserver, with a
  * polling fallback) and resolves as soon as one appears. It rejects with
  * "store-error" when the widget has drawn its failure line (the Retry control)
  * and with "timeout" when neither happens in time.
+ *
+ * Called with no matchFn — findBuyAnchor(container) or
+ * whenBuyAnchor(container, null, timeout) — the answer means only "the panel
+ * has rendered its rows". That is how product.html tells "the shop is loaded
+ * but does not sell this piece" (rows, no match) apart from "the shop has not
+ * answered yet" (no rows at all), which is the case #113/#114 must keep
+ * queueing.
+ *
+ * buyRowPrice reads the price the shop itself is showing for a row.
+ * payments-widget.js builds every row as
+ *
+ *   div > [ div(b name, div description), span(price), a[data-item] ]
+ *
+ * so the price is the Buy anchor's previous element sibling; if that is ever
+ * reshuffled we fall back to the first <span> in the row. The text is returned
+ * exactly as the platform sent it (whitespace collapsed) — no parsing, no
+ * currency guessing.
  *
  * It never posts to checkout itself: the caller clicks the widget's own Buy
  * link, so payments-widget.js keeps ownership of the checkout POST and of its
@@ -58,6 +76,23 @@
     try {
       return !!(container && container.querySelector && container.querySelector("[data-d8a-retry]"));
     } catch (e) { return false; }
+  };
+
+  /* The price text the shop panel is showing next to this Buy link. Returns ""
+     when there is no anchor or no price cell — callers treat "" as "the shop
+     said nothing", i.e. leave the page's own price alone. */
+  var buyRowPrice = function (anchor) {
+    if (!anchor) return "";
+    var cell = null;
+    try {
+      cell = anchor.previousElementSibling || null;
+      if (!cell || !cell.textContent) {
+        var row = anchor.parentNode;
+        cell = (row && row.querySelector) ? row.querySelector("span") : null;
+      }
+    } catch (e) { cell = null; }
+    var text = (cell && cell.textContent) ? cell.textContent : "";
+    return String(text).replace(/\s+/g, " ").trim();
   };
 
   var whenBuyAnchor = function (container, matchFn, timeoutMs) {
@@ -111,6 +146,7 @@
   };
 
   ns.findBuyAnchor = findBuyAnchor;
+  ns.buyRowPrice = buyRowPrice;
   ns.storePanelFailed = storePanelFailed;
   ns.whenBuyAnchor = whenBuyAnchor;
   ns.BUY_ANCHOR_TIMEOUT = DEFAULT_TIMEOUT;
