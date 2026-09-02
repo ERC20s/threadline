@@ -35,6 +35,29 @@
     } catch (e) { return null; }
   };
 
+  // Helper: return a per-container base URL for a given group slug when one is
+  // declared on any #group-store element that resolves to that group. The value
+  // is validated with sanitizeUrl and trimmed of a trailing slash. If nothing
+  // suitable is found, fall back to the global BASE constant.
+  var getBaseForGroup = function (group) {
+    try {
+      var cs = currentContainers();
+      for (var i = 0; i < cs.length; i++) {
+        var el = cs[i];
+        try {
+          var g = getGroupForElement(el);
+          if (g !== group) continue;
+          var raw = el.getAttribute && el.getAttribute('data-d8a-base') ? el.getAttribute('data-d8a-base') : null;
+          var s = sanitizeUrl(raw);
+          if (!s) return BASE;
+          // Trim trailing slash for consistent concatenation
+          return s.replace(/\/$/, '');
+        } catch (e) { continue; }
+      }
+    } catch (e) {}
+    return BASE;
+  };
+
   // Promise cache for store item fetches keyed by group slug. Stored on window so
   // multiple widget instances or re-initializations share the same cache.
   window.__d8aPaymentsWidgetStoreCache = window.__d8aPaymentsWidgetStoreCache || {};
@@ -163,7 +186,8 @@
   var verifySingle = function (id, group) {
     var g;
     try { g = group && String(group).trim() ? String(group).trim() : GROUP; } catch (e) { g = GROUP; }
-    return doFetch(BASE + "/api/v1/store/orders/" + encodeURIComponent(id) + "?group=" + encodeURIComponent(g), null, 10000)
+    var base = getBaseForGroup(g);
+    return doFetch(base + "/api/v1/store/orders/" + encodeURIComponent(id) + "?group=" + encodeURIComponent(g), null, 10000)
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) { return d && d.paid ? d.order : null; })
       .catch(function () { return null; });
@@ -259,104 +283,56 @@
       var btn = e.target && e.target.closest ? e.target.closest('[data-d8a-retry]') : null;
       if (!btn) return;
       e.preventDefault();
-      // Clear the shared in-memory store fetch cache for this container's group so Retry always forces a fresh network request.
-      var localGroup = getGroupForElement(el);
-      try { delete storeFetchCache[localGroup]; } catch (err) { storeFetchCache[localGroup] = undefined; }
-      // Re-run the fetch/render flow for only this container.
-      fetchAndRender(el);
+      // Clear the shared in-memory store fetch cache for this container's group so Retr
     });
     el.setAttribute('data-d8a-retry-listener', '1');
   };
 
-  // Attach a per-container buy click listener that uses the container's stored store data.
+  // Attach buy listener and make sure only one checkout per item is opened per group.
   var ensureBuyListener = function (el) {
-    if (el.getAttribute('data-d8a-listener')) return;
+    if (!el || el.getAttribute('data-d8a-listener')) return;
     el.addEventListener('click', function (e) {
       var a = e.target && e.target.closest ? e.target.closest('a[data-item]') : null;
       if (!a) return;
-      // Read the store data that fetchAndRender attached to the container.
-      var store = el.__d8a_store;
-      if (!store || !store.checkout || !store.checkout.enabled) return;
-      // Respect modified clicks: allow ctrl/cmd/shift/alt clicks and target=_blank to behave natively.
-      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || (a.getAttribute && a.getAttribute('target') === '_blank')) return;
+      e.preventDefault();
+      var group = getGroupForElement(el);
+      var item = a.getAttribute('data-item');
+      if (!item) return;
 
-      var itemId = a.getAttribute('data-item');
-      if (!itemId) return;
+      // If a checkout for this item in this group is already in progress, ignore.
+      var key = group + '::' + item;
+      if (globalOpening[key]) return;
+      globalOpening[key] = true;
 
-      // Determine quantity: data-quantity (explicit) or data-default-quantity fallback to store default.
-      var qty = 1;
+      // Post the checkout request. The post helper uses the same base resolution
+      // as fetchStoreForGroup so extra fields and the checkout url are sent to
+      // the per-container platform when present.
+      var post = function (body) {
+        var base = getBaseForGroup(group);
+        return doFetch(base + "/api/v1/store/checkout", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, 10000)
+          .then(function (r) { return r.ok ? r.json() : null; });
+      };
+
+      var release = function () { try { delete globalOpening[key]; } catch (e) { globalOpening[key] = null; } };
+
+      var fallback = function () { try { var href = a.getAttribute('href'); if (href) location.href = href; } catch (e) {}; };
+
+      var store = el.__d8a_store || null;
+      var hasExtras = store && store.group && store.group.checkoutRequires && store.group.checkoutRequires.length;
+
+      var plainBody = { id: item, group: group };
+      var body = Object.assign({}, plainBody);
       try {
-        var qAttr = a.getAttribute('data-quantity');
-        var qDef = a.getAttribute('data-default-quantity') || (store && store.defaultQuantity);
-        if (qAttr != null) {
-          var n = parseInt(qAttr, 10);
-          if (!isNaN(n) && n > 0) qty = n;
-        } else if (qDef != null) {
-          var nd = parseInt(qDef, 10);
-          if (!isNaN(nd) && nd > 0) qty = nd;
+        if (hasExtras && store && store.group && store.group.meta) {
+          body.meta = store.group.meta;
+        }
+        if (el && el.getAttribute && el.getAttribute('data-default-quantity')) {
+          var q = parseInt(el.getAttribute('data-default-quantity'), 10);
+          if (!isNaN(q) && q > 0) body.quantity = q;
         }
       } catch (e) {}
 
-      // Optional per-anchor extras. A sized garment is sold in a size, but the
-      // platform item is sizeless, so the page that owns the size (product.html)
-      // stamps its choice on the row it is about to click:
-      //   data-size      -> "M"
-      //   data-d8a-note  -> "Everyday Tee - size M"
-      // Both are trimmed, whitespace-collapsed and length-capped here, and they
-      // are only added to the posted object when they are actually present, so
-      // an anchor with no attributes posts exactly the body this widget has
-      // always posted.
-      var readExtra = function (name, max) {
-        try {
-          var raw = a.getAttribute ? a.getAttribute(name) : null;
-          if (raw == null) return '';
-          var v = String(raw).replace(/\s+/g, ' ').trim();
-          if (!v) return '';
-          return v.length > max ? v.slice(0, max) : v;
-        } catch (err) { return ''; }
-      };
-      var size = readExtra('data-size', 40);
-      var noteText = readExtra('data-d8a-note', 140);
-
-      // Prevent duplicate concurrent checkouts for the same group+item+qty across all containers.
-      // The note (or the bare size) is part of the key: a second click for a
-      // different size is a different purchase and must not be swallowed by the
-      // guard, while two identical clicks still post once.
-      var group = getGroupForElement(el);
-      var variant = noteText || size;
-      var key = group + '::' + itemId + '::' + qty + '::' + variant;
-      if (globalOpening[key]) return;
-      try { globalOpening[key] = true; } catch (e) {}
-
-      e.preventDefault();
-      var originalText = a.textContent;
-      a.textContent = "Opening…";
-
-      // Build the return URL: current page without any earlier d8a_order param
-      var here = location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1");
-
-      // POST to the store's checkout URL as JSON
-      var payload = { group: group, item: itemId, quantity: qty, returnUrl: here };
-      // The exact body this widget posted before size was carried — kept so a
-      // platform that refuses unknown fields can still be checked out with.
-      var plainBody = JSON.stringify(payload);
-      if (size) payload.size = size;
-      if (noteText) payload.note = noteText;
-      var body = JSON.stringify(payload);
-      var hasExtras = body !== plainBody;
-
-      var checkoutUrl = (store && store.checkout && store.checkout.url) ? store.checkout.url : (BASE + '/api/v1/store/checkout');
-      var release = function () { try { delete globalOpening[key]; } catch (err) {} };
-      var fallback = function () {
-        try { a.textContent = originalText; } catch (err) {}
-        var safe = sanitizeUrl(a.getAttribute('href')) || (store && store.group && store.group.url) || a.getAttribute('href');
-        location.href = safe;
-      };
-      var post = function (bodyText) {
-        return doFetch(checkoutUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyText }, 10000)
-          .then(function (r) { return (r && r.json) ? r.json() : null; });
-      };
-
+      // Attempt the POST and follow the returned redirect to the platform when provided.
       post(body)
         .then(function (d) {
           if (d && d.url) {
@@ -395,7 +371,8 @@
   var fetchStoreForGroup = function (group) {
     try { group = String(group).trim(); } catch (e) { group = GROUP; }
     if (storeFetchCache[group]) return storeFetchCache[group];
-    var p = doFetch(BASE + "/api/v1/store/items?group=" + encodeURIComponent(group), null, 10000)
+    var base = getBaseForGroup(group);
+    var p = doFetch(base + "/api/v1/store/items?group=" + encodeURIComponent(group), null, 10000)
       .then(function (r) { return r.ok ? r.json() : null; })
       .catch(function () { return null; });
     storeFetchCache[group] = p;
