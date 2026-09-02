@@ -297,9 +297,34 @@
         }
       } catch (e) {}
 
+      // Optional per-anchor extras. A sized garment is sold in a size, but the
+      // platform item is sizeless, so the page that owns the size (product.html)
+      // stamps its choice on the row it is about to click:
+      //   data-size      -> "M"
+      //   data-d8a-note  -> "Everyday Tee - size M"
+      // Both are trimmed, whitespace-collapsed and length-capped here, and they
+      // are only added to the posted object when they are actually present, so
+      // an anchor with no attributes posts exactly the body this widget has
+      // always posted.
+      var readExtra = function (name, max) {
+        try {
+          var raw = a.getAttribute ? a.getAttribute(name) : null;
+          if (raw == null) return '';
+          var v = String(raw).replace(/\s+/g, ' ').trim();
+          if (!v) return '';
+          return v.length > max ? v.slice(0, max) : v;
+        } catch (err) { return ''; }
+      };
+      var size = readExtra('data-size', 40);
+      var noteText = readExtra('data-d8a-note', 140);
+
       // Prevent duplicate concurrent checkouts for the same group+item+qty across all containers.
+      // The note (or the bare size) is part of the key: a second click for a
+      // different size is a different purchase and must not be swallowed by the
+      // guard, while two identical clicks still post once.
       var group = getGroupForElement(el);
-      var key = group + '::' + itemId + '::' + qty;
+      var variant = noteText || size;
+      var key = group + '::' + itemId + '::' + qty + '::' + variant;
       if (globalOpening[key]) return;
       try { globalOpening[key] = true; } catch (e) {}
 
@@ -311,24 +336,56 @@
       var here = location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1");
 
       // POST to the store's checkout URL as JSON
-      var body = JSON.stringify({ group: group, item: itemId, quantity: qty, returnUrl: here });
-      doFetch((store && store.checkout && store.checkout.url) ? store.checkout.url : (BASE + '/api/v1/store/checkout'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body }, 10000)
-        .then(function (r) { return r.json ? r.json() : null; })
+      var payload = { group: group, item: itemId, quantity: qty, returnUrl: here };
+      // The exact body this widget posted before size was carried — kept so a
+      // platform that refuses unknown fields can still be checked out with.
+      var plainBody = JSON.stringify(payload);
+      if (size) payload.size = size;
+      if (noteText) payload.note = noteText;
+      var body = JSON.stringify(payload);
+      var hasExtras = body !== plainBody;
+
+      var checkoutUrl = (store && store.checkout && store.checkout.url) ? store.checkout.url : (BASE + '/api/v1/store/checkout');
+      var release = function () { try { delete globalOpening[key]; } catch (err) {} };
+      var fallback = function () {
+        try { a.textContent = originalText; } catch (err) {}
+        var safe = sanitizeUrl(a.getAttribute('href')) || (store && store.group && store.group.url) || a.getAttribute('href');
+        location.href = safe;
+      };
+      var post = function (bodyText) {
+        return doFetch(checkoutUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyText }, 10000)
+          .then(function (r) { return (r && r.json) ? r.json() : null; });
+      };
+
+      post(body)
         .then(function (d) {
-          try { delete globalOpening[key]; } catch (e) {}
           if (d && d.url) {
+            release();
             location.href = d.url;
-            return;
+            return null;
           }
-          // Otherwise, fall back to anchor href if present and allowed by sanitizeUrl.
-          try { a.textContent = originalText; } catch (e) {}
-          var safe = sanitizeUrl(a.getAttribute('href')) || (store && store.group && store.group.url) || a.getAttribute('href');
-          location.href = safe;
-        }).catch(function () {
-          try { delete globalOpening[key]; } catch (e) {}
-          try { a.textContent = originalText; } catch (e) {}
-          var safe2 = sanitizeUrl(a.getAttribute('href')) || (store && store.group && store.group.url) || a.getAttribute('href');
-          location.href = safe2;
+          // No checkout url came back. If we sent the extra fields, the answer
+          // may be the platform rejecting them: try exactly once more with the
+          // plain body before giving up to the anchor href.
+          if (!hasExtras) {
+            release();
+            fallback();
+            return null;
+          }
+          return post(plainBody).then(function (d2) {
+            release();
+            if (d2 && d2.url) { location.href = d2.url; return null; }
+            fallback();
+            return null;
+          }).catch(function () {
+            release();
+            fallback();
+            return null;
+          });
+        })
+        .catch(function () {
+          release();
+          fallback();
         });
     });
     el.setAttribute('data-d8a-listener', '1');
