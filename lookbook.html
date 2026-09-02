@@ -28,32 +28,29 @@
       <h1>Autumn lookbook</h1>
       <p class="note">Six looks, shot in one afternoon at the studio. Every piece links straight to its page. Photography here is placeholder imagery.</p>
 
-      <div class="lookbook">
-        <figure class="look">
-          <img src="https://picsum.photos/seed/threadline-look-1/800/1000" alt="Tee worn under an open canvas overshirt" loading="lazy" width="800" height="1000">
-          <figcaption>Everyday Tee under the Canvas Overshirt — <a href="product.html?id=canvas-overshirt">shop the overshirt</a></figcaption>
-        </figure>
-        <figure class="look">
-          <img src="https://picsum.photos/seed/threadline-look-2/800/1000" alt="Relaxed shirt worn open over a ribbed longsleeve" loading="lazy" width="800" height="1000">
-          <figcaption>Relaxed Shirt over the Ribbed Longsleeve — <a href="product.html?id=relaxed-shirt">shop the shirt</a></figcaption>
-        </figure>
-        <figure class="look">
-          <img src="https://picsum.photos/seed/threadline-look-3/800/1000" alt="Merino crew knit with tapered casual pants" loading="lazy" width="800" height="1000">
-          <figcaption>Merino Crew Knit and Casual Pant — <a href="product.html?id=merino-crew">shop the knit</a></figcaption>
-        </figure>
-        <figure class="look">
-          <img src="https://picsum.photos/seed/threadline-look-4/800/1000" alt="Linen dress with a lambswool scarf" loading="lazy" width="800" height="1000">
-          <figcaption>Linen Summer Dress, layered late — <a href="product.html?id=linen-dress">shop the dress</a></figcaption>
-        </figure>
-        <figure class="look">
-          <img src="https://picsum.photos/seed/threadline-look-5/800/1000" alt="Rigid denim jacket over a lightweight hoodie" loading="lazy" width="800" height="1000">
-          <figcaption>Rigid Denim Jacket over the Lightweight Hoodie — <a href="product.html?id=denim-jacket">shop the jacket</a></figcaption>
-        </figure>
-        <figure class="look">
-          <img src="https://picsum.photos/seed/threadline-look-6/800/1000" alt="Woven shirt worn with a classic cap" loading="lazy" width="800" height="1000">
-          <figcaption>Woven Shirt and Classic Cap — <a href="product.html?id=woven-shirt">shop the shirt</a></figcaption>
-        </figure>
-      </div>
+      <!-- The looks are rendered from scripts/products.js (Threadline.LOOKS +
+           Threadline.renderLooks): names, prices and links all come from the
+           catalogue, so nothing here is hand-copied. -->
+      <div class="lookbook" id="lookbook"></div>
+      <p class="status" id="lookbook-status" role="status"></p>
+
+      <noscript>
+        <p class="note">The looks are rendered from <code>scripts/products.js</code>. Without JavaScript, use these direct links:</p>
+        <ul>
+          <li><a href="product.html?id=everyday-tee">Everyday Tee — $38</a></li>
+          <li><a href="product.html?id=relaxed-shirt">Relaxed Shirt — $48</a></li>
+          <li><a href="product.html?id=lightweight-hoodie">Lightweight Hoodie — $68</a></li>
+          <li><a href="product.html?id=casual-pant">Casual Pant — $58</a></li>
+          <li><a href="product.html?id=woven-shirt">Woven Shirt — $52</a></li>
+          <li><a href="product.html?id=classic-cap">Classic Cap — $22</a></li>
+          <li><a href="product.html?id=merino-crew">Merino Crew Knit — $88</a></li>
+          <li><a href="product.html?id=canvas-overshirt">Canvas Overshirt — $94</a></li>
+          <li><a href="product.html?id=linen-dress">Linen Summer Dress — $76</a></li>
+          <li><a href="product.html?id=ribbed-longsleeve">Ribbed Longsleeve — $44</a></li>
+          <li><a href="product.html?id=wool-scarf">Lambswool Scarf — $46</a></li>
+          <li><a href="product.html?id=denim-jacket">Rigid Denim Jacket — $118</a></li>
+        </ul>
+      </noscript>
 
       <p class="actions">
         <a class="btn" href="products.html">Shop the collection</a>
@@ -88,5 +85,28 @@
       <div>Threadline Clothing Co. — small-batch apparel. Product photography is placeholder imagery.</div>
     </footer>
   </div>
+
+  <!-- The catalogue owns the looks as well as the grid. -->
+  <script src="scripts/products.js"></script>
+  <script>
+    (function () {
+      var T = window.Threadline;
+      var el = document.getElementById("lookbook");
+      var status = document.getElementById("lookbook-status");
+      if (!T || !el || typeof T.renderLooks !== "function") return;
+
+      var count = T.renderLooks(el);
+
+      /* How many pieces of the collection this page actually links, counted
+         from what was rendered rather than from the list — an id that no
+         longer resolves is printed as plain text and must not be counted. */
+      var linked = el.querySelectorAll(".look-pieces a[data-product-id]").length;
+
+      if (status) {
+        status.textContent = count + (count === 1 ? " look" : " looks") +
+          ", " + linked + (linked === 1 ? " piece" : " pieces") + " linked.";
+      }
+    })();
+  </script>
 </body>
 </html>

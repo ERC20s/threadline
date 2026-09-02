@@ -2,7 +2,9 @@
  *
  * One source of truth for every page: index.html renders the featured cards
  * from it, products.html renders the full grid, product.html renders a single
- * item chosen with ?id=<id>. Plain browser JS, no build step, no framework.
+ * item chosen with ?id=<id>, and lookbook.html renders the LOOKS list below
+ * (every piece a look wears is linked from here, never hand-copied).
+ * Plain browser JS, no build step, no framework.
  *
  * Images are placeholder URLs (picsum.photos, seeded so each item keeps the
  * same picture). Swap the `image` values for real photography before launch —
@@ -218,6 +220,80 @@
     return null;
   };
 
+  /* ---- the lookbook ------------------------------------------------------
+     lookbook.html used to hard-code six <figure> blocks. Every caption named
+     two garments but linked only one, and the names were copied by hand — so
+     half the collection was named and unclickable, and a renamed id sent a
+     shopper to the "not found" panel in product.html.
+
+     The looks now live here, next to the catalogue they point at: each entry
+     is a photo (seed + alt text) and the catalogue ids the look wears, in the
+     order the caption should read them. Threadline.looks() resolves those ids
+     through byId, so a name or a price only ever comes from the catalogue.
+     An id we no longer make is kept as plain text (never a dead link), and
+     tests/payments-widget.test.html fails if any id here does not resolve or
+     if a catalogue piece appears in no look at all. */
+  var LOOKS = [
+    {
+      seed: "look-1",
+      alt: "Tee worn under an open canvas overshirt",
+      note: "The tee under an open overshirt — the whole autumn, most days.",
+      wears: ["everyday-tee", "canvas-overshirt"]
+    },
+    {
+      seed: "look-2",
+      alt: "Relaxed shirt worn open over a ribbed longsleeve",
+      note: "Shirt worn open over the rib, sleeves pushed back.",
+      wears: ["relaxed-shirt", "ribbed-longsleeve"]
+    },
+    {
+      seed: "look-3",
+      alt: "Merino crew knit with tapered casual pants",
+      note: "Fine merino with the tapered pant — the simplest thing we make.",
+      wears: ["merino-crew", "casual-pant"]
+    },
+    {
+      seed: "look-4",
+      alt: "Linen dress with a lambswool scarf",
+      note: "The linen dress layered late in the season, scarf doubled over.",
+      wears: ["linen-dress", "wool-scarf"]
+    },
+    {
+      seed: "look-5",
+      alt: "Rigid denim jacket over a lightweight hoodie",
+      note: "Raw denim over the hoodie, hood out.",
+      wears: ["denim-jacket", "lightweight-hoodie"]
+    },
+    {
+      seed: "look-6",
+      alt: "Woven shirt worn with a classic cap",
+      note: "Yarn-dyed weave and a washed cap — the studio uniform.",
+      wears: ["woven-shirt", "classic-cap"]
+    }
+  ];
+
+  var lookImage = function (seed) {
+    return img(seed, 800, 1000);
+  };
+
+  /* The looks with every id resolved. Each piece is
+     { id, name, product } — `product` is null for an id the catalogue no
+     longer has, and the renderer prints that one as plain text. */
+  var looks = function (list) {
+    return (list || LOOKS).map(function (look) {
+      return {
+        seed: look.seed,
+        image: lookImage(look.seed),
+        alt: look.alt,
+        note: look.note,
+        pieces: (look.wears || []).map(function (id) {
+          var p = byId(id);
+          return { id: id, name: p ? p.name : id, product: p };
+        })
+      };
+    });
+  };
+
   /* ---- categories, and the gate on ?category= -----------------------------
      products.html filters the grid by category and now carries the choice on
      the URL, so a category can be linked to and shared. The value on the URL
@@ -328,6 +404,75 @@
     });
   };
 
+  /* One lookbook figure, built with the same DOM-only style as card(). The
+     caption is the look's note plus a list of the pieces it wears: every
+     known piece is a link to its product page with the catalogue price, so
+     nothing on the lookbook is hand-copied any more. */
+  var lookFigure = function (look) {
+    var fig = document.createElement("figure");
+    fig.className = "look";
+    fig.dataset.look = look.seed;
+
+    var image = document.createElement("img");
+    image.src = look.image;
+    image.alt = look.alt || "";
+    image.loading = "lazy";
+    image.width = 800;
+    image.height = 1000;
+    fig.appendChild(image);
+
+    var caption = document.createElement("figcaption");
+
+    if (look.note) {
+      var note = document.createElement("span");
+      note.className = "look-note";
+      note.textContent = look.note;
+      caption.appendChild(note);
+    }
+
+    var list = document.createElement("ul");
+    list.className = "look-pieces";
+
+    look.pieces.forEach(function (piece) {
+      var li = document.createElement("li");
+
+      if (piece.product) {
+        var a = document.createElement("a");
+        a.href = productUrl(piece.product);
+        a.dataset.productId = piece.product.id;
+        a.textContent = piece.product.name;
+        li.appendChild(a);
+
+        var price = document.createElement("span");
+        price.className = "look-price";
+        price.textContent = money(piece.product.price);
+        li.appendChild(document.createTextNode(" "));
+        li.appendChild(price);
+      } else {
+        /* An id the catalogue no longer has: name it, never link it. */
+        li.className = "look-piece-missing";
+        li.textContent = piece.name;
+      }
+
+      list.appendChild(li);
+    });
+
+    caption.appendChild(list);
+    fig.appendChild(caption);
+    return fig;
+  };
+
+  /* Render the looks into a container element (lookbook.html's .lookbook). */
+  var renderLooks = function (el, list) {
+    if (!el) return 0;
+    el.innerHTML = "";
+    var resolved = looks(list);
+    resolved.forEach(function (look) {
+      el.appendChild(lookFigure(look));
+    });
+    return resolved.length;
+  };
+
   var featured = function () {
     return PRODUCTS.filter(function (p) { return p.featured; });
   };
@@ -342,6 +487,10 @@
     money: money,
     productUrl: productUrl,
     card: card,
-    renderGrid: renderGrid
+    renderGrid: renderGrid,
+    LOOKS: LOOKS,
+    looks: looks,
+    lookFigure: lookFigure,
+    renderLooks: renderLooks
   };
 })(window);
