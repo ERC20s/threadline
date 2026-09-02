@@ -690,6 +690,57 @@
           ' note=' + JSON.stringify(noteText(untouched)));
       }, 1000);
 
+      // 12) Threadline.resolveSize: ?size= on product.html is shopper input, so
+      // it must be resolved against the catalogue before it can be pressed on a
+      // size button or stamped onto a checkout row. "m" is the catalogue's "M",
+      // a size the piece is not made in is no size at all, and a one-size piece
+      // answers its single size whatever the URL asked for. Pure function —
+      // no fixture, no checkout, so the counts above are untouched.
+      (function runResolveSizeTest() {
+        var T = window.Threadline;
+        if (!T || typeof T.resolveSize !== 'function') {
+          note('resolve-size-normalises', false, 'Threadline.resolveSize missing');
+          return;
+        }
+
+        var sized = { id: 'r-sized', name: 'Resolve Tee', sizes: ['S', 'M', 'L'] };
+        var one = { id: 'r-onesize', name: 'Resolve Cap', sizes: ['One size'] };
+
+        var normalises = T.resolveSize(sized, 'm') === 'M' &&
+          T.resolveSize(sized, ' M ') === 'M' &&
+          T.resolveSize(sized, 'L') === 'L';
+        note('resolve-size-normalises', normalises,
+          'm=' + JSON.stringify(T.resolveSize(sized, 'm')) +
+          ' " M "=' + JSON.stringify(T.resolveSize(sized, ' M ')) +
+          ' L=' + JSON.stringify(T.resolveSize(sized, 'L')));
+
+        var rejects = T.resolveSize(sized, 'XXL') === '' &&
+          T.resolveSize(sized, 'One size') === '' &&
+          T.resolveSize(sized, '') === '' &&
+          T.resolveSize(sized, null) === '';
+        note('resolve-size-rejects-unknown', rejects,
+          'XXL=' + JSON.stringify(T.resolveSize(sized, 'XXL')) +
+          ' "One size"=' + JSON.stringify(T.resolveSize(sized, 'One size')) +
+          ' empty=' + JSON.stringify(T.resolveSize(sized, '')) +
+          ' null=' + JSON.stringify(T.resolveSize(sized, null)));
+
+        var oneSizeWins = T.resolveSize(one, 'XL') === 'One size' &&
+          T.resolveSize(one, 'M') === 'One size' &&
+          T.resolveSize(one, '') === 'One size' &&
+          T.resolveSize(one, null) === 'One size';
+        note('resolve-size-one-size-wins', oneSizeWins,
+          'XL=' + JSON.stringify(T.resolveSize(one, 'XL')) +
+          ' null=' + JSON.stringify(T.resolveSize(one, null)));
+
+        var safe = T.resolveSize(null, 'M') === '' &&
+          T.resolveSize({ id: 'r-none' }, 'M') === '' &&
+          T.resolveSize({ id: 'r-none', sizes: [] }, 'M') === '';
+        note('resolve-size-handles-missing-catalogue', safe,
+          'noProduct=' + JSON.stringify(T.resolveSize(null, 'M')) +
+          ' noSizes=' + JSON.stringify(T.resolveSize({ id: 'r-none' }, 'M')) +
+          ' emptySizes=' + JSON.stringify(T.resolveSize({ id: 'r-none', sizes: [] }, 'M')));
+      })();
+
       // Final aggregator after a bit more time
       setTimeout(function(){
         note('final', true, 'Manual-run tests completed; review individual PASS/FAIL lines above.');

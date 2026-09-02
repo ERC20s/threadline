@@ -18,6 +18,7 @@
  *   Threadline.reconcileGrid(grid, index, options)        -> unlisted count
  *   Threadline.productForAnchor(anchor)                   -> catalogue product | null
  *   Threadline.needsSize(product)                         -> boolean
+ *   Threadline.resolveSize(product, requested)            -> size ("" if none)
  *   Threadline.guardBuyClicks(container, decide)          -> dispose()
  *
  * whenBuyAnchor resolves with the first matching `a[data-item]` already inside
@@ -97,6 +98,20 @@
  * (ctrl/cmd/shift/alt, a non-primary button) and target="_blank" rows are
  * passed through untouched, exactly as the widget passes them through. It
  * returns a dispose() that detaches the guard again.
+ *
+ * resolveSize(product, requested) is the gate on ?size=. The value on the URL is
+ * shopper input and used to be trusted as written, so product.html?id=classic-
+ * cap&size=XL gave a one-size piece the size XL and Buy stamped it onto the
+ * checkout row. The helper answers with a size from product.sizes or with "":
+ *
+ *   - a piece made in one size always resolves to that size, whatever was
+ *     asked, so nothing can override "One size";
+ *   - otherwise the request is matched against product.sizes through the same
+ *     normaliseKey ids and titles are compared on, so "m" and " M " resolve to
+ *     the catalogue's "M";
+ *   - anything the piece is not made in — "XXL", junk, empty, no catalogue
+ *     entry at all — resolves to "", which callers must read as "no size chosen
+ *     yet", the state in which Buy already refuses to open checkout.
  *
  * It never posts to checkout itself: the caller clicks the widget's own Buy
  * link, so payments-widget.js keeps ownership of the checkout POST and of its
@@ -360,6 +375,23 @@
     return !!(product && product.sizes && product.sizes.length > 1);
   };
 
+  /* The size a page may actually use for `product`, given whatever a URL asked
+     for. One size in the catalogue wins outright; otherwise only a size the
+     piece is really made in comes back, matched case- and punctuation-blind.
+     "" means "no size chosen" — never "use what was asked". */
+  var resolveSize = function (product, requested) {
+    var sizes = (product && product.sizes && product.sizes.length) ? product.sizes : null;
+    if (!sizes) return "";
+    if (sizes.length === 1) return sizes[0];
+
+    var key = normaliseKey(requested);
+    if (!key) return "";
+    for (var i = 0; i < sizes.length; i++) {
+      if (normaliseKey(sizes[i]) === key) return sizes[i];
+    }
+    return "";
+  };
+
   /* Only ordinary left-clicks are ours: a ctrl/cmd/shift/alt click or a middle
      click is the shopper opening the row in a tab, which the widget also lets
      through. An event something else already handled is left alone too. */
@@ -478,6 +510,7 @@
   ns.storePanelFailed = storePanelFailed;
   ns.productForAnchor = productForAnchor;
   ns.needsSize = needsSize;
+  ns.resolveSize = resolveSize;
   ns.guardBuyClicks = guardBuyClicks;
   ns.whenBuyAnchor = whenBuyAnchor;
   ns.BUY_ANCHOR_TIMEOUT = DEFAULT_TIMEOUT;

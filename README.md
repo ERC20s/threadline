@@ -132,6 +132,18 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
   Cap, Lambswool Scarf) and rows with no catalogue match behave exactly as
   before, and modified clicks (ctrl/cmd/shift/alt, middle click, `target=_blank`)
   are always passed through.
+- A `?size=` on `product.html` is only used when the piece is really made in it.
+  `Threadline.resolveSize(product, requested)` (in
+  `scripts/checkout-intent.js`) returns a size from `product.sizes` or `""`: a
+  one-size piece always resolves to its single size, so nothing can override
+  `One size`; otherwise the request is matched case- and punctuation-blind
+  through `normaliseKey`, so `?size=m` selects `M` and `?size=XXL` selects
+  nothing. `product.html` resolves the parameter before it paints the size
+  buttons, then corrects the URL with `history.replaceState` (via the shared
+  `putSizeOnUrl`, which also drops the parameter entirely when there is no
+  size) so `payments-widget.js` cannot copy a refused value into its
+  `returnUrl`. A rejected size says "We don't make that size — choose one
+  below." and leaves Buy in its existing "Choose a size first." state.
 - The chosen size now travels with the money. The platform item is sizeless, so
   a paid order used to reach the group's Admin tab as "Everyday Tee ×1" with no
   size on it. `product.html` stamps the widget's own row immediately before it
@@ -167,7 +179,11 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
   `checkout-group` index: a stale price is repainted and noted, a card showing
   the same money in another shape is left alone, an unlisted card is flagged and
   counted, a card that stops disagreeing loses its note, and an empty (or
-  missing) index leaves the grid untouched and returns `0`.
+  missing) index leaves the grid untouched and returns `0`. Its `resolve-size`
+  cases need no fixture at all: `"m"` must resolve to `"M"`, `"XXL"` and
+  `"One size"` on a sized piece must resolve to `""`, a one-size piece must
+  answer `"One size"` whatever is asked, and a missing or sizeless product must
+  answer `""`.
 
 `.d8a` declares the group, the run entry and the payments block. Do not hand-edit
 its generated blocks.
