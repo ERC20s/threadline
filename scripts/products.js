@@ -339,6 +339,55 @@
     return ALL_CATEGORIES;
   };
 
+  /* ---- related pieces -----------------------------------------------------
+     product.html's "You might also like" grid used to be built inline with
+
+       T.products.filter(function (p) {
+         return p.id !== product.id && (p.category === product.category || p.featured);
+       }).slice(0, 4)
+
+     which keeps catalogue order — and the first four entries here (Everyday
+     Tee, Relaxed Shirt, Lightweight Hoodie, Casual Pant) are all featured, so
+     they filled all four slots on nearly every page. The Rigid Denim Jacket
+     never suggested the Canvas Overshirt; the Linen Summer Dress never
+     suggested the Lambswool Scarf.
+
+     related() fills the slots in three passes instead, each in catalogue order:
+     the piece's own category first, then featured pieces, then whatever is
+     left. The piece itself is never included and nothing appears twice, so a
+     shopper on any page sees the rest of that category before the front page's
+     four. `limit` and `list` exist for tests and for a caller working on a
+     subset; with no arguments it answers for the real catalogue, four cards. */
+  var RELATED_LIMIT = 4;
+
+  var related = function (product, limit, list) {
+    var source = (list && list.length) ? list : PRODUCTS;
+    var max = (typeof limit === "number" && limit > 0) ? Math.floor(limit) : RELATED_LIMIT;
+    var selfId = product ? product.id : null;
+    var category = product ? product.category : null;
+    var out = [];
+    var seen = {};
+
+    var take = function (p) {
+      if (out.length >= max) return;
+      if (!p || !p.id || p.id === selfId || seen[p.id]) return;
+      seen[p.id] = true;
+      out.push(p);
+    };
+
+    var pass = function (test) {
+      for (var i = 0; i < source.length && out.length < max; i++) {
+        if (test(source[i])) take(source[i]);
+      }
+    };
+
+    if (category) pass(function (p) { return !!p && p.category === category; });
+    pass(function (p) { return !!p && !!p.featured; });
+    pass(function (p) { return !!p; });
+
+    return out;
+  };
+
   var money = function (n) {
     return "$" + Number(n).toFixed(0);
   };
@@ -484,6 +533,8 @@
     resolveCategory: resolveCategory,
     ALL_CATEGORIES: ALL_CATEGORIES,
     featured: featured,
+    related: related,
+    RELATED_LIMIT: RELATED_LIMIT,
     money: money,
     productUrl: productUrl,
     card: card,

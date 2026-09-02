@@ -135,9 +135,19 @@
         document.getElementById("product").hidden = true;
         var nf = document.getElementById("not-found");
         nf.hidden = false;
-        T.renderGrid(document.getElementById("fallback-grid"), T.products);
+        var fallbackGrid = document.getElementById("fallback-grid");
+        T.renderGrid(fallbackGrid, T.products);
         document.getElementById("crumb").textContent = "Not found";
         document.title = "Not found — Threadline Clothing Co.";
+        /* The catalogue we show instead of the piece is priced from
+           scripts/products.js; once the shop panel has rendered, make it agree
+           with the live shop exactly as index.html and products.html do. */
+        var nfPanel = document.getElementById("group-store");
+        if (nfPanel && T.whenBuyAnchor && T.shopPriceIndex && T.reconcileGrid) {
+          T.whenBuyAnchor(nfPanel, null, T.BUY_ANCHOR_TIMEOUT || 12000)
+            .then(function () { T.reconcileGrid(fallbackGrid, T.shopPriceIndex(nfPanel)); })
+            .catch(function () { /* panel failed or timed out: leave the grid as written */ });
+        }
         return;
       }
 
@@ -170,7 +180,14 @@
         details.appendChild(li);
       });
 
-      T.renderGrid(document.getElementById("related-grid"), T.products.filter(function (p) {
+      /* "You might also like": Threadline.related fills the four slots with the
+         piece's own category first, then featured pieces, then the rest. The
+         old inline filter kept catalogue order, so the four featured pieces at
+         the top of scripts/products.js filled every grid — the denim jacket
+         never suggested the overshirt. The filter is kept here only as the
+         fallback for a catalogue file too old to carry the helper. */
+      var relatedGrid = document.getElementById("related-grid");
+      T.renderGrid(relatedGrid, T.related ? T.related(product) : T.products.filter(function (p) {
         return p.id !== product.id && (p.category === product.category || p.featured);
       }).slice(0, 4));
 
@@ -387,10 +404,22 @@
         }
       };
 
+      /* The related cards carry catalogue prices too. One shopPriceIndex pass
+         over the rendered panel repaints them all: a shop row with a different
+         price wins and the card says "Price from the group shop.", a piece the
+         shop has no row for says "Not in the shop yet." A panel that rendered
+         nothing leaves the grid exactly as written (reconcileGrid's own rule),
+         so an empty or unreachable shop never blanks the suggestions. */
+      var reconcileRelated = function () {
+        if (!panel || !relatedGrid || !T.shopPriceIndex || !T.reconcileGrid) return;
+        try { T.reconcileGrid(relatedGrid, T.shopPriceIndex(panel)); } catch (e) {}
+      };
+
       if (panel && T.whenBuyAnchor) {
         /* No matchFn: resolves as soon as the panel has rendered any row. */
         T.whenBuyAnchor(panel, null, T.BUY_ANCHOR_TIMEOUT || 12000)
           .then(function () {
+            reconcileRelated();
             var mine = T.findBuyAnchor ? T.findBuyAnchor(panel, matchesProduct) : null;
             if (mine) {
               resolvedAnchor = mine;

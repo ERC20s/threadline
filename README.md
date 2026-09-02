@@ -26,8 +26,10 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
 ## How it fits together
 
 - `scripts/products.js` is the single catalogue. It defines `window.Threadline`
-  (`products`, `byId`, `featured`, `money`, `renderGrid`). Add, remove or reprice
-  a garment there and every page follows. Images are placeholder URLs
+  (`products`, `byId`, `featured`, `related`, `money`, `renderGrid`). Add, remove
+  or reprice a garment there and every page follows — and list it for sale in the
+  `items:` block of the root `.d8a` in the same change, with the same name and
+  price, because that block is what the group actually sells. Images are placeholder URLs
   (picsum.photos, seeded) — replace the `image` values with real photography.
 - Sizing help is part of the catalogue. Every entry in `scripts/products.js` may
   carry two optional fields: `sizeGuide`, the id of a section in
@@ -105,6 +107,18 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
   The card link is never disabled and the grid is repainted after every filter
   click, because `renderGrid` rebuilds the cards each time. The tolerant price
   compare (`Threadline.samePrice`) is shared with `product.html`.
+- `product.html`'s "You might also like" grid comes from
+  `Threadline.related(product, limit, list)` in `scripts/products.js`. It fills
+  four slots in three passes, each in catalogue order: the piece's own category
+  first, then featured pieces, then whatever is left — never the piece itself,
+  never a duplicate. The old inline filter
+  (`p.id !== product.id && (p.category === product.category || p.featured)`)
+  kept catalogue order, and the first four entries in the catalogue are all
+  featured, so those four filled the grid on nearly every page and the Rigid
+  Denim Jacket never suggested the Canvas Overshirt. The page also runs the
+  shared reconcile pass over `#related-grid` (and over `#fallback-grid` on the
+  "not found" branch) once the shop panel has rendered, so suggestion cards
+  carry live shop prices and "Not in the shop yet." like every other grid.
 - The repaint itself is one shared helper: `Threadline.reconcileGrid(grid,
   index, options)` in `scripts/checkout-intent.js`. It walks the `.card`
   elements in a rendered grid, looks each one up in a `shopPriceIndex` (id
