@@ -42,8 +42,21 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
   must equal the slug in `.d8a` (`group: d8a:d8aaaa-batch_threadline`), and the
   shop pages repeat it as `data-d8a-group`. If they ever disagree the panel says
   "There was an error loading the store (group …)" and names the slug it tried.
+- `scripts/checkout-intent.js` closes the early-click race. The widget only fills
+  `#group-store` once its items request returns, so a shopper who clicks Buy in
+  the first seconds used to be told the piece was not listed. The helper adds
+  `Threadline.whenBuyAnchor(container, matchFn, timeoutMs)` (plus
+  `findBuyAnchor` and `storePanelFailed`): it resolves with a matching
+  `a[data-item]` that is already there, otherwise watches the container with a
+  `MutationObserver` (interval fallback) and resolves when one appears, rejecting
+  on the widget's failure line or after 12s. `product.html` queues the click,
+  says "Fetching the shop — checkout will open in a moment…" and disables Buy
+  while one intent is pending. It never posts to checkout itself — it clicks the
+  widget's own link, so the widget's duplicate-checkout guard still applies.
 - `tests/payments-widget.test.html` is the browser test for the widget; open it
-  in a browser while the site is served.
+  at http://localhost:5004/tests/payments-widget.test.html while the site is
+  served. Its `intent-group` fixture answers late on purpose, to prove a queued
+  Buy intent still opens exactly one checkout.
 
 `.d8a` declares the group, the run entry and the payments block. Do not hand-edit
 its generated blocks.
