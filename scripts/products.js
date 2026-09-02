@@ -197,6 +197,10 @@
     var a = document.createElement("a");
     a.className = "card";
     a.href = productUrl(p);
+    /* The catalogue id travels with the card so a rendered grid can be matched
+       back to this entry — products.html uses it to reconcile the grid with the
+       live shop panel (Threadline.shopPriceIndex). */
+    a.dataset.productId = p.id;
 
     var thumb = document.createElement("div");
     thumb.className = "thumb";

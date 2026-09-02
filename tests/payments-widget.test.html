@@ -348,6 +348,63 @@
           'anyRow=' + (anyRow ? anyRow.getAttribute('data-item') : 'none') + ' matching=' + (mine ? mine.getAttribute('data-item') : 'null'));
       }, 700);
 
+      // 8) shopPriceIndex + samePrice: what products.html repaints its grid
+      // from. Read-only over the same checkout fixture (item c1, "Checkout
+      // Tee", "$15"), so it cannot disturb the checkout counts above.
+      setTimeout(function runShopIndexTest(attempt) {
+        var T = window.Threadline;
+        var container = document.getElementById('group-store-checkout');
+        var anchor = container && container.querySelector('a[data-item="c1"]');
+
+        if (!anchor && (attempt || 0) < 8) {
+          setTimeout(function () { runShopIndexTest((attempt || 0) + 1); }, 200);
+          return;
+        }
+        if (!T || typeof T.shopPriceIndex !== 'function' || typeof T.samePrice !== 'function') {
+          note('shop-price-index', false, 'Threadline.shopPriceIndex/samePrice missing');
+          return;
+        }
+        if (!anchor) {
+          note('shop-price-index', false, 'checkout fixture rendered no Buy anchor');
+          return;
+        }
+
+        var index = T.shopPriceIndex(container);
+
+        // Matched by platform item id, and by the row title the widget renders
+        // as <b> — the two keys a catalogue card is looked up with.
+        var byId = index.lookup('c1', 'Something Else');
+        var byName = index.lookup('no-such-id', 'checkout tee');
+        var matchedOk = index.size === 1 &&
+          !!byId && byId.price === '$15' &&
+          !!byName && byName.anchor === anchor &&
+          index.priceFor('c1') === '$15';
+        note('shop-price-index-matches', matchedOk,
+          'size=' + index.size + ' byId=' + (byId ? byId.price : 'null') +
+          ' byName=' + (byName ? byName.name : 'null'));
+
+        // A catalogue piece the shop has no row for: products.html flags the
+        // card "Not in the shop yet" instead of advertising a price.
+        var missing = index.lookup('everyday-tee', 'Everyday Tee');
+        note('shop-price-index-unlisted', missing === null && index.priceFor('everyday-tee', 'Everyday Tee') === '',
+          'lookup(everyday-tee)=' + String(missing) + ' priceFor=' + JSON.stringify(index.priceFor('everyday-tee', 'Everyday Tee')));
+
+        // An empty container must read as "the shop said nothing" (size 0), not
+        // as "nothing is on sale".
+        var emptyIndex = T.shopPriceIndex(document.createElement('div'));
+        note('shop-price-index-empty-panel', emptyIndex.size === 0 && emptyIndex.lookup('c1') === null,
+          'size=' + emptyIndex.size);
+
+        // samePrice tolerance: same money in different shapes is not a repaint;
+        // a different number or a different currency mark is.
+        var tolerant = T.samePrice('$15', '15.00') && T.samePrice('$38', '$38') &&
+          T.samePrice(' $38 ', '$38.00') && T.samePrice('38', '38.0');
+        var strict = !T.samePrice('$15', '$18') && !T.samePrice('$15', '€15') &&
+          !T.samePrice('$15', '') && !T.samePrice('', 'free');
+        note('same-price-tolerance', tolerant && strict,
+          'tolerant=' + tolerant + ' strict=' + strict);
+      }, 750);
+
       // Final aggregator after a bit more time
       setTimeout(function(){
         note('final', true, 'Manual-run tests completed; review individual PASS/FAIL lines above.');
