@@ -165,9 +165,32 @@
       }).slice(0, 4));
 
       /* ---- size selection ---- */
-      var chosenSize = params.get("size") || (product.sizes.length === 1 ? product.sizes[0] : "");
       var sizeBox = document.getElementById("sizes");
       var oneSize = product.sizes.length === 1;
+
+      /* ?size= is shopper input and must never be believed as written: the page
+         used to take it straight off the URL, so ?id=classic-cap&size=XL gave a
+         one-size piece the size XL (the fallback below was skipped merely
+         because a parameter was there) and Buy then stamped data-size="XL" onto
+         the checkout row. Threadline.resolveSize answers with a size this piece
+         is really made in, or with "" — one size in the catalogue always wins,
+         "m" resolves to "M", "XXL" resolves to nothing. The inline fallback
+         only matters if scripts/checkout-intent.js failed to load, like the one
+         used for samePrice below. */
+      var resolveSize = T.resolveSize || function (p, requested) {
+        var sizes = (p && p.sizes && p.sizes.length) ? p.sizes : null;
+        if (!sizes) return "";
+        if (sizes.length === 1) return sizes[0];
+        var key = String(requested == null ? "" : requested).toLowerCase().replace(/[^a-z0-9]+/g, "");
+        if (!key) return "";
+        for (var i = 0; i < sizes.length; i++) {
+          if (String(sizes[i]).toLowerCase().replace(/[^a-z0-9]+/g, "") === key) return sizes[i];
+        }
+        return "";
+      };
+
+      var requestedSize = params.get("size");
+      var chosenSize = resolveSize(product, requestedSize);
 
       /* ---- sizing help, per piece ----
          The label used to say "Choose a size" even for the Classic Cap, and the
@@ -200,6 +223,19 @@
         fitNote.appendChild(document.createTextNode("."));
       }
 
+      /* Keep the size on the URL: payments-widget.js builds its returnUrl from
+         location.href, so the choice survives the trip to checkout and back.
+         An empty size removes the parameter instead — a value we refused must
+         not be carried into checkout, nor come back on the return URL. */
+      var putSizeOnUrl = function (size) {
+        try {
+          var url = new URL(location.href);
+          if (size) { url.searchParams.set("size", size); }
+          else { url.searchParams.delete("size"); }
+          history.replaceState(null, "", url.toString());
+        } catch (e) {}
+      };
+
       var paintSizes = function () {
         Array.prototype.forEach.call(sizeBox.querySelectorAll("button"), function (b) {
           b.setAttribute("aria-pressed", b.dataset.size === chosenSize ? "true" : "false");
@@ -217,17 +253,22 @@
           chosenSize = s;
           paintSizes();
           say("Size " + s + " selected.");
-          /* Keep the size on the URL: payments-widget.js builds its returnUrl from
-             location.href, so the choice survives the trip to checkout and back. */
-          try {
-            var url = new URL(location.href);
-            url.searchParams.set("size", s);
-            history.replaceState(null, "", url.toString());
-          } catch (e) {}
+          putSizeOnUrl(s);
         });
         sizeBox.appendChild(b);
       });
       paintSizes();
+
+      /* A ?size= we did not accept as written is corrected on the URL right
+         now, before payments-widget.js can copy location.href into a returnUrl
+         and before any Buy click can stamp it onto a checkout row. Three cases:
+         "m" is rewritten to the catalogue's "M" (nothing to say), a size we do
+         not make is dropped and the shopper is asked to pick one, and a size
+         aimed at a one-size piece is replaced by that piece's own size. */
+      if (requestedSize !== null && requestedSize !== chosenSize) {
+        putSizeOnUrl(chosenSize);
+        if (!chosenSize) say("We don't make that size — choose one below.", "error");
+      }
 
       /* ---- Buy: hand off to the widget's own Buy link for this item ---- */
       var normalise = function (s) {
