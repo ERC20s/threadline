@@ -445,6 +445,40 @@
         if (scroll && panel && panel.scrollIntoView) panel.scrollIntoView({ behavior: "smooth", block: "center" });
       };
 
+      /* ---- the other failure: the shop itself ----
+         whenBuyAnchor rejects for three reasons that are all about the shop —
+         "store-error" (the widget drew its own failure line), "timeout" and
+         "no-container" — and for none of them is this piece at fault. Saying
+         "isn't listed" there blamed our catalogue and sent the shopper to a
+         panel that already reads "The shop could not be reached", with no
+         mention of its Retry button. */
+      var shopIsDown = function (err) {
+        /* The widget's failure line is the one certain signal. */
+        if (T.storePanelFailed && T.storePanelFailed(panel)) return true;
+        var reason = String((err && err.message) || err || "").replace(/^Error:\s*/, "").trim();
+        if (reason === "store-error" || reason === "no-container") return true;
+        /* A timeout with rows on screen really is "rows, but not this piece";
+           a timeout with no rows at all means the shop never answered. */
+        if (reason === "timeout") return !(T.findBuyAnchor && T.findBuyAnchor(panel));
+        /* An unknown rejection: only call it an outage if the panel is empty. */
+        return !(T.findBuyAnchor && T.findBuyAnchor(panel));
+      };
+
+      /* Buy is deliberately NOT disabled here: Retry in the panel may succeed
+         a second later, and a disabled button would outlive the outage. */
+      var sayShopDown = function (scroll) {
+        if (status && T.receiptIn && T.receiptIn(status)) return;
+        if (status && T.renderShopDown) {
+          T.renderShopDown(status, { product: product, size: chosenSize });
+        } else {
+          say("The shop isn't answering, so checkout can't open for " + product.name +
+            " right now. Use Retry in the Checkout panel below, or email hello@threadline.example and we'll reserve " +
+            (chosenSize ? "size " + chosenSize : "one for you") + ".", "error");
+        }
+        /* The Retry button we just told them about is inside the panel. */
+        if (scroll && panel && panel.scrollIntoView) panel.scrollIntoView({ behavior: "smooth", block: "center" });
+      };
+
       /* payments-widget.js listens on the #group-store container and owns the
          checkout POST (including its duplicate-click guard), so we click its own
          link rather than posting a second time from here. */
@@ -567,7 +601,13 @@
             var paidHere = status && T.receiptIn && T.receiptIn(status);
             if (!pending && !paidHere) sayNotListed();
           })
-          .catch(function () { /* panel failed or timed out: leave the page as written */ });
+          .catch(function (err) {
+            /* The page's own prices stay as written — the shop said nothing to
+               reconcile against — but the shopper is told, instead of being
+               left with a Buy button that looks ready and a blamed catalogue
+               twelve seconds after they click it. Never over a receipt. */
+            if (shopIsDown(err)) sayShopDown(false);
+          });
       }
 
       /* ---- the same guard on the panel's own Buy links ----
@@ -631,7 +671,10 @@
         var ready = liveAnchor();
         if (ready) { openCheckout(ready); return; }
 
-        if (!T.whenBuyAnchor || !panel) { sayNotListed(true); return; }
+        /* No panel on the page (or no waiting helper) is the "no-container"
+           case: the shop never got a chance to answer, which is not the same
+           as this piece being unlisted. */
+        if (!T.whenBuyAnchor || !panel) { sayShopDown(true); return; }
 
         /* The panel is still loading (payments-widget.js fills it only after its
            items request returns). Queue the click instead of failing early. */
@@ -650,7 +693,14 @@
 
         T.whenBuyAnchor(panel, matchesProduct, T.BUY_ANCHOR_TIMEOUT || 12000)
           .then(function (anchor) { resolvedAnchor = anchor; release(); openCheckout(anchor); })
-          .catch(function () { release(); sayNotListed(true); });
+          .catch(function (err) {
+            release();
+            /* Two different failures, two different sentences: the shop is not
+               answering (Retry, or email us) versus the shop is up and does not
+               sell this piece (pick it in Checkout, or email us). */
+            if (shopIsDown(err)) { sayShopDown(true); return; }
+            sayNotListed(true);
+          });
       });
 
       /* ---- receipt: the widget fires this once the platform confirms payment ----

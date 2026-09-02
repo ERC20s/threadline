@@ -23,6 +23,8 @@
  *   Threadline.guardBuyClicks(container, decide)          -> dispose()
  *   Threadline.productForOrder(order)                     -> catalogue product | null
  *   Threadline.renderReceipt(target, order, options)      -> element | null
+ *   Threadline.isShopDownReason(err)                      -> boolean
+ *   Threadline.renderShopDown(target, options)            -> element | null
  *
  * whenBuyAnchor resolves with the first matching `a[data-item]` already inside
  * the container, otherwise it watches the container (MutationObserver, with a
@@ -153,6 +155,32 @@
  *     appends a prefilled mailto to hello@threadline.example carrying the order
  *     id, the piece and the size, so an order can be fulfilled even if the
  *     platform dropped the size field.
+ *
+ * isShopDownReason(err) / renderShopDown(target, options) are the other half of
+ * that honesty. whenBuyAnchor rejects for three reasons that are all about the
+ * SHOP — "store-error" (the widget drew its failure line), "timeout" (nothing
+ * rendered in time) and "no-container" (no panel on the page) — and for none of
+ * them is our catalogue at fault. product.html used to map every one of them
+ * onto "This piece isn't listed in the shop panel yet", which blamed the piece,
+ * sent the shopper to a panel already saying "The shop could not be reached"
+ * and never mentioned Retry.
+ *
+ *   - isShopDownReason(err) answers true for those three reasons (an Error, a
+ *     string, or anything with a .message). Only the fourth case — rows on
+ *     screen but none for this piece, which callers detect with
+ *     findBuyAnchor(container) — is really "not listed". A caller holding a
+ *     panel that HAS rendered rows must check that first: a timeout with rows
+ *     present means the row for this piece never came, not that the shop is
+ *     down.
+ *   - renderShopDown(target, options) writes the one true sentence, so every
+ *     page says the same thing: the shop is not answering, use Retry in the
+ *     Checkout panel, or email CONTACT_EMAIL — with a prefilled mailto built
+ *     the way receiptMailto builds one. Options:
+ *     { product, name, size, brief, append, tone, mail, mailText }. `brief` is
+ *     the grid pages' one-liner ("the prices here are ours, not the shop's");
+ *     `append` adds the line after whatever the status was already saying
+ *     instead of replacing it. It never writes over a paid receipt
+ *     (receiptIn) and it never disables anything — Retry may well succeed.
  *
  * The receipt element is stamped data-receipt-order="<id>"; a second call for
  * the same order id into the same target returns the element already there
@@ -629,6 +657,89 @@
     return box;
   };
 
+  /* ---- "the shop isn't answering" ----------------------------------------
+     One wording, one mailto, one place to change them. Every page that waits
+     on whenBuyAnchor can now tell a shop outage apart from a piece we do not
+     sell, and say the true one. */
+
+  /* The reasons whenBuyAnchor rejects with, all of them about the shop. */
+  var SHOP_DOWN_REASONS = { "store-error": true, "timeout": true, "no-container": true };
+
+  var SHOP_DOWN_ATTR = "data-shop-down";
+
+  /* The grid pages' short line: the cards keep their catalogue prices, and the
+     shopper should know those are ours rather than the shop's. */
+  var SHOP_DOWN_NOTE =
+    "The shop isn't answering just now, so these prices are ours, not the shop's. " +
+    "Use Retry in the Checkout panel below.";
+
+  var isShopDownReason = function (err) {
+    var text = "";
+    if (err && err.message) text = String(err.message);
+    else if (err !== null && err !== undefined) text = String(err);
+    return !!SHOP_DOWN_REASONS[text.replace(/^Error:\s*/, "").trim()];
+  };
+
+  /* Same shape as receiptMailto, for the purchase that could not start. */
+  var shopDownMailto = function (pieceName, size) {
+    var lines = [
+      "Piece: " + (pieceName || "(not named)"),
+      "Size: " + (size || "not chosen"),
+      "",
+      "The shop panel on the site isn't answering. Please can you reserve this for me?"
+    ].join("\n");
+    return "mailto:" + CONTACT_EMAIL +
+      "?subject=" + encodeURIComponent("Threadline enquiry" + (pieceName ? " — " + pieceName : "")) +
+      "&body=" + encodeURIComponent(lines);
+  };
+
+  var shopDownSentence = function (pieceName, size) {
+    return "The shop isn't answering, so checkout can't open" +
+      (pieceName ? " for " + pieceName : "") +
+      " right now. Use Retry in the Checkout panel below, or email us and we'll reserve " +
+      (size ? "size " + size : "one for you") + ".";
+  };
+
+  var renderShopDown = function (target, options) {
+    if (!target || !target.appendChild) return null;
+    var opts = options || {};
+
+    /* A paid order outranks an outage: "the shop isn't answering" under a
+       receipt reads as a failed purchase. */
+    if (receiptIn(target)) return null;
+
+    var product = opts.product || null;
+    var pieceName = opts.name || (product && product.name) || "";
+    var size = (opts.size === undefined || opts.size === null) ? "" : String(opts.size);
+    var sentence = opts.brief ? SHOP_DOWN_NOTE : shopDownSentence(pieceName, size);
+
+    if (opts.append) {
+      var had = target.textContent ? String(target.textContent).trim() : "";
+      /* Already said, and the panel has not been retried: do not stack lines. */
+      if (had && target.querySelector && target.querySelector("[" + SHOP_DOWN_ATTR + "]")) return null;
+      if (had) target.appendChild(document.createTextNode(" "));
+    } else {
+      target.textContent = "";
+    }
+
+    var box = document.createElement("span");
+    box.setAttribute(SHOP_DOWN_ATTR, "");
+    box.appendChild(document.createTextNode(sentence + " "));
+
+    /* The brief line lives under a grid where nothing has been chosen yet, so
+       it carries no email unless the caller asks for one. */
+    if (!opts.brief || opts.mail) {
+      var mail = document.createElement("a");
+      mail.href = shopDownMailto(pieceName, size);
+      mail.textContent = opts.mailText || "Email " + CONTACT_EMAIL;
+      box.appendChild(mail);
+    }
+
+    target.appendChild(box);
+    if (target.setAttribute) target.setAttribute("data-tone", opts.tone || "error");
+    return box;
+  };
+
   var whenBuyAnchor = function (container, matchFn, timeoutMs) {
     var limit = (typeof timeoutMs === "number" && timeoutMs > 0) ? timeoutMs : DEFAULT_TIMEOUT;
 
@@ -701,6 +812,11 @@
   ns.receiptMailto = receiptMailto;
   ns.RECEIPT_ATTR = RECEIPT_ATTR;
   ns.CONTACT_EMAIL = CONTACT_EMAIL;
+  ns.isShopDownReason = isShopDownReason;
+  ns.renderShopDown = renderShopDown;
+  ns.shopDownMailto = shopDownMailto;
+  ns.SHOP_DOWN_NOTE = SHOP_DOWN_NOTE;
+  ns.SHOP_DOWN_ATTR = SHOP_DOWN_ATTR;
   ns.whenBuyAnchor = whenBuyAnchor;
   ns.BUY_ANCHOR_TIMEOUT = DEFAULT_TIMEOUT;
 })(window);

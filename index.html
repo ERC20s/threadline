@@ -216,7 +216,15 @@
             shopIndex = index;
             show();
           })
-          .catch(function () { /* nothing to reconcile against */ });
+          .catch(function () {
+            /* Nothing to reconcile against — and every reason whenBuyAnchor
+               rejects for is the shop's, not ours. Say so in one short line so
+               the shopper knows the prices on these cards are the catalogue's,
+               and that Retry lives in the Checkout panel below. Never over a
+               paid receipt. */
+            if (!status || !T.renderShopDown) return;
+            T.renderShopDown(status, { brief: true, append: true });
+          });
       }
     })();
   </script>
