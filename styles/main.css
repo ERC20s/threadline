@@ -1,0 +1,23 @@
+/* styles/main.css - shared site styles for Threadline home and header */
+:root{--max-width:980px;--gap:18px;--accent:#7c5cff;--muted:#6b7280}
+html,body{height:100%}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;margin:0;padding:24px;box-sizing:border-box;color:#0f172a;background:#fff;display:flex;justify-content:center}
+.main{width:100%;max-width:var(--max-width)}
+.header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}
+.brand{font-weight:800;font-size:1.1rem;letter-spacing:0.2px}
+.nav{display:flex;gap:12px}
+.nav a{color:var(--accent);text-decoration:none;font-weight:600}
+.nav a:focus{outline:3px solid rgba(124,92,255,0.12);outline-offset:4px}
+.hero{display:block;padding:28px;border-radius:10px;background:linear-gradient(180deg,#fbfaff,#fff);margin-bottom:20px}
+.hero h1{margin:0 0 8px;font-size:1.5rem}
+.hero p{margin:0;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--gap);margin-top:18px}
+.card{display:flex;flex-direction:column;gap:10px;text-decoration:none;color:inherit}
+.thumb{border-radius:8px;overflow:hidden;background:#fff}
+.thumb svg{display:block;width:100%;height:auto}
+.name{font-weight:700;margin:0;font-size:0.95rem}
+.price{color:#111827;font-weight:700}
+.actions{margin-top:18px}
+footer{margin-top:28px;padding-top:18px;border-top:1px solid #f1f1f3;color:#6b7280;font-size:13px}
+.contact{margin-top:18px;padding:16px;border-radius:8px;background:#fff}
+@media(min-width:800px){.grid{grid-template-columns:repeat(4,1fr)}.hero{display:flex;align-items:center;justify-content:space-between;padding:36px}}
