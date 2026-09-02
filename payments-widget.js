@@ -323,6 +323,66 @@
     el.setAttribute('data-d8a-retry-listener', '1');
   };
 
+  // Render a read-only catalogue from the page's local Threadline.products.
+  // This is opt-in only: only containers that set data-d8a-fallback="readonly"
+  // will use this. The rendered rows are non-interactive 'View' links that
+  // point to product.html?id=<id> and carry no data-item attribute or checkout wiring.
+  var renderReadOnlyCatalogue = function (el) {
+    try {
+      if (!el) return;
+      var T = window.Threadline || {};
+      var products = Array.isArray(T.products) ? T.products : [];
+      try { el.innerHTML = ''; } catch (e) {}
+
+      var info = document.createElement('p');
+      info.style.cssText = "font:13px system-ui,sans-serif;color:#9ca3af";
+      info.textContent = 'Read-only catalogue — prices may be out of date.\u00a0 Links go to the product page.';
+      el.appendChild(info);
+
+      products.forEach(function (p) {
+        try {
+          var row = document.createElement('div');
+          row.style.cssText = 'display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif';
+          var left = document.createElement('div'); left.style.flex = '1';
+          var b = document.createElement('b'); b.textContent = p.name || '';
+          left.appendChild(b);
+          if (p.description) { var d = document.createElement('div'); d.style.fontSize = '12px'; d.style.color = '#6b7280'; d.textContent = p.description; left.appendChild(d); }
+          row.appendChild(left);
+
+          var priceText = '';
+          try {
+            if (T && typeof T.money === 'function' && p && p.price) priceText = T.money(p.price);
+            else priceText = (p && p.price) ? String(p.price) : '';
+          } catch (e) { priceText = (p && p.price) ? String(p.price) : ''; }
+          var price = document.createElement('span'); price.textContent = priceText; row.appendChild(price);
+
+          var a = document.createElement('a');
+          var href = 'product.html?id=' + encodeURIComponent(p.id || '');
+          var safe = sanitizeUrl(href) || '#';
+          a.setAttribute('href', safe);
+          // Intentionally do NOT set data-item, do not attach checkout behavior.
+          a.setAttribute('rel', 'noopener noreferrer');
+          a.style.cssText = 'background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none';
+          a.textContent = 'View';
+          row.appendChild(a);
+
+          el.appendChild(row);
+        } catch (e) {}
+      });
+
+      var p = document.createElement('p');
+      p.style.cssText = "font:11px system-ui,sans-serif;color:#9ca3af";
+      var link = document.createElement('a');
+      link.setAttribute('href', '');
+      link.style.color = '#7c5cff';
+      link.textContent = '';
+      p.appendChild(link);
+      el.appendChild(p);
+    } catch (e) {
+      try { el.innerHTML = ''; } catch (err) {}
+    }
+  };
+
   // Attach a per-container buy click listener that uses the container's stored store data.
   var ensureBuyListener = function (el) {
     if (el.getAttribute('data-d8a-listener')) return;
@@ -539,6 +599,21 @@
     var promise = fetchStoreForGroup(group, el);
     promise.then(function (s) {
       if (!s) {
+        // If the container explicitly opts in to a read-only fallback and
+        // the page carries a local catalogue (window.Threadline.products),
+        // render a clearly labelled read-only catalogue instead of the retry UI.
+        try {
+          var opted = el.getAttribute && el.getAttribute('data-d8a-fallback') === 'readonly';
+          var T = window.Threadline || {};
+          var localProducts = Array.isArray(T.products) ? T.products : null;
+          if (opted && localProducts && localProducts.length) {
+            renderReadOnlyCatalogue(el);
+            // Still attach a Retry so authors can force a network re-check.
+            ensureRetryListener(el);
+            return;
+          }
+        } catch (e) {}
+
         renderMessageWithRetry(el, failure);
         ensureRetryListener(el);
         return;
