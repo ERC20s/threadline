@@ -35,7 +35,25 @@
     } catch (e) { return null; }
   };
 
-  // Promise cache for store item fetches keyed by group slug. Stored on window so
+  // Helper: read and cache a per-container base URL from the element's
+  // data-d8a-base attribute. The value is run through sanitizeUrl, trimmed
+  // of any trailing slash and stored on the element as __d8a_base.
+  // Returns the sanitized base (no trailing slash) or null when absent/invalid.
+  var getBaseForElement = function (el) {
+    try {
+      if (!el) return null;
+      if (typeof el.__d8a_base !== 'undefined') return el.__d8a_base;
+      var raw = el.getAttribute && el.getAttribute('data-d8a-base');
+      var s = sanitizeUrl(raw);
+      if (!s) { el.__d8a_base = null; return null; }
+      // Strip a single trailing slash (and any accidental multiples)
+      while (s.length > 0 && s[s.length - 1] === '/') s = s.slice(0, -1);
+      el.__d8a_base = s || null;
+      return el.__d8a_base;
+    } catch (e) { try { el.__d8a_base = null; } catch (e2) {} return null; }
+  };
+
+  // Promise cache for store item fetches keyed by group slug and base. Stored on window so
   // multiple widget instances or re-initializations share the same cache.
   window.__d8aPaymentsWidgetStoreCache = window.__d8aPaymentsWidgetStoreCache || {};
   var storeFetchCache = window.__d8aPaymentsWidgetStoreCache;
@@ -159,55 +177,89 @@
   };
 
   // The handshake: an order id is only proof once the platform says so.
-  // New: support multi-group verification. Expose window.groupStoreVerify(id[, group]).
-  var verifySingle = function (id, group) {
+  // New: support multi-base verification. Expose window.groupStoreVerify(id[, group]).
+  var verifySingleWithBase = function (id, group, base) {
     var g;
     try { g = group && String(group).trim() ? String(group).trim() : GROUP; } catch (e) { g = GROUP; }
-    return doFetch(BASE + "/api/v1/store/orders/" + encodeURIComponent(id) + "?group=" + encodeURIComponent(g), null, 10000)
-      .then(function (r) { return r.ok ? r.json() : null; })
+    var b = base || BASE;
+    return doFetch(b + "/api/v1/store/orders/" + encodeURIComponent(id) + "?group=" + encodeURIComponent(g), null, 10000)
+      .then(function (r) { return r && r.ok ? r.json() : null; })
       .then(function (d) { return d && d.paid ? d.order : null; })
       .catch(function () { return null; });
   };
 
+  // Backwards-compatible single-host verifier that uses the global BASE.
+  var verifySingle = function (id, group) {
+    return verifySingleWithBase(id, group, BASE);
+  };
+
   var groupStoreVerify = function (id, group) {
     if (!id) return Promise.resolve(null);
-    // If a specific group is requested, verify only that group.
+    // If a specific group is requested, prefer verifying against any containers
+    // on the page that resolve to that group and use their per-container base.
     if (typeof group === 'string' && group) {
+      var found = null;
+      var foundGroup = null;
+      var els = [];
+      try {
+        currentContainers().forEach(function (el) {
+          try {
+            var g = getGroupForElement(el);
+            if (g === group) els.push(el);
+          } catch (e) {}
+        });
+      } catch (e) {}
+      // If we found container(s) for that group, try each one's base in turn.
+      if (els.length) {
+        return els.reduce(function (prev, el) {
+          return prev.then(function (res) {
+            if (res) return res;
+            var base = getBaseForElement(el) || BASE;
+            return verifySingleWithBase(id, group, base).then(function (o) {
+              if (o) { found = o; foundGroup = group; return o; }
+              return null;
+            });
+          });
+        }, Promise.resolve(null)).then(function (res) {
+          if (found) { try { found._d8a_group = foundGroup; } catch (e) {} return found; }
+          return null;
+        });
+      }
+      // No page container resolves to that group: fall back to the global BASE.
       return verifySingle(id, group);
     }
-    // Otherwise, attempt verification across every distinct group resolved
+
+    // Otherwise, attempt verification across every distinct group+base resolved
     // from #group-store elements on the page. Run sequentially and stop at
-    // the first match.
+    // the first match. We deduplicate by group+base so identical containers
+    // aren't queried twice, but separate containers for the same group with
+    // different bases are all tried.
     var seen = {};
-    var groups = [];
+    var targets = [];
     try {
       currentContainers().forEach(function (el) {
         try {
           var g = getGroupForElement(el);
-          if (!seen[g]) { seen[g] = true; groups.push(g); }
+          var b = getBaseForElement(el) || BASE;
+          var key = g + '::' + b;
+          if (!seen[key]) { seen[key] = true; targets.push({ group: g, base: b }); }
         } catch (e) {}
       });
     } catch (e) {}
-    if (!groups.length) groups.push(GROUP);
+    if (!targets.length) targets.push({ group: GROUP, base: BASE });
 
-    var found = null;
+    var foundOrder = null;
     var foundGroup = null;
-    // Sequentially try each group, returning the order when found.
-    return groups.reduce(function (prev, g) {
+    return targets.reduce(function (prev, t) {
       return prev.then(function (res) {
-        if (res) return res; // already found
-        return verifySingle(id, g).then(function (o) {
-          if (o) {
-            found = o; foundGroup = g; return o;
-          }
+        if (res) return res;
+        return verifySingleWithBase(id, t.group, t.base).then(function (o) {
+          if (o) { foundOrder = o; foundGroup = t.group; return o; }
           return null;
         });
       });
     }, Promise.resolve(null)).then(function (res) {
-      if (found) {
-        try { found._d8a_group = foundGroup; } catch (e) {}
-        return found;
-      }
+      if (foundOrder) { try { foundOrder._d8a_group = foundGroup; } catch (e) {} return foundOrder; }
       return null;
     });
   };
@@ -259,43 +311,33 @@
       var btn = e.target && e.target.closest ? e.target.closest('[data-d8a-retry]') : null;
       if (!btn) return;
       e.preventDefault();
-      // Clear the shared in-memory store fetch cache for this container's group so Retry always forces a fresh network request.
-      var localGroup = getGroupForElement(el);
-      try { delete storeFetchCache[localGroup]; } catch (err) { storeFetchCache[localGroup] = undefined; }
-      // Re-run the fetch/render flow for only this container.
+      // Clear the shared in-memory store fetch cache for this container's group so Retry forces a reload from the
+      // chosen base. Keyed by group+base to only clear the entry we used.
+      try {
+        var g = getGroupForElement(el);
+        var b = getBaseForElement(el) || BASE;
+        delete storeFetchCache[g + '::' + b];
+      } catch (err) {}
       fetchAndRender(el);
     });
     el.setAttribute('data-d8a-retry-listener', '1');
   };
 
-  // Attach a per-container buy click listener that uses the container's stored store data.
+  // Attach the buy listener to a container if it's not already attached.
   var ensureBuyListener = function (el) {
-    if (el.getAttribute('data-d8a-listener')) return;
+    if (!el || el.getAttribute('data-d8a-listener')) return;
     el.addEventListener('click', function (e) {
       var a = e.target && e.target.closest ? e.target.closest('a[data-item]') : null;
       if (!a) return;
-      // Read the store data that fetchAndRender attached to the container.
-      var store = el.__d8a_store;
-      if (!store || !store.checkout || !store.checkout.enabled) return;
-      // Respect modified clicks: allow ctrl/cmd/shift/alt clicks and target=_blank to behave natively.
-      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || (a.getAttribute && a.getAttribute('target') === '_blank')) return;
-
       var itemId = a.getAttribute('data-item');
       if (!itemId) return;
 
-      // Determine quantity: data-quantity (explicit) or data-default-quantity fallback to store default.
+      // Quantity may be stored on the anchor or the container.
       var qty = 1;
       try {
-        var qAttr = a.getAttribute('data-quantity');
-        var qDef = a.getAttribute('data-default-quantity') || (store && store.defaultQuantity);
-        if (qAttr != null) {
-          var n = parseInt(qAttr, 10);
-          if (!isNaN(n) && n > 0) qty = n;
-        } else if (qDef != null) {
-          var nd = parseInt(qDef, 10);
-          if (!isNaN(nd) && nd > 0) qty = nd;
-        }
-      } catch (e) {}
+        var q = a.getAttribute('data-quantity') || el.getAttribute('data-default-quantity');
+        if (q) qty = parseInt(q, 10) || 1;
+      } catch (err) { qty = 1; }
 
       // Optional per-anchor extras. A sized garment is sold in a size, but the
       // platform item is sizeless, so the page that owns the size (product.html)
@@ -330,7 +372,8 @@
 
       e.preventDefault();
       var originalText = a.textContent;
-      a.textContent = "Opening…";
+      a.textContent = "Opening6".replace('\u00E6','…');
+      a.textContent = "Opening\u2026";
 
       // Build the return URL: current page without any earlier d8a_order param
       var here = location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1");
@@ -345,11 +388,12 @@
       var body = JSON.stringify(payload);
       var hasExtras = body !== plainBody;
 
-      var checkoutUrl = (store && store.checkout && store.checkout.url) ? store.checkout.url : (BASE + '/api/v1/store/checkout');
+      var base = getBaseForElement(el) || BASE;
+      var checkoutUrl = (el.__d8a_store && el.__d8a_store.checkout && el.__d8a_store.checkout.url) ? el.__d8a_store.checkout.url : (base + '/api/v1/store/checkout');
       var release = function () { try { delete globalOpening[key]; } catch (err) {} };
       var fallback = function () {
         try { a.textContent = originalText; } catch (err) {}
-        var safe = sanitizeUrl(a.getAttribute('href')) || (store && store.group && store.group.url) || a.getAttribute('href');
+        var safe = sanitizeUrl(a.getAttribute('href')) || (el.__d8a_store && el.__d8a_store.group && el.__d8a_store.group.url) || a.getAttribute('href');
         location.href = safe;
       };
       var post = function (bodyText) {
@@ -391,14 +435,17 @@
     el.setAttribute('data-d8a-listener', '1');
   };
 
-  // Fetch the store data (items, checkout, group) for a given group slug. Use the shared cache so parallel containers dedupe network traffic.
-  var fetchStoreForGroup = function (group) {
+  // Fetch the store data (items, checkout, group) for a given group slug and optional element
+  // so the request can be directed at a per-container base when present. Use the shared cache so parallel containers dedupe network traffic.
+  var fetchStoreForGroup = function (group, el) {
     try { group = String(group).trim(); } catch (e) { group = GROUP; }
-    if (storeFetchCache[group]) return storeFetchCache[group];
-    var p = doFetch(BASE + "/api/v1/store/items?group=" + encodeURIComponent(group), null, 10000)
-      .then(function (r) { return r.ok ? r.json() : null; })
+    var base = getBaseForElement(el) || BASE;
+    var key = group + '::' + base;
+    if (storeFetchCache[key]) return storeFetchCache[key];
+    var p = doFetch(base + "/api/v1/store/items?group=" + encodeURIComponent(group), null, 10000)
+      .then(function (r) { return r && r.ok ? r.json() : null; })
       .catch(function () { return null; });
-    storeFetchCache[group] = p;
+    storeFetchCache[key] = p;
     return p;
   };
 
@@ -457,13 +504,13 @@
 
     var group = getGroupForElement(el);
     // Optimistically show a loading state
-    el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#6b7280">Loading…</p>';
+    el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#6b7280">Loading3</p>';
 
     // Name the slug we tried, so a future mismatch between this file and the
     // group declared in .d8a is visible on the page instead of silent.
     var failure = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">There was an error loading the store (group ' + esc(group) + ').</p>';
 
-    var promise = fetchStoreForGroup(group);
+    var promise = fetchStoreForGroup(group, el);
     promise.then(function (s) {
       if (!s) {
         renderMessageWithRetry(el, failure);
