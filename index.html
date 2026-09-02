@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Threadline — Home</title>
+  <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+  <main class="main">
+    <header class="header">
+      <div class="brand">Threadline</div>
+      <nav class="nav" aria-label="Site navigation">
+        <a href="/">Home</a>
+        <a href="products.html">Products</a>
+        <a href="product.html">Product</a>
+        <a href="size-guide.html">Size Guide</a>
+        <a href="#contact">Contact</a>
+      </nav>
+    </header>
+
+    <section class="hero" aria-labelledby="home-hero">
+      <div>
+        <h1 id="home-hero">Small-batch essentials, thoughtfully made</h1>
+        <p>Clean wardrobe staples — tees, shirts and outer layers designed for everyday life. Small runs, sustainable partners, honest prices.</p>
+      </div>
+      <div style="min-width:180px;text-align:right">
+        <p style="margin:0;font-weight:700;color:#111827">Free shipping over $100</p>
+        <p style="margin:6px 0 0;color:var(--muted);font-size:0.95rem">Shop small. Shop better.</p>
+      </div>
+    </section>
+
+    <section aria-labelledby="products-heading">
+      <h2 id="products-heading">Featured products</h2>
+      <div class="grid" role="list">
+
+        <a class="card" role="listitem" href="products.html#p1" aria-labelledby="p1-name">
+          <div class="thumb">
+            <svg viewBox="0 0 400 400" role="img" aria-label="Everyday tee preview">
+              <defs>
+                <linearGradient id="g-1" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0" stop-color="#f3f0ff"/>
+                  <stop offset="1" stop-color="#ffffff"/>
+                </linearGradient>
+              </defs>
+              <rect width="400" height="400" rx="8" fill="url(#g-1)"/>
+            </svg>
+          </div>
+          <div>
+            <h3 id="p1-name" class="name">Everyday Tee</h3>
+            <div class="price">$38</div>
+          </div>
+        </a>
+
+        <a class="card" role="listitem" href="products.html#p2" aria-labelledby="p2-name">
+          <div class="thumb">
+            <svg viewBox="0 0 400 400" role="img" aria-label="Relaxed shirt preview">
+              <defs>
+                <linearGradient id="g-2" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0" stop-color="#fff7ed"/>
+                  <stop offset="1" stop-color="#ffffff"/>
+                </linearGradient>
+              </defs>
+              <rect width="400" height="400" rx="8" fill="url(#g-2)"/>
+            </svg>
+          </div>
+          <div>
+            <h3 id="p2-name" class="name">Relaxed Shirt</h3>
+            <div class="price">$48</div>
+          </div>
+        </a>
+
+        <a class="card" role="listitem" href="products.html#p3" aria-labelledby="p3-name">
+          <div class="thumb">
+            <svg viewBox="0 0 400 400" role="img" aria-label="Lightweight hoodie preview">
+              <defs>
+                <linearGradient id="g-3" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0" stop-color="#effaf9"/>
+                  <stop offset="1" stop-color="#ffffff"/>
+                </linearGradient>
+              </defs>
+              <rect width="400" height="400" rx="8" fill="url(#g-3)"/>
+            </svg>
+          </div>
+          <div>
+            <h3 id="p3-name" class="name">Lightweight Hoodie</h3>
+            <div class="price">$68</div>
+          </div>
+        </a>
+
+        <a class="card" role="listitem" href="products.html#p4" aria-labelledby="p4-name">
+          <div class="thumb">
+            <svg viewBox="0 0 400 400" role="img" aria-label="Casual pant preview">
+              <defs>
+                <linearGradient id="g-4" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0" stop-color="#f8fafc"/>
+                  <stop offset="1" stop-color="#ffffff"/>
+                </linearGradient>
+              </defs>
+              <rect width="400" height="400" rx="8" fill="url(#g-4)"/>
+            </svg>
+          </div>
+          <div>
+            <h3 id="p4-name" class="name">Casual Pant</h3>
+            <div class="price">$58</div>
+          </div>
+        </a>
+
+      </div>
+      <div class="actions">
+        <a href="products.html">See all products</a>
+      </div>
+    </section>
+
+    <section id="contact" aria-labelledby="contact-heading" class="contact">
+      <h2 id="contact-heading">Contact</h2>
+      <p>If you have questions about sizing, stock or collaborations, email hello@threadline.example or use the contact form on the store page.</p>
+      <p class="actions"><a href="/products.html">Visit the shop</a></p>
+    </section>
+
+    <footer>
+      <div>Threadline Clothing Co. — small batch apparel</div>
+      <div style="margin-top:6px">Built with a simple static site and the group's embedded payments widget.</div>
+    </footer>
+  </main>
+</body>
+</html>
