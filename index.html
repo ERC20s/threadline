@@ -44,11 +44,24 @@
           <a href="products.html">See all products &rarr;</a>
         </div>
         <div class="grid" id="featured-grid"></div>
+        <p class="status" id="featured-status" role="status"></p>
         <noscript>
           <p class="note">Product cards need JavaScript to render. The full catalogue is on the
             <a href="products.html">shop page</a>, and each item has its own page, for example
             <a href="product.html?id=everyday-tee">the Everyday Tee</a>.</p>
         </noscript>
+      </section>
+
+      <section class="store-panel" aria-labelledby="home-store-heading">
+        <h2 id="home-store-heading">Buy direct from the group shop</h2>
+        <p>Items and prices come from the group's shop; card payments land in the group's shared balance. The featured prices above are reconciled with this list as soon as it loads.</p>
+        <!-- d8a payments widget: the container from the repository .d8a payments: block.
+             payments-widget.js fills every #group-store on the page, so the same
+             container works here and on products.html. Loading it here also means a
+             buyer who returns to the home page with ?d8a_order=… has the receipt
+             verified and shown. -->
+        <div id="group-store" aria-live="polite" data-d8a-group="d8aaaa-batch_threadline" data-default-quantity="1"><p>Loading store…</p></div>
+        <noscript><p>Shop: <a href="https://d8a.com/g/d8aaaa-batch_threadline">https://d8a.com/g/d8aaaa-batch_threadline</a></p></noscript>
       </section>
 
       <section class="section" id="about" aria-labelledby="about-heading">
@@ -115,10 +128,74 @@
   </div>
 
   <script src="scripts/products.js"></script>
+  <!-- Shared shop helpers (whenBuyAnchor, shopPriceIndex, reconcileGrid,
+       guardBuyClicks): loaded after products.js, which owns the
+       window.Threadline namespace, and before payments-widget.js, which fills
+       #group-store. -->
+  <script src="scripts/checkout-intent.js"></script>
+  <script src="payments-widget.js"></script>
   <script>
     (function () {
+      var T = window.Threadline;
       var grid = document.getElementById("featured-grid");
-      if (window.Threadline && grid) window.Threadline.renderGrid(grid, window.Threadline.featured());
+      var status = document.getElementById("featured-status");
+      var panel = document.getElementById("group-store");
+      if (!T || !grid) return;
+
+      /* Built once the shop panel has rendered its rows; null means "the shop
+         has not spoken", which leaves the featured cards exactly as written. */
+      var shopIndex = null;
+
+      /* Render the featured cards, then make them agree with the live shop:
+         the shop's price where the two really differ, "Not in the shop yet."
+         where the shop sells no such row. The repaint is the shared helper in
+         scripts/checkout-intent.js, the same one products.html uses. */
+      var show = function () {
+        T.renderGrid(grid, T.featured());
+        var unlisted = (shopIndex && T.reconcileGrid) ? T.reconcileGrid(grid, shopIndex) : 0;
+        if (status) {
+          status.textContent = unlisted
+            ? unlisted + (unlisted === 1 ? " featured piece is" : " featured pieces are") +
+              " not in the shop yet — the rest check out at the price shown."
+            : "";
+        }
+      };
+
+      show();
+
+      /* ---- no sized garment leaves the panel without a size ----
+         The panel's own Buy links post a checkout for the platform item and
+         nothing else, so a tee bought straight from this list would arrive with
+         no size. Guard the panel in the capture phase (before
+         payments-widget.js's own click handler) and send a sized piece to its
+         product page, where the size buttons are. One-size pieces (Classic Cap,
+         Lambswool Scarf) and rows we cannot match to the catalogue are left
+         exactly as they are. */
+      if (panel && T.guardBuyClicks) {
+        T.guardBuyClicks(panel, function (info) {
+          if (!info.product || !info.needsSize) return false;
+          if (status) {
+            status.textContent = info.product.name + " is made in sizes — choose one on the product page.";
+          }
+          location.href = T.productUrl(info.product);
+          return true;
+        });
+      }
+
+      /* Wait for the shop panel — no matchFn, so this resolves as soon as
+         payments-widget.js has rendered any row — then index it once and
+         repaint the featured grid. A panel that fails, times out or renders no
+         rows changes nothing on this page. */
+      if (panel && T.whenBuyAnchor && T.shopPriceIndex) {
+        T.whenBuyAnchor(panel, null, T.BUY_ANCHOR_TIMEOUT || 12000)
+          .then(function () {
+            var index = T.shopPriceIndex(panel);
+            if (!index || !index.size) return;
+            shopIndex = index;
+            show();
+          })
+          .catch(function () { /* nothing to reconcile against */ });
+      }
     })();
   </script>
 </body>
