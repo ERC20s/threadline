@@ -120,6 +120,26 @@ payments:
   })();
   </script>
 
+# items: — what the group sells. One line per piece, read after every merge.
+# Names and prices are kept identical to the catalogue in scripts/products.js,
+# so the shop panel matches a row to a card by name and the reconcile passes in
+# index.html, products.html and product.html find no difference to repaint.
+# Dropping a line here PAUSES that piece (it is never deleted); putting the line
+# back restores it.
+items:
+  Everyday Tee = $38.00 — Soft combed cotton, cut for a modern relaxed fit.
+  Relaxed Shirt = $48.00 — An easy overshirt-weight button-down for every season.
+  Lightweight Hoodie = $68.00 — Loopback cotton that works indoors and out.
+  Casual Pant = $58.00 — A tapered everyday trouser with a comfortable waist.
+  Woven Shirt = $52.00 — Textured yarn-dyed cotton with a soft, lived-in hand.
+  Classic Cap = $22.00 — Washed cotton six-panel with a soft, unstructured crown.
+  Merino Crew Knit = $88.00 — Fine-gauge merino that layers under anything.
+  Canvas Overshirt = $94.00 — The layer between a shirt and a coat.
+  Linen Summer Dress = $76.00 — Washed European linen, cut long and loose.
+  Ribbed Longsleeve = $44.00 — A close-fitting rib that holds its shape.
+  Lambswool Scarf = $46.00 — Woven in a small mill, finished with a hand-tied fringe.
+  Rigid Denim Jacket = $118.00 — Raw 12oz denim that fades to your own pattern.
+
 url: https://verkl.com
 # run: — how to run it. Yours to edit; VS Code's ▶ (the VSD8A extension) launches each entry.
 run:

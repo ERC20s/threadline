@@ -904,6 +904,89 @@
           ' expectedLinks=' + pieceCount + ' pricesOk=' + pricesOk);
       })();
 
+      // 15) Threadline.related: the "You might also like" grid on product.html.
+      // The old inline filter kept catalogue order, so the four featured pieces
+      // at the top of scripts/products.js filled every grid — the denim jacket
+      // never suggested the overshirt. Pure function plus one render into a
+      // detached element: no fixture, no checkout, so the counts above are
+      // untouched.
+      (function runRelatedTest() {
+        var T = window.Threadline;
+        if (!T || typeof T.related !== 'function') {
+          note('related-prefers-own-category', false, 'Threadline.related missing');
+          return;
+        }
+
+        // a) never the piece itself, never a duplicate, always min(4, n-1)
+        var expected = Math.min(T.RELATED_LIMIT || 4, T.products.length - 1);
+        var bad = [];
+        T.products.forEach(function (p) {
+          var out = T.related(p);
+          var ids = out.map(function (r) { return r.id; });
+          var dupes = ids.filter(function (id, i) { return ids.indexOf(id) !== i; });
+          if (out.length !== expected || ids.indexOf(p.id) !== -1 || dupes.length) {
+            bad.push(p.id + '->' + JSON.stringify(ids));
+          }
+        });
+        note('related-never-repeats-or-returns-self', bad.length === 0,
+          'expectedPerPiece=' + expected + ' problems=' + JSON.stringify(bad));
+
+        // b) whenever the catalogue has another piece in the same category, the
+        // first suggestion is from that category — the actual bug: denim jacket
+        // -> canvas overshirt, linen dress -> a dress or the next best thing.
+        var wrongFirst = [];
+        T.products.forEach(function (p) {
+          var siblings = T.products.filter(function (q) {
+            return q.id !== p.id && q.category === p.category;
+          });
+          if (!siblings.length) return;
+          var first = T.related(p)[0];
+          if (!first || first.category !== p.category) {
+            wrongFirst.push(p.id + '->' + (first ? first.id + '/' + first.category : 'none'));
+          }
+        });
+        note('related-prefers-own-category', wrongFirst.length === 0,
+          'wrongFirst=' + JSON.stringify(wrongFirst));
+
+        // c) the two examples the group named
+        var jacket = T.byId('denim-jacket');
+        var jacketIds = jacket ? T.related(jacket).map(function (r) { return r.id; }) : [];
+        note('related-denim-jacket-suggests-overshirt',
+          jacketIds.indexOf('canvas-overshirt') === 0,
+          'denim-jacket=' + JSON.stringify(jacketIds));
+
+        // d) limit and list arguments, and a piece whose category is unique
+        var stub = [
+          { id: 's1', name: 'A', category: 'Tops', featured: true },
+          { id: 's2', name: 'B', category: 'Hats', featured: true },
+          { id: 's3', name: 'C', category: 'Tops' },
+          { id: 's4', name: 'D', category: 'Bags' }
+        ];
+        var subset = T.related(stub[1], 2, stub).map(function (r) { return r.id; });
+        var lone = T.related({ id: 'sx', category: 'Nothing We Make' }, 3, stub)
+          .map(function (r) { return r.id; });
+        note('related-honours-limit-and-list',
+          subset.length === 2 && subset.indexOf('s2') === -1 &&
+          subset[0] === 's1' && lone.length === 3 && lone[0] === 's1' && lone[1] === 's2',
+          'subset=' + JSON.stringify(subset) + ' loneCategory=' + JSON.stringify(lone));
+
+        // e) rendered: four cards, each stamped with a catalogue id the
+        // reconcile pass in product.html can match against the shop panel.
+        var holder = document.createElement('div');
+        var tee = T.byId('everyday-tee');
+        T.renderGrid(holder, T.related(tee));
+        var cards = holder.querySelectorAll('a.card[data-product-id]');
+        note('related-renders-matchable-cards',
+          cards.length === expected &&
+          Array.prototype.every.call(cards, function (c) {
+            return !!T.byId(c.getAttribute('data-product-id')) &&
+              c.getAttribute('data-product-id') !== 'everyday-tee';
+          }),
+          'cards=' + cards.length + ' ids=' + Array.prototype.map.call(cards, function (c) {
+            return c.getAttribute('data-product-id');
+          }).join(','));
+      })();
+
       // Final aggregator after a bit more time
       setTimeout(function(){
         note('final', true, 'Manual-run tests completed; review individual PASS/FAIL lines above.');
