@@ -35,6 +35,9 @@
           <p class="kicker" id="product-category"></p>
           <h1 id="product-name">Loading…</h1>
           <div class="price" id="product-price"></div>
+          <!-- Filled only when the live shop panel prices this piece differently
+               from the catalogue in scripts/products.js. -->
+          <p class="hint" id="price-source" hidden></p>
           <p class="description" id="product-description"></p>
           <ul class="details" id="product-details"></ul>
 
@@ -210,8 +213,9 @@
       var STORE_URL = "https://d8a.com/g/d8aaaa-batch_threadline";
 
       /* The failure line, with a way out: the group's own storefront. */
-      var sayNotListed = function () {
-        say("This piece isn't listed in the shop panel yet. Pick it in Checkout below, or email hello@threadline.example and we'll reserve size " + chosenSize + ".", "error");
+      var sayNotListed = function (scroll) {
+        say("This piece isn't listed in the shop panel yet. Pick it in Checkout below, or email hello@threadline.example and we'll reserve " +
+          (chosenSize ? "size " + chosenSize : "one for you") + ".", "error");
         if (status) {
           status.appendChild(document.createTextNode(" "));
           var link = document.createElement("a");
@@ -219,7 +223,9 @@
           link.textContent = "Open the shop on d8a.com";
           status.appendChild(link);
         }
-        if (panel && panel.scrollIntoView) panel.scrollIntoView({ behavior: "smooth", block: "center" });
+        /* Only jump to the shop panel when the shopper asked for it by clicking
+           Buy; the load-time check must not scroll the page under them. */
+        if (scroll && panel && panel.scrollIntoView) panel.scrollIntoView({ behavior: "smooth", block: "center" });
       };
 
       /* payments-widget.js listens on the #group-store container and owns the
@@ -234,8 +240,78 @@
          disabled so a second click cannot start a second checkout. */
       var pending = false;
 
+      /* Set once the loaded panel turns out not to sell this piece: Buy stays
+         disabled and a queued intent must not switch it back on. */
+      var notListed = false;
+
+      /* The row the reconcile pass below resolved, reused by the click so we do
+         not search the panel twice. Dropped if the panel re-renders (Retry). */
+      var resolvedAnchor = null;
+
+      var liveAnchor = function () {
+        if (resolvedAnchor && panel && panel.contains && panel.contains(resolvedAnchor)) return resolvedAnchor;
+        resolvedAnchor = null;
+        return T.findBuyAnchor ? T.findBuyAnchor(panel, matchesProduct) : null;
+      };
+
+      /* ---- reconcile the page with the live shop, before anyone clicks ----
+         The catalogue price in scripts/products.js is ours; the money is taken
+         by payments-widget.js from the item set on the group's Admin tab. When
+         the panel has rendered we make the page agree with it: show the shop's
+         price, or say plainly that this piece is not on sale. If the panel
+         fails or times out we change nothing — the queued-click behaviour is
+         the fallback. */
+      var priceEl = document.getElementById("product-price");
+      var priceNote = document.getElementById("price-source");
+
+      /* "$38" vs "$38.00" vs "38" is the same money. Only a real difference is
+         worth repainting the price. */
+      var samePrice = function (a, b) {
+        var x = String(a || "").replace(/\s+/g, "").toLowerCase();
+        var y = String(b || "").replace(/\s+/g, "").toLowerCase();
+        if (x === y) return true;
+        var nx = (x.match(/-?\d+(\.\d+)?/) || [])[0];
+        var ny = (y.match(/-?\d+(\.\d+)?/) || [])[0];
+        if (nx === undefined || ny === undefined) return false;
+        /* Same number and same currency mark (or neither carries one). */
+        var cx = x.replace(/[\d.,\s]/g, ""), cy = y.replace(/[\d.,\s]/g, "");
+        return Number(nx) === Number(ny) && (!cx || !cy || cx === cy);
+      };
+
+      var showShopPrice = function (anchor) {
+        var shopPrice = T.buyRowPrice ? T.buyRowPrice(anchor) : "";
+        if (!shopPrice || !priceEl) return;
+        if (samePrice(shopPrice, priceEl.textContent)) return;
+        priceEl.textContent = shopPrice;
+        if (priceNote) {
+          priceNote.textContent = "Price from the group shop, where checkout takes payment.";
+          priceNote.hidden = false;
+        }
+      };
+
+      if (panel && T.whenBuyAnchor) {
+        /* No matchFn: resolves as soon as the panel has rendered any row. */
+        T.whenBuyAnchor(panel, null, T.BUY_ANCHOR_TIMEOUT || 12000)
+          .then(function () {
+            var mine = T.findBuyAnchor ? T.findBuyAnchor(panel, matchesProduct) : null;
+            if (mine) {
+              resolvedAnchor = mine;
+              showShopPrice(mine);
+              return;
+            }
+            /* Rows, but none for this piece: say so now rather than after a
+               click and a twelve-second wait. */
+            notListed = true;
+            buy.disabled = true;
+            buy.setAttribute("aria-disabled", "true");
+            if (!pending) sayNotListed();
+          })
+          .catch(function () { /* panel failed or timed out: leave the page as written */ });
+      }
+
       buy.addEventListener("click", function () {
         if (pending) return;
+        if (notListed) { sayNotListed(true); return; }
         if (!chosenSize) {
           say("Choose a size first.", "error");
           var first = sizeBox.querySelector("button");
@@ -243,11 +319,12 @@
           return;
         }
 
-        /* Already rendered — the common case — goes straight through. */
-        var ready = T.findBuyAnchor ? T.findBuyAnchor(panel, matchesProduct) : null;
+        /* Already rendered — the common case, and after the load-time reconcile
+           usually the anchor it resolved — goes straight through. */
+        var ready = liveAnchor();
         if (ready) { openCheckout(ready); return; }
 
-        if (!T.whenBuyAnchor || !panel) { sayNotListed(); return; }
+        if (!T.whenBuyAnchor || !panel) { sayNotListed(true); return; }
 
         /* The panel is still loading (payments-widget.js fills it only after its
            items request returns). Queue the click instead of failing early. */
@@ -258,13 +335,15 @@
 
         var release = function () {
           pending = false;
-          buy.disabled = false;
+          /* If the reconcile pass has meanwhile found the shop does not sell
+             this piece, Buy stays off. */
+          buy.disabled = notListed;
           buy.removeAttribute("aria-busy");
         };
 
         T.whenBuyAnchor(panel, matchesProduct, T.BUY_ANCHOR_TIMEOUT || 12000)
-          .then(function (anchor) { release(); openCheckout(anchor); })
-          .catch(function () { release(); sayNotListed(); });
+          .then(function (anchor) { resolvedAnchor = anchor; release(); openCheckout(anchor); })
+          .catch(function () { release(); sayNotListed(true); });
       });
 
       /* ---- receipt: the widget fires this once the platform confirms payment ---- */

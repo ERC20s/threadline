@@ -53,10 +53,23 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
   says "Fetching the shop — checkout will open in a moment…" and disables Buy
   while one intent is pending. It never posts to checkout itself — it clicks the
   widget's own link, so the widget's duplicate-checkout guard still applies.
+- The same helper reconciles the page with the live shop on load, before anyone
+  clicks. `Threadline.buyRowPrice(anchor)` returns the price the panel is
+  showing for a row (the widget builds each row as
+  `div > [div(name, description), span(price), a[data-item]]`, so the price is
+  the anchor's previous sibling). `product.html` waits for
+  `whenBuyAnchor(panel, null, …)` — no matchFn, meaning "rows have rendered" —
+  and then: shows the shop's price in `#product-price` with a short note when it
+  differs from the catalogue, or, when rows rendered but none match this piece,
+  disables Buy and says it is not listed. If the panel fails or times out the
+  page is left exactly as written and the queued-click path still applies.
+  Prices are set on the group's Admin tab, so the shop always wins.
 - `tests/payments-widget.test.html` is the browser test for the widget; open it
   at http://localhost:5004/tests/payments-widget.test.html while the site is
   served. Its `intent-group` fixture answers late on purpose, to prove a queued
-  Buy intent still opens exactly one checkout.
+  Buy intent still opens exactly one checkout; the `checkout-group` fixture is
+  also read (not clicked) to check `buyRowPrice` and the "rows, but not this
+  piece" case.
 
 `.d8a` declares the group, the run entry and the payments block. Do not hand-edit
 its generated blocks.

@@ -310,10 +310,48 @@
         });
       })();
 
+      // 7) Live price and "listed, but not this piece": what product.html reads
+      // before anyone clicks Buy. Uses the already-rendered checkout fixture
+      // (item c1, price "$15") — read only, no clicks, so it cannot disturb the
+      // duplicate-checkout counts above.
+      setTimeout(function runShopPriceTest(attempt) {
+        var T = window.Threadline;
+        var container = document.getElementById('group-store-checkout');
+        var anchor = container && container.querySelector('a[data-item="c1"]');
+
+        if (!anchor && (attempt || 0) < 8) {
+          setTimeout(function () { runShopPriceTest((attempt || 0) + 1); }, 200);
+          return;
+        }
+        if (!T || typeof T.buyRowPrice !== 'function') {
+          note('buy-row-price', false, 'Threadline.buyRowPrice missing');
+          return;
+        }
+        if (!anchor) {
+          note('buy-row-price', false, 'checkout fixture rendered no Buy anchor');
+          return;
+        }
+
+        var price = T.buyRowPrice(anchor);
+        note('buy-row-price', price === '$15', 'buyRowPrice=' + JSON.stringify(price) + ' (expected "$15")');
+        note('buy-row-price-no-anchor', T.buyRowPrice(null) === '', 'buyRowPrice(null)=' + JSON.stringify(T.buyRowPrice(null)));
+
+        // Rows rendered (findBuyAnchor with no matchFn) but no row for the piece
+        // we are showing: product.html must disable Buy and say so immediately
+        // instead of queueing a click that can only time out.
+        var anyRow = T.findBuyAnchor(container);
+        var mine = T.findBuyAnchor(container, function (a) {
+          return a.getAttribute('data-item') === 'not-sold-here';
+        });
+        var ok = !!anyRow && mine === null;
+        note('panel-listed-but-not-this-piece', ok,
+          'anyRow=' + (anyRow ? anyRow.getAttribute('data-item') : 'none') + ' matching=' + (mine ? mine.getAttribute('data-item') : 'null'));
+      }, 700);
+
       // Final aggregator after a bit more time
       setTimeout(function(){
         note('final', true, 'Manual-run tests completed; review individual PASS/FAIL lines above.');
-      }, 1600);
+      }, 2800);
 
     } catch (e) { note('runChecks', false, String(e)); }
   }
