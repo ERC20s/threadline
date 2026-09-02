@@ -231,7 +231,26 @@
       /* payments-widget.js listens on the #group-store container and owns the
          checkout POST (including its duplicate-click guard), so we click its own
          link rather than posting a second time from here. */
+      /* The panel sells a sizeless platform item, so the chosen size has to
+         travel on the row we are about to click: payments-widget.js reads
+         data-size and data-d8a-note off the anchor and adds them to the
+         checkout POST. Stamped immediately before every click, so the value
+         posted is always the size on screen, never an earlier one. */
+      var stampSize = function (anchor) {
+        if (!anchor || !anchor.setAttribute) return;
+        try {
+          if (chosenSize) {
+            anchor.setAttribute("data-size", chosenSize);
+            anchor.setAttribute("data-d8a-note", product.name + " - size " + chosenSize);
+          } else {
+            anchor.removeAttribute("data-size");
+            anchor.removeAttribute("data-d8a-note");
+          }
+        } catch (e) {}
+      };
+
       var openCheckout = function (anchor) {
+        stampSize(anchor);
         say("Opening checkout for " + product.name + ", size " + chosenSize + "…");
         anchor.click();
       };
@@ -320,7 +339,9 @@
           if (!piece || !info.needsSize) return false;
 
           if (piece.id === product.id) {
-            if (chosenSize) return false;
+            /* A size is chosen: let the click through, but stamp the row first
+               so the checkout the widget posts carries that size. */
+            if (chosenSize) { stampSize(info.anchor); return false; }
             say("Choose a size first.", "error");
             var firstSize = sizeBox.querySelector("button");
             if (firstSize) firstSize.focus();
@@ -373,8 +394,29 @@
       /* ---- receipt: the widget fires this once the platform confirms payment ---- */
       document.addEventListener("group-store:paid", function (e) {
         var order = e && e.detail ? e.detail : null;
-        say("Thank you — order " + (order && order.id ? order.id : "") + " is paid" +
+        var orderId = order && order.id ? order.id : "";
+        say("Thank you — order " + orderId + " is paid" +
           (chosenSize ? " (size " + chosenSize + ")" : "") + ". A confirmation email is on its way.", "ok");
+
+        /* The size is sent with the checkout, but the platform only stores it if
+           it accepted the extra field. Offer a prefilled email carrying the
+           order id, the piece and the size, so the order can always be
+           fulfilled without the shopper writing it out. */
+        if (!status) return;
+        var lines = [
+          "Order: " + (orderId || "(no order id)"),
+          "Piece: " + product.name,
+          "Size: " + (chosenSize || "not chosen"),
+          "",
+          "Please confirm my order."
+        ].join("\n");
+        var mail = document.createElement("a");
+        mail.href = "mailto:hello@threadline.example" +
+          "?subject=" + encodeURIComponent("Threadline order " + (orderId || "")) +
+          "&body=" + encodeURIComponent(lines);
+        mail.textContent = "Email us the size for this order";
+        status.appendChild(document.createTextNode(" "));
+        status.appendChild(mail);
       });
     })();
   </script>

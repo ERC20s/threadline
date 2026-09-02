@@ -66,6 +66,16 @@
            because that is how payments-widget.js finds a container to fill. -->
       <div id="group-store" data-d8a-group="guard-group"></div>
     </div>
+    <div>
+      <h3>Size note (note-group)</h3>
+      <!-- The row here is stamped with data-size / data-d8a-note by the test
+           before it is clicked, so the posted checkout body can be read. Its
+           checkout answer deliberately carries no url, which is how the single
+           plain-body retry is exercised; the item's payUrl is this same page
+           plus a hash, so the widget's href fallback only moves the fragment
+           instead of navigating the test page away. -->
+      <div id="group-store" data-d8a-group="note-group"></div>
+    </div>
   </div>
 
   <script>
@@ -89,6 +99,9 @@
     // Checkout-count helpers exposed for tests
     window.__testCheckoutCount = 0;
     window.__testCheckoutByGroup = {};
+    // Every posted checkout body, in order, keyed by the group in the body —
+    // what the size-carrying assertions read.
+    window.__testCheckoutBodies = {};
     window.__testCheckoutSeen = new Promise(function (resolve) { window.__resolveTestCheckoutSeen = resolve; });
 
     // Stateful behavior: retry-group first call fails, second call succeeds.
@@ -150,6 +163,15 @@
           ], group: { name: 'Guard', url: 'https://d8a.com/g/guard-group' }, checkout: { enabled: true, url: 'https://d8a.com/api/v1/store/checkout' } }, true);
         }
 
+        // note-group: one item, checkout enabled. payUrl and the group url are
+        // this very page (an absolute path, which sanitizeUrl allows) plus a
+        // hash, so the widget's href fallback after a url-less checkout answer
+        // changes only the fragment.
+        if (g === 'note-group') {
+          var selfUrl = location.pathname + location.search;
+          return jsonResponse({ items: [ { id: 'n1', name: 'Note Tee', price: '$25', payUrl: selfUrl + '#note-fallback' } ], group: { name: 'Note', url: selfUrl + '#note-group' }, checkout: { enabled: true, url: 'https://d8a.com/api/v1/store/checkout' } }, true);
+        }
+
         // checkout-group: provide an item and enable checkout so Buy triggers a POST
         if (g === 'checkout-group') {
           return jsonResponse({ items: [ { id: 'c1', name: 'Checkout Tee', price: '$15', payUrl: 'https://d8a.com/pay/c1' } ], group: { name: 'Checkout', url: 'https://d8a.com/g/checkout-group' }, checkout: { enabled: true, url: 'https://d8a.com/api/v1/store/checkout' } }, true);
@@ -180,12 +202,19 @@
             try { bodyGroup = JSON.parse(opts.body).group; } catch (e) {}
             if (bodyGroup) {
               window.__testCheckoutByGroup[bodyGroup] = (window.__testCheckoutByGroup[bodyGroup] || 0) + 1;
+              window.__testCheckoutBodies[bodyGroup] = window.__testCheckoutBodies[bodyGroup] || [];
+              window.__testCheckoutBodies[bodyGroup].push(opts && opts.body);
             }
             window.__testCheckoutCount = (window.__testCheckoutCount || 0) + 1;
             if (typeof window.__resolveTestCheckoutSeen === 'function') {
               try { window.__resolveTestCheckoutSeen(window.__testCheckoutCount); } catch (e) {}
               // only resolve once
               window.__resolveTestCheckoutSeen = null;
+            }
+            // note-group answers, but without a url: the widget must retry once
+            // with the plain body and then fall back to the anchor href.
+            if (bodyGroup === 'note-group') {
+              return jsonResponse({ ok: true }, true);
             }
           }
         } catch (e) {}
@@ -502,6 +531,55 @@
           }, 350);
         }, 350);
       }, 900);
+
+      // 10) The chosen size travels with the checkout POST. product.html stamps
+      // the widget's own row with data-size / data-d8a-note just before it
+      // clicks it; payments-widget.js must add those to the posted JSON, retry
+      // exactly once with the plain body when the answer carries no url, and
+      // leave an unstamped anchor's body exactly as it was.
+      setTimeout(function runSizeNoteTest(attempt) {
+        var container = document.querySelector('#fixtures [data-d8a-group="note-group"]');
+        var anchor = container && container.querySelector('a[data-item="n1"]');
+
+        if (!anchor && (attempt || 0) < 10) {
+          setTimeout(function () { runSizeNoteTest((attempt || 0) + 1); }, 150);
+          return;
+        }
+        if (!anchor) {
+          note('checkout-carries-size', false, 'note fixture rendered no Buy anchor');
+          return;
+        }
+
+        anchor.setAttribute('data-size', 'M');
+        anchor.setAttribute('data-d8a-note', 'Note Tee - size M');
+        anchor.click();
+
+        setTimeout(function () {
+          var bodies = (window.__testCheckoutBodies && window.__testCheckoutBodies['note-group']) || [];
+          var first = null, second = null;
+          try { first = JSON.parse(bodies[0]); } catch (e) {}
+          try { second = JSON.parse(bodies[1]); } catch (e) {}
+
+          var carried = !!first && first.item === 'n1' && first.quantity === 1 &&
+            first.size === 'M' && first.note === 'Note Tee - size M';
+          note('checkout-carries-size', carried, 'first body=' + JSON.stringify(bodies[0] || null));
+
+          var retriedOnce = bodies.length === 2 && !!second &&
+            second.item === 'n1' && second.group === 'note-group' &&
+            typeof second.size === 'undefined' && typeof second.note === 'undefined';
+          note('checkout-retries-plain-body-once', retriedOnce,
+            'POSTs=' + bodies.length + ' second body=' + JSON.stringify(bodies[1] || null));
+
+          // An anchor with no size attributes (the checkout-group fixture,
+          // clicked in test 5) must post exactly the body it always posted.
+          var plain = (window.__testCheckoutBodies && window.__testCheckoutBodies['checkout-group']) || [];
+          var parsed = null;
+          try { parsed = JSON.parse(plain[0]); } catch (e) {}
+          var keys = parsed ? Object.keys(parsed).sort().join(',') : '';
+          note('plain-anchor-body-unchanged', keys === 'group,item,quantity,returnUrl',
+            'checkout-group body keys=' + JSON.stringify(keys));
+        }, 700);
+      }, 1300);
 
       // Final aggregator after a bit more time
       setTimeout(function(){

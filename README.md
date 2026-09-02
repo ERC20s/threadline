@@ -92,6 +92,23 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
   Cap, Lambswool Scarf) and rows with no catalogue match behave exactly as
   before, and modified clicks (ctrl/cmd/shift/alt, middle click, `target=_blank`)
   are always passed through.
+- The chosen size now travels with the money. The platform item is sizeless, so
+  a paid order used to reach the group's Admin tab as "Everyday Tee ×1" with no
+  size on it. `product.html` stamps the widget's own row immediately before it
+  is clicked — `data-size="M"` and `data-d8a-note="Everyday Tee - size M"` — in
+  `openCheckout` and on the pass-through branch of the panel guard, so the value
+  posted is always the size on screen. `payments-widget.js` reads those two
+  attributes off the anchor (trimmed, whitespace-collapsed, capped at 40 and 140
+  characters), adds `size` and `note` to the checkout JSON **only when present**,
+  and includes the note in the duplicate-checkout key
+  (`group::item::qty::note`), so a second click for a different size is a
+  different purchase. If the first POST answers without a `url` the widget
+  retries **once** with exactly the body it used to send, before the existing
+  anchor-href fallback — the cover for a platform that refuses unknown fields.
+  An anchor with no attributes posts an unchanged body. The receipt line on
+  `product.html` also offers a prefilled `mailto:hello@threadline.example`
+  carrying the order id, the piece and the size, so fulfilment is possible even
+  if the platform stored no note.
 - `tests/payments-widget.test.html` is the browser test for the widget; open it
   at http://localhost:5004/tests/payments-widget.test.html while the site is
   served. Its `intent-group` fixture answers late on purpose, to prove a queued
@@ -101,7 +118,11 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
   empty panel) and `samePrice`'s tolerance. Its `guard-group` fixture lists one
   sized row and one one-size row against a stub catalogue: the sized row must
   produce no checkout POST and leave the anchor untouched, the one-size row must
-  still post exactly once.
+  still post exactly once. Its `note-group` fixture stamps a row with
+  `data-size`/`data-d8a-note` and clicks it, then reads the recorded request
+  bodies: the first POST must carry `size` and `note`, a url-less answer must
+  produce exactly one plain retry, and the unstamped `checkout-group` body must
+  still have only `group,item,quantity,returnUrl`.
 
 `.d8a` declares the group, the run entry and the payments block. Do not hand-edit
 its generated blocks.
