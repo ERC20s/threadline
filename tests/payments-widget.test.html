@@ -1182,6 +1182,87 @@
           });
       })();
 
+      // 18) Product links must keep their id. A shopper reported that
+      // /product.html?id=everyday-tee landed on /product with the query gone:
+      // that is the static server's clean-URL redirect, and product.html reads
+      // the id from the query, so every card, lookbook link and shared link
+      // fell into the "We couldn't find that piece" panel. Two halves are
+      // checked here: serve.json (read-only) must switch the redirect off and
+      // still route the extensionless paths, and Threadline.productIdFromLocation
+      // must recover an id from a URL that lost its query.
+      (function runProductIdFromLocationTest() {
+        var T = window.Threadline;
+
+        // a) the helper itself. It resolves through the catalogue in its own
+        // closure, so the product stubs other assertions install cannot change
+        // these answers.
+        var NAME = 'product-id-from-location';
+        if (typeof T.productIdFromLocation !== 'function') {
+          note(NAME, false, 'Threadline.productIdFromLocation is missing');
+        } else {
+          var at = function (pathname, search, hash) {
+            return { pathname: pathname || '', search: search || '', hash: hash || '' };
+          };
+          var cases = [
+            ['query', at('/product.html', '?id=everyday-tee'), 'everyday-tee'],
+            ['query-with-size', at('/product.html', '?id=denim-jacket&size=M'), 'denim-jacket'],
+            ['query-encoded', at('/product.html', '?id=merino%2Dcrew'), 'merino-crew'],
+            ['path-segment', at('/product/everyday-tee', ''), 'everyday-tee'],
+            ['fragment', at('/product.html', '', '#linen-dress'), 'linen-dress'],
+            ['query-wins-over-fragment', at('/product.html', '?id=wool-scarf', '#everyday-tee'), 'wool-scarf'],
+            ['bare-path', at('/product', ''), null],
+            ['unknown-id', at('/product.html', '?id=not-a-piece'), null],
+            ['nothing', at('/', ''), null]
+          ];
+          var bad = [];
+          cases.forEach(function (c) {
+            var got = null;
+            try { got = T.productIdFromLocation(c[1]); } catch (err) { got = 'threw: ' + String(err); }
+            if (got !== c[2]) bad.push(c[0] + ' -> ' + JSON.stringify(got) + ' (wanted ' + JSON.stringify(c[2]) + ')');
+          });
+          // and the piece itself, not just the id
+          var resolved = (typeof T.productFromLocation === 'function')
+            ? T.productFromLocation(at('/product/everyday-tee', ''))
+            : null;
+          if (!resolved || resolved.id !== 'everyday-tee') bad.push('productFromLocation did not return the tee');
+          note(NAME, bad.length === 0, bad.length ? bad.join(' | ') : cases.length + ' url cases resolved as expected');
+        }
+
+        // b) serve.json: the server config that stops the redirect. Read-only,
+        // like assertion 17's read of ../.d8a — the mock's passthrough makes
+        // this a real request.
+        var CFG = 'serve-json-keeps-the-query';
+        var PAGES = ['index.html', 'product.html', 'products.html', 'lookbook.html', 'size-guide.html'];
+        fetch('../serve.json', { cache: 'no-store' })
+          .then(function (r) {
+            if (!r || !r.ok || typeof r.text !== 'function') throw new Error('HTTP ' + (r && r.status ? r.status : '?'));
+            return r.text();
+          })
+          .then(function (text) {
+            var cfg = JSON.parse(text);
+            var problems = [];
+            if (cfg.cleanUrls !== false) problems.push('cleanUrls is ' + JSON.stringify(cfg.cleanUrls) + ', it must be false or /product.html redirects to /product and drops ?id=');
+            var rewrites = Array.isArray(cfg.rewrites) ? cfg.rewrites : [];
+            if (!rewrites.length) problems.push('no rewrites: extensionless links people already have would 404');
+            PAGES.forEach(function (page) {
+              var hit = rewrites.some(function (rw) {
+                return rw && String(rw.destination || '').replace(/^\//, '') === page;
+              });
+              if (!hit) problems.push('no rewrite serving ' + page);
+            });
+            rewrites.forEach(function (rw) {
+              if (!rw || !rw.source || !rw.destination) problems.push('rewrite without a source or destination: ' + JSON.stringify(rw));
+            });
+            note(CFG, problems.length === 0,
+              problems.length ? problems.join(' | ')
+                              : 'cleanUrls false, ' + rewrites.length + ' rewrites covering ' + PAGES.length + ' pages');
+          })
+          .catch(function (err) {
+            note(CFG, false, 'could not read serve.json (' + String(err && err.message ? err.message : err) +
+              ') — serve the repository root and open this page over http, e.g. the `site` entry in .d8a');
+          });
+      })();
+
       // Final aggregator after a bit more time
       setTimeout(function(){
         note('final', true, 'Manual-run tests completed; review individual PASS/FAIL lines above.');

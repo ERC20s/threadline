@@ -396,6 +396,83 @@
     return "product.html?id=" + encodeURIComponent(p.id);
   };
 
+  /* ---- reading the piece back off a URL -----------------------------------
+     Every link the site builds is productUrl(p) — "product.html?id=<id>" — and
+     product.html used to read that id from the query string and nothing else:
+
+       var params = new URLSearchParams(location.search);
+       var product = T.byId(params.get("id") || "");
+
+     A static server with clean URLs switched on answers /product.html with a
+     redirect to the extensionless /product and drops the query on the way, so
+     a shopper following a card or a shared link landed on the "We couldn't
+     find that piece" panel. serve.json at the repository root turns that
+     redirect off ("cleanUrls": false, plus internal rewrites so /product still
+     serves product.html); this helper is the belt to that pair of braces and,
+     as a bonus, makes /product/everyday-tee and product.html#everyday-tee
+     resolve too.
+
+     Order of preference: ?id= (what we link), then the last path segment, then
+     the fragment. Each candidate is decoded and only returned when byId
+     resolves it, so nothing a shopper types can put an unknown id on the page —
+     an id we do not make still falls through to the not-found panel. */
+  var decodeId = function (value) {
+    var raw = String(value == null ? "" : value).trim();
+    if (!raw) return "";
+    try { return decodeURIComponent(raw.replace(/\+/g, " ")).trim(); }
+    catch (err) { return raw; }
+  };
+
+  var productIdFromLocation = function (loc) {
+    var l = loc || (typeof location !== "undefined" ? location : null);
+    if (!l) return null;
+
+    var candidates = [];
+
+    /* 1. the query string, the way every link on the site is written. */
+    var search = String(l.search || "");
+    if (search) {
+      var fromQuery = null;
+      if (typeof URLSearchParams === "function") {
+        try { fromQuery = new URLSearchParams(search).get("id"); } catch (err) { fromQuery = null; }
+      }
+      if (fromQuery == null) {
+        var m = search.match(/[?&]id=([^&#]*)/);
+        fromQuery = m ? m[1] : null;
+      }
+      if (fromQuery != null) candidates.push(decodeId(fromQuery));
+    }
+
+    /* 2. a trailing path segment: /product/everyday-tee. Segments that look
+          like a file (product.html, index.html) are skipped — byId would
+          refuse them anyway, this just keeps the intent readable. */
+    var path = String(l.pathname || "");
+    if (path) {
+      var parts = path.split("/");
+      for (var i = parts.length - 1; i >= 0; i--) {
+        var seg = parts[i];
+        if (!seg || seg.indexOf(".") !== -1) continue;
+        candidates.push(decodeId(seg));
+        break;
+      }
+    }
+
+    /* 3. a fragment: product.html#everyday-tee. */
+    var hash = String(l.hash || "").replace(/^#/, "");
+    if (hash) candidates.push(decodeId(hash));
+
+    for (var c = 0; c < candidates.length; c++) {
+      if (candidates[c] && byId(candidates[c])) return candidates[c];
+    }
+    return null;
+  };
+
+  /* The piece a URL asks for, or null. product.html renders the not-found
+     panel on null exactly as it did when it read ?id= itself. */
+  var productFromLocation = function (loc) {
+    return byId(productIdFromLocation(loc) || "");
+  };
+
   /* Build one catalogue card with DOM APIs (no innerHTML, no escaping bugs). */
   var card = function (p) {
     var a = document.createElement("a");
@@ -537,6 +614,8 @@
     RELATED_LIMIT: RELATED_LIMIT,
     money: money,
     productUrl: productUrl,
+    productIdFromLocation: productIdFromLocation,
+    productFromLocation: productFromLocation,
     card: card,
     renderGrid: renderGrid,
     LOOKS: LOOKS,
