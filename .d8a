@@ -1,18 +1,18 @@
 # .d8a — who governs this repository, how to run it, and how it earns.
 # Code lands on this branch only by the named group's passed vote; delete the
 # file to withdraw consent. The three lines below, tools: and payments: are
-# generated, never hand-edited. Everything else: https://d8a.com/docs?group=batch-threadline#d8a-file
+# generated, never hand-edited. Everything else: https://d8a.com/docs?group=d8aaaa-batch_threadline#d8a-file
 version: 1
-group: d8a:batch-threadline
-proof: dlMpukYaW-XMzLORYJh34lzftS1z070iPy7K9cngU6Ln5zCNfTpyGnKSPEdFMVFJCSt6kOVmgNDl0N5sktQh0X8yj3rbeH_B8hJKkGwvwcVD128oFAEDfw6VfQgZfcU5Mbkd1zvCiYk4mpMu7_aXevEKRFQehgM-9TE-a0NcctRXPxSx7CHlJl5p9q5udzY3GVOIwslm9dCJ_kXo6Wx6pAUWzunwW1zS5ZbaM8JRm-BwAHK4v_7S9dDHWF6bsMsxUUrURvSvn-FtaVeuVrp3rDqyH1wEb53-vWJHHfUjAkmagfq0AXr-ZOI5zNySkqG15sy9wARHstTGvcTcgR7trQ
+group: d8a:d8aaaa-batch_threadline
+proof: t6VQui_CKO50BiBlqgGs-jOTdyVji8HYguvYJ7vbFZBFZjXm1HN_mMwslf93StOGyLEiLmtmRqmAojB89Hl3cXOuBx8ck9finBYLTA3aD69xuiCdAeGI5sI2wPFfZwQ8YO2qgFx8-9lWWgJjm9FyVIpdERD7r-cpHLzWyQF0zBAChnZLg8tD6fvZ0Cfuey09PngHTncf_gRpZDh7RLnllKgqvc-NgDd6I-ELj9zw4qscBgqe4eEjGSF0gQrLM04UGRCpxHHI0eoqPgtjTt9e9f--LicDnxzLz-PD0m4Xen7YJ7fJgUlJgXNq6ye_d95Qiea5wVq-VBX6WqDuV05n3w
 
 # tools: — the group's own doors, for a person or an agent working here.
 tools:
-  group    = https://d8a.com/g/batch-threadline
-  admin    = https://d8a.com/g/batch-threadline?section=admin
-  items    = https://d8a.com/api/v1/store/items?group=batch-threadline
+  group    = https://d8a.com/g/d8aaaa-batch_threadline
+  admin    = https://d8a.com/g/d8aaaa-batch_threadline?section=admin
+  items    = https://d8a.com/api/v1/store/items?group=d8aaaa-batch_threadline
   checkout = https://d8a.com/api/v1/store/checkout
-  verify   = https://d8a.com/api/v1/store/orders/ORDER?group=batch-threadline
+  verify   = https://d8a.com/api/v1/store/orders/ORDER?group=d8aaaa-batch_threadline
 
 # payments: — the group's shop. Paste this block where it should appear on the
 # site; card payments land in the group's shared credit balance. Items and
@@ -27,7 +27,7 @@ payments:
   <script>
   (function () {
     var BASE = "https://d8a.com";
-    var GROUP = "batch-threadline";
+    var GROUP = "d8aaaa-batch_threadline";
     var esc = function (s) {
       return String(s).replace(/[&<>"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; });
     };
@@ -53,32 +53,70 @@ payments:
       }
       document.dispatchEvent(new CustomEvent("group-store:paid", { detail: o }));
     });
-    fetch(BASE + "/api/v1/store/items?group=" + encodeURIComponent(GROUP))
-      .then(function (r) { return r.json(); })
-      .then(function (s) {
-        if (!el || !s.items) return;
-        if (!s.items.length) { el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now.</p>'; return; }
-        el.innerHTML = s.items.map(function (it) {
-          return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif">' +
-            '<div style="flex:1"><b>' + esc(it.name) + '</b>' +
-            (it.description ? '<div style="font-size:12px;color:#6b7280">' + esc(it.description) + '</div>' : '') + '</div>' +
-            '<span>' + esc(it.price) + '</span>' +
-            '<a href="' + esc(it.payUrl) + '" data-item="' + esc(it.id) + '" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a></div>';
-        }).join("") + '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group.url) + '" style="color:#7c5cff">' + esc(s.group.name) + '</a></p>';
-        el.addEventListener("click", function (e) {
-          var a = e.target && e.target.closest ? e.target.closest("a[data-item]") : null;
-          if (!a || !s.checkout.enabled) return;
-          e.preventDefault();
-          a.textContent = "Opening\u2026";
-          // Come back to this page — minus any earlier receipt on the URL.
-          var here = location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1");
-          fetch(s.checkout.url, { method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ group: GROUP, item: a.getAttribute("data-item"), quantity: 1, returnUrl: here }) })
-            .then(function (r) { return r.json(); })
-            .then(function (d) { if (d.url) { location.href = d.url; } else { a.textContent = "Buy"; location.href = a.href; } })
-            .catch(function () { location.href = a.href; });
+    if (!el) return;
+    // The list. What is on sale is read from the platform (s) and kept here so
+    // the Buy handler below, wired once, always sees the latest load.
+    var store = null;
+    // One place that draws the failure line, so the timeout and the .catch at
+    // the end show exactly the same thing. Try again re-runs the load in place.
+    var loadFailed = function () {
+      el.innerHTML = '<p role="status" style="font:13px system-ui,sans-serif;color:#9ca3af">The shop could not be reached. <button type="button" data-store-retry style="font:inherit;color:#7c5cff;background:none;border:0;padding:0;cursor:pointer;text-decoration:underline">Try again</button></p>';
+      var retry = el.querySelector("[data-store-retry]");
+      if (retry) retry.addEventListener("click", function () { load(); });
+    };
+    var load = function () {
+      el.innerHTML = '<p role="status" style="font:13px system-ui,sans-serif;color:#9ca3af">Loading what&#39;s on sale\u2026</p>';
+      // A request that never answers (captive wifi, a stalled proxy) never
+      // rejects, so without this the box would sit on the loading line for ever.
+      var done = false, timedOut = false;
+      var ctrl = window.AbortController ? new AbortController() : null;
+      var timer = setTimeout(function () {
+        if (done) return;
+        timedOut = true;
+        if (ctrl) { try { ctrl.abort(); } catch (err) { loadFailed(); } }  // rejects -> .catch below
+        else { loadFailed(); }                                             // no AbortController: draw it here
+      }, 12000);
+      fetch(BASE + "/api/v1/store/items?group=" + encodeURIComponent(GROUP), ctrl ? { signal: ctrl.signal } : undefined)
+        .then(function (r) {
+          if (timedOut) return null;              // late answer: the failure line stands
+          done = true;
+          clearTimeout(timer);                    // a slow but good render is never killed
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          return r.json();
+        })
+        .then(function (s) {
+          if (!s) return;
+          if (!s.items) throw new Error("bad payload");
+          store = s;
+          if (!s.items.length) { el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now.</p>'; return; }
+          el.innerHTML = s.items.map(function (it) {
+            return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif">' +
+              '<div style="flex:1"><b>' + esc(it.name) + '</b>' +
+              (it.description ? '<div style="font-size:12px;color:#6b7280">' + esc(it.description) + '</div>' : '') + '</div>' +
+              '<span>' + esc(it.price) + '</span>' +
+              '<a href="' + esc(it.payUrl) + '" data-item="' + esc(it.id) + '" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a></div>';
+          }).join("") + '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group.url) + '" style="color:#7c5cff">' + esc(s.group.name) + '</a></p>';
+        })
+        .catch(function () {
+          clearTimeout(timer);
+          loadFailed();
         });
-      });
+    };
+    el.addEventListener("click", function (e) {
+      var a = e.target && e.target.closest ? e.target.closest("a[data-item]") : null;
+      var s = store;
+      if (!a || !s || !s.checkout.enabled) return;
+      e.preventDefault();
+      a.textContent = "Opening\u2026";
+      // Come back to this page — minus any earlier receipt on the URL.
+      var here = location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1");
+      fetch(s.checkout.url, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ group: GROUP, item: a.getAttribute("data-item"), quantity: 1, returnUrl: here }) })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (d.url) { location.href = d.url; } else { a.textContent = "Buy"; location.href = a.href; } })
+        .catch(function () { location.href = a.href; });
+    });
+    load();
   })();
   </script>
 
