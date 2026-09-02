@@ -218,6 +218,51 @@
     return null;
   };
 
+  /* ---- categories, and the gate on ?category= -----------------------------
+     products.html filters the grid by category and now carries the choice on
+     the URL, so a category can be linked to and shared. The value on the URL
+     is shopper input and is never believed as written: it is resolved against
+     the catalogue the same way scripts/checkout-intent.js resolves ?size=
+     against product.sizes — case- and punctuation-blind, with a safe default
+     ("All") for anything we do not have. That way a renamed or deleted
+     category degrades to the whole collection instead of an empty grid. */
+
+  var ALL_CATEGORIES = "All";
+
+  /* The same normalisation Threadline.normaliseKey uses, kept here so this
+     file stays standalone (products.js is loaded before checkout-intent.js,
+     and on pages that load it alone). */
+  var categoryKey = function (value) {
+    return String(value == null ? "" : value).toLowerCase().replace(/[^a-z0-9]+/g, "");
+  };
+
+  /* Every category the catalogue actually has, in catalogue order, with "All"
+     first. `list` is only for tests and for a caller filtering a subset; with
+     no argument it answers for the real catalogue. */
+  var categories = function (list) {
+    var source = (list && list.length) ? list : PRODUCTS;
+    var out = [ALL_CATEGORIES];
+    for (var i = 0; i < source.length; i++) {
+      var c = source[i] && source[i].category;
+      if (c && out.indexOf(c) === -1) out.push(c);
+    }
+    return out;
+  };
+
+  /* The category a page may actually show, given whatever a URL asked for.
+     "outerwear" and " OUTERWEAR " both answer "Outerwear"; "", null, "nonsense"
+     and a category we no longer make all answer "All". Never returns a value
+     that is not in categories(). */
+  var resolveCategory = function (requested, list) {
+    var known = categories(list);
+    var key = categoryKey(requested);
+    if (!key) return ALL_CATEGORIES;
+    for (var i = 0; i < known.length; i++) {
+      if (categoryKey(known[i]) === key) return known[i];
+    }
+    return ALL_CATEGORIES;
+  };
+
   var money = function (n) {
     return "$" + Number(n).toFixed(0);
   };
@@ -290,6 +335,9 @@
   global.Threadline = {
     products: PRODUCTS,
     byId: byId,
+    categories: categories,
+    resolveCategory: resolveCategory,
+    ALL_CATEGORIES: ALL_CATEGORIES,
     featured: featured,
     money: money,
     productUrl: productUrl,

@@ -144,7 +144,17 @@
       /* ---- render the piece ---- */
       document.title = product.name + " — Threadline Clothing Co.";
       document.getElementById("crumb").textContent = product.name;
-      document.getElementById("product-category").textContent = product.category;
+      /* The kicker is a link into the shop's filter now: products.html reads
+         ?category= and opens on that category, so "Outerwear" here goes to the
+         outerwear and the related grid below is not the only way across. The
+         value is resolved on the other page, so a category we stop making
+         simply lands on the whole collection. */
+      var categoryEl = document.getElementById("product-category");
+      categoryEl.textContent = "";
+      var categoryLink = document.createElement("a");
+      categoryLink.href = "products.html?category=" + encodeURIComponent(product.category);
+      categoryLink.textContent = product.category;
+      categoryEl.appendChild(categoryLink);
       document.getElementById("product-name").textContent = product.name;
       document.getElementById("product-price").textContent = T.money(product.price);
       document.getElementById("product-description").textContent = product.description;

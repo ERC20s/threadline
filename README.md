@@ -144,6 +144,22 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
   size) so `payments-widget.js` cannot copy a refused value into its
   `returnUrl`. A rejected size says "We don't make that size — choose one
   below." and leaves Buy in its existing "Choose a size first." state.
+- A category can be linked to. `products.html` builds its filter buttons from
+  `Threadline.categories()` (in `scripts/products.js`: `"All"` first, then every
+  category the catalogue really has, in catalogue order) and carries the chosen
+  one in `?category=`. The parameter is shopper input, so it goes through
+  `Threadline.resolveCategory(requested)` first — matched case- and
+  punctuation-blind, exactly like `resolveSize` — which answers with a real
+  category or with `"All"`: `?category=outerwear` opens Outerwear,
+  `?category=nonsense` (or a category we stopped making) opens the whole
+  collection instead of an empty grid. Clicking a filter rewrites the URL with
+  `history.replaceState` through `putCategoryOnUrl`, which sets or **deletes
+  only the `category` key** — every other parameter, above all a returning
+  buyer's `?d8a_order=…`, is carried over untouched — and `All` drops the
+  parameter rather than writing `?category=All`. A value that had to be
+  corrected is rewritten on load, so the next link shared is one that works.
+  The kicker on `product.html` is now a link to
+  `products.html?category=<category>`, so a piece leads back to its own shelf.
 - The chosen size now travels with the money. The platform item is sizeless, so
   a paid order used to reach the group's Admin tab as "Everyday Tee ×1" with no
   size on it. `product.html` stamps the widget's own row immediately before it
@@ -183,7 +199,12 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
   cases need no fixture at all: `"m"` must resolve to `"M"`, `"XXL"` and
   `"One size"` on a sized piece must resolve to `""`, a one-size piece must
   answer `"One size"` whatever is asked, and a missing or sizeless product must
-  answer `""`.
+  answer `""`. Its `resolve-category` cases need no fixture either (the page
+  loads `scripts/products.js` before `scripts/checkout-intent.js` for them):
+  `categories()` must start with `All` and list each category once,
+  `"outerwear"` must resolve to `"Outerwear"`, junk/empty/`null` must resolve to
+  `"All"`, every answer must be a category the filter buttons have, and the
+  `?category=` rewrite must leave `?d8a_order=` alone.
 
 `.d8a` declares the group, the run entry and the payments block. Do not hand-edit
 its generated blocks.

@@ -241,7 +241,14 @@
   </script>
 
   <!-- Paths are relative to the repository root: open this page from the root
-       (e.g. the `site` entry in .d8a) so both scripts resolve. -->
+       (e.g. the `site` entry in .d8a) so both scripts resolve.
+       products.js is loaded FIRST because it creates window.Threadline, which
+       checkout-intent.js then extends. It is here for the catalogue helpers
+       (categories / resolveCategory); the guard test below still replaces
+       Threadline.products with its own two-entry stub, and resolveCategory
+       reads the real catalogue from its own closure, so that stub cannot
+       change its answers. -->
+  <script src="../scripts/products.js"></script>
   <script src="../scripts/checkout-intent.js"></script>
   <script src="../payments-widget.js"></script>
 
@@ -739,6 +746,86 @@
           'noProduct=' + JSON.stringify(T.resolveSize(null, 'M')) +
           ' noSizes=' + JSON.stringify(T.resolveSize({ id: 'r-none' }, 'M')) +
           ' emptySizes=' + JSON.stringify(T.resolveSize({ id: 'r-none', sizes: [] }, 'M')));
+      })();
+
+      // 13) Threadline.categories / Threadline.resolveCategory: ?category= on
+      // products.html is shopper input too, so it must be resolved against the
+      // catalogue before the grid is filtered by it. Pure functions — no
+      // fixture, no checkout, so the counts above are untouched. The list
+      // argument is used for the stub cases so the assertions do not move when
+      // the catalogue grows.
+      (function runResolveCategoryTest() {
+        var T = window.Threadline;
+        if (!T || typeof T.resolveCategory !== 'function' || typeof T.categories !== 'function') {
+          note('resolve-category-normalises', false, 'Threadline.categories/resolveCategory missing');
+          return;
+        }
+
+        var stub = [
+          { id: 's1', name: 'Stub Tee', category: 'Tops' },
+          { id: 's2', name: 'Stub Coat', category: 'Outerwear' },
+          { id: 's3', name: 'Stub Longsleeve', category: 'Tops' }
+        ];
+
+        var list = T.categories(stub);
+        note('categories-lists-all-first',
+          list.length === 3 && list[0] === 'All' && list[1] === 'Tops' && list[2] === 'Outerwear',
+          'categories=' + JSON.stringify(list));
+
+        // The real catalogue: "All" first, no duplicates, and the categories the
+        // grid's filter buttons are built from.
+        var real = T.categories();
+        var realOk = real[0] === 'All' && real.indexOf('Outerwear') > 0 &&
+          real.indexOf('Dresses') > 0 && real.indexOf('Accessories') > 0 &&
+          real.length === real.filter(function (c, i) { return real.indexOf(c) === i; }).length;
+        note('categories-covers-real-catalogue', realOk, 'categories=' + JSON.stringify(real));
+
+        var normalises = T.resolveCategory('outerwear') === 'Outerwear' &&
+          T.resolveCategory(' OUTERWEAR ') === 'Outerwear' &&
+          T.resolveCategory('Dresses') === 'Dresses' &&
+          T.resolveCategory('outerwear', stub) === 'Outerwear';
+        note('resolve-category-normalises', normalises,
+          'outerwear=' + JSON.stringify(T.resolveCategory('outerwear')) +
+          ' " OUTERWEAR "=' + JSON.stringify(T.resolveCategory(' OUTERWEAR ')) +
+          ' Dresses=' + JSON.stringify(T.resolveCategory('Dresses')));
+
+        var safe = T.resolveCategory('nonsense') === 'All' &&
+          T.resolveCategory('') === 'All' &&
+          T.resolveCategory(null) === 'All' &&
+          T.resolveCategory(undefined) === 'All' &&
+          T.resolveCategory('all') === 'All' &&
+          T.resolveCategory('Dresses', stub) === 'All';
+        note('resolve-category-falls-back-to-all', safe,
+          'nonsense=' + JSON.stringify(T.resolveCategory('nonsense')) +
+          ' empty=' + JSON.stringify(T.resolveCategory('')) +
+          ' null=' + JSON.stringify(T.resolveCategory(null)) +
+          ' all=' + JSON.stringify(T.resolveCategory('all')) +
+          ' notInStub=' + JSON.stringify(T.resolveCategory('Dresses', stub)));
+
+        // Whatever comes back must be something the filter buttons can press.
+        var answers = ['outerwear', 'nonsense', '', null, 'Tops', 'accessories'].map(function (q) {
+          return T.resolveCategory(q);
+        });
+        note('resolve-category-answers-are-known', answers.every(function (a) {
+          return real.indexOf(a) !== -1;
+        }), 'answers=' + JSON.stringify(answers));
+
+        // The URL rewrite products.html performs must only touch the category
+        // key: a returning buyer's ?d8a_order= has to survive it. Same code
+        // shape as putCategoryOnUrl in products.html.
+        try {
+          var url = new URL('https://example.test/products.html?d8a_order=abc123&category=junk&x=1');
+          var resolved = T.resolveCategory(url.searchParams.get('category'));
+          if (resolved && resolved !== 'All') { url.searchParams.set('category', resolved); }
+          else { url.searchParams.delete('category'); }
+          note('category-url-keeps-other-params',
+            url.searchParams.get('d8a_order') === 'abc123' &&
+            url.searchParams.get('x') === '1' &&
+            url.searchParams.get('category') === null,
+            'url=' + url.toString());
+        } catch (e) {
+          note('category-url-keeps-other-params', false, String(e));
+        }
       })();
 
       // Final aggregator after a bit more time
