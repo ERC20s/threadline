@@ -18,14 +18,15 @@
   <div id="results"></div>
   <div id="fixtures">
     <div>
-      <h3>Default group (batch-threadline)</h3>
-      <!-- default group: no data-d8a-group attr -->
+      <h3>Default group (d8aaaa-batch_threadline)</h3>
+      <!-- default group: no data-d8a-group attr — must resolve to the GROUP
+           constant in payments-widget.js, i.e. the slug declared in .d8a -->
       <div id="group-store"></div>
     </div>
     <div>
-      <h3>Explicit same group (batch-threadline)</h3>
+      <h3>Explicit same group (d8aaaa-batch_threadline)</h3>
       <!-- duplicate id intentionally to exercise multi-container handling -->
-      <div id="group-store" data-d8a-group="batch-threadline"></div>
+      <div id="group-store" data-d8a-group="d8aaaa-batch_threadline"></div>
     </div>
     <div>
       <h3>Different group (other-group)</h3>
@@ -98,9 +99,9 @@
           return jsonResponse({ items: [ { id: 'r1', name: 'Retry Tee', price: '$10', payUrl: 'https://d8a.com/pay/r1' } ], group: { name: 'Retry', url: 'https://d8a.com/g/retry-group' }, checkout: { enabled: false } }, true);
         }
 
-        // batch-threadline: return a payload with one unsafe payUrl
-        if (g === 'batch-threadline') {
-          return jsonResponse({ items: [ { id: 'item-unsafe', name: 'Bad Link Tee', description: 'edge payUrl', price: '$12', payUrl: 'javascript:alert(1)' } ], group: { name: 'Threadline', url: 'https://d8a.com/g/batch-threadline' }, checkout: { enabled: false } }, true);
+        // d8aaaa-batch_threadline (the real group slug): return a payload with one unsafe payUrl
+        if (g === 'd8aaaa-batch_threadline') {
+          return jsonResponse({ items: [ { id: 'item-unsafe', name: 'Bad Link Tee', description: 'edge payUrl', price: '$12', payUrl: 'javascript:alert(1)' } ], group: { name: 'Threadline', url: 'https://d8a.com/g/d8aaaa-batch_threadline' }, checkout: { enabled: false } }, true);
         }
 
         // other-group: empty list
@@ -121,7 +122,7 @@
       if (url.indexOf('/api/v1/store/orders/') !== -1) {
         var oid = (url.match(/\/api\/v1\/store\/orders\/([^?]+)/) || [])[1] || '';
         oid = decodeURIComponent(oid);
-        // We accept 'paid-1' as a paid order for batch-threadline
+        // We accept 'paid-1' as a paid order for d8aaaa-batch_threadline
         if (oid === 'paid-1') {
           return jsonResponse({ paid: true, order: { id: 'paid-1', itemName: 'T-Shirt', quantity: 1 } }, true);
         }
@@ -157,21 +158,23 @@
   // Run assertions after a short delay to allow the widget to initialize.
   function runChecks() {
     try {
-      // 1) Shared in-memory cache used for same group: batch-threadline
+      // 1) Shared in-memory cache used for same group: d8aaaa-batch_threadline
+      // This also pins the default group: the container with no data-d8a-group
+      // must resolve to the slug declared in .d8a, so both fixtures share one fetch.
       var counts = window.__testFetchCounts || {};
-      var sharedOk = (counts['batch-threadline'] === 1);
-      note('shared-cache-used', sharedOk, 'items fetch count for batch-threadline = ' + (counts['batch-threadline']||0));
+      var sharedOk = (counts['d8aaaa-batch_threadline'] === 1);
+      note('shared-cache-used', sharedOk, 'items fetch count for d8aaaa-batch_threadline = ' + (counts['d8aaaa-batch_threadline']||0));
 
-      // 2) Safe href fallback for unsafe payUrl: item-unsafe should have href https://d8a.com/g/batch-threadline
+      // 2) Safe href fallback for unsafe payUrl: item-unsafe should have href https://d8a.com/g/d8aaaa-batch_threadline
       var anchors = Array.prototype.slice.call(document.querySelectorAll('#group-store a[data-item="item-unsafe"]'));
       var a = anchors.length ? anchors[0] : null;
-      var hrefOk = !!a && a.getAttribute('href') === 'https://d8a.com/g/batch-threadline';
+      var hrefOk = !!a && a.getAttribute('href') === 'https://d8a.com/g/d8aaaa-batch_threadline';
       note('safe-href-fallback', hrefOk, a ? ('href=' + a.getAttribute('href')) : 'anchor not found');
 
       // 3) groupStoreVerify resolves to paid order when orders endpoint returns paid
       if (typeof window.groupStoreVerify === 'function') {
         window.groupStoreVerify('paid-1').then(function (o) {
-          var ok = o && o.id === 'paid-1' && o._d8a_group === 'batch-threadline';
+          var ok = o && o.id === 'paid-1' && o._d8a_group === 'd8aaaa-batch_threadline';
           note('groupStoreVerify-paid', ok, ok ? ('id='+o.id+', group='+o._d8a_group) : JSON.stringify(o));
         }).catch(function (e) { note('groupStoreVerify-paid', false, String(e)); });
       } else {

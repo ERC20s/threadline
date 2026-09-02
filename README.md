@@ -38,6 +38,10 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
   then clicks the widget's own Buy link for that item, so there is still exactly
   one checkout request per purchase. The chosen size is written to the URL
   (`?id=…&size=M`) so it survives the round trip to checkout and back.
+  The widget sells for one group slug: `GROUP` at the top of `payments-widget.js`
+  must equal the slug in `.d8a` (`group: d8a:d8aaaa-batch_threadline`), and the
+  shop pages repeat it as `data-d8a-group`. If they ever disagree the panel says
+  "There was an error loading the store (group …)" and names the slug it tried.
 - `tests/payments-widget.test.html` is the browser test for the widget; open it
   in a browser while the site is served.
 
