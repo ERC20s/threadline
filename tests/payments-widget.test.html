@@ -1263,6 +1263,75 @@
           });
       })();
 
+      // 19) Quantity. The product page could only ever sell one of anything:
+      // every checkout it started asked for quantity 1. product.html now offers
+      // 1..Threadline.MAX_QUANTITY and stamps the choice on the widget's own row
+      // as data-quantity, which payments-widget.js has always read. Two halves:
+      // the helper that keeps a URL from lying about the number, and the posted
+      // body that must actually carry it.
+      (function runResolveQuantityTest() {
+        var T = window.Threadline;
+        var NAME = 'resolve-quantity-clamps-bad-input';
+        if (!T || typeof T.resolveQuantity !== 'function') {
+          note(NAME, false, 'Threadline.resolveQuantity is missing');
+          return;
+        }
+        var max = T.MAX_QUANTITY || 5;
+        var cases = [
+          ['one', '1', 1],
+          ['three', '3', 3],
+          ['padded', ' 3 ', 3],
+          ['zero', '0', 1],
+          ['negative', '-2', 1],
+          ['fractional', '2.5', 1],
+          ['junk', 'three', 1],
+          ['empty', '', 1],
+          ['null', null, 1],
+          ['undefined', undefined, 1],
+          ['over-the-ceiling', '99', max],
+          ['at-the-ceiling', String(max), max]
+        ];
+        var bad = [];
+        cases.forEach(function (c) {
+          var got = null;
+          try { got = T.resolveQuantity(c[1], max); } catch (err) { got = 'threw: ' + String(err); }
+          if (got !== c[2]) bad.push(c[0] + ' -> ' + JSON.stringify(got) + ' (wanted ' + JSON.stringify(c[2]) + ')');
+        });
+        if (typeof max !== 'number' || max < 2) bad.push('MAX_QUANTITY is ' + JSON.stringify(max) + ', it must be a number above 1');
+        note(NAME, bad.length === 0,
+          bad.length ? bad.join(' | ') : cases.length + ' quantity cases resolved as expected (max ' + max + ')');
+      })();
+
+      // A stamped row must post that quantity. Runs after assertion 10 has read
+      // the note-group bodies it counts, and uses a different quantity, size and
+      // note, so the widget's duplicate guard (group::item::qty::variant) sees a
+      // different purchase and does not swallow the click.
+      setTimeout(function runQuantityPostTest() {
+        var container = document.querySelector('#fixtures [data-d8a-group="note-group"]');
+        var anchor = container && container.querySelector('a[data-item="n1"]');
+        var NAME = 'checkout-carries-quantity';
+        if (!anchor) {
+          note(NAME, false, 'note fixture rendered no Buy anchor');
+          return;
+        }
+
+        var before = ((window.__testCheckoutBodies && window.__testCheckoutBodies['note-group']) || []).length;
+        anchor.setAttribute('data-size', 'L');
+        anchor.setAttribute('data-quantity', '3');
+        anchor.setAttribute('data-d8a-note', 'Note Tee - size L ×3');
+        anchor.click();
+
+        setTimeout(function () {
+          var bodies = (window.__testCheckoutBodies && window.__testCheckoutBodies['note-group']) || [];
+          var posted = null;
+          try { posted = JSON.parse(bodies[before]); } catch (e) {}
+          var ok = !!posted && posted.item === 'n1' && posted.group === 'note-group' &&
+            posted.quantity === 3 && posted.size === 'L' && posted.note === 'Note Tee - size L ×3';
+          note(NAME, ok, 'body=' + JSON.stringify(bodies[before] || null) +
+            ' (posts before this click=' + before + ', after=' + bodies.length + ')');
+        }, 700);
+      }, 2300);
+
       // Final aggregator after a bit more time
       setTimeout(function(){
         note('final', true, 'Manual-run tests completed; review individual PASS/FAIL lines above.');

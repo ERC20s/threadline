@@ -19,6 +19,7 @@
  *   Threadline.productForAnchor(anchor)                   -> catalogue product | null
  *   Threadline.needsSize(product)                         -> boolean
  *   Threadline.resolveSize(product, requested)            -> size ("" if none)
+ *   Threadline.resolveQuantity(requested, max)            -> whole number 1..max
  *   Threadline.guardBuyClicks(container, decide)          -> dispose()
  *   Threadline.productForOrder(order)                     -> catalogue product | null
  *   Threadline.renderReceipt(target, order, options)      -> element | null
@@ -118,6 +119,22 @@
  * It never posts to checkout itself: the caller clicks the widget's own Buy
  * link, so payments-widget.js keeps ownership of the checkout POST and of its
  * duplicate-checkout guard.
+ *
+ * resolveQuantity(requested, max) is the same "never believe the URL" rule for
+ * ?qty= on product.html. The site could only ever sell one of anything: every
+ * checkout it started asked for quantity 1. payments-widget.js has always read
+ * data-quantity off the row it is about to post ("var qAttr = a.getAttribute(
+ * 'data-quantity')"), so the page that owns the choice only has to make one and
+ * stamp it. The helper answers with a whole number between 1 and `max`
+ * (ns.MAX_QUANTITY when no max is given):
+ *
+ *   - "3" -> 3, " 3 " -> 3;
+ *   - "0", "-2", "2.5", "three", "", null, undefined -> 1, because a shopper
+ *     who followed a mangled link still means "one";
+ *   - "99" -> max, so a hand-edited URL cannot post a hundred-piece order.
+ *
+ * A quantity is never a reason to refuse a checkout — unlike a missing size,
+ * there is always a sane answer — so callers can use the result directly.
  *
  * productForOrder(order) / renderReceipt(target, order, options) are the paid
  * receipt. payments-widget.js verifies a returning ?d8a_order=<id> and fires
@@ -419,6 +436,27 @@
     return "";
   };
 
+  /* How many of one piece a single checkout may ask for. Five is a shop
+     decision, not a platform limit: a bigger order is a conversation with us
+     (hello@threadline.example), not a silently accepted URL. */
+  var MAX_QUANTITY = 5;
+
+  /* The quantity a page may actually use, given whatever a URL or a stray
+     attribute asked for. Only a whole number survives; everything else is 1,
+     and anything above the ceiling is the ceiling. */
+  var resolveQuantity = function (requested, max) {
+    var ceiling = Math.floor(Number(max));
+    if (!ceiling || ceiling < 1 || !isFinite(ceiling)) ceiling = MAX_QUANTITY;
+
+    if (requested === null || requested === undefined) return 1;
+    var text = String(requested).replace(/\s+/g, "");
+    if (!/^\+?[0-9]+$/.test(text)) return 1;
+
+    var n = parseInt(text, 10);
+    if (!isFinite(n) || n < 1) return 1;
+    return n > ceiling ? ceiling : n;
+  };
+
   /* Only ordinary left-clicks are ours: a ctrl/cmd/shift/alt click or a middle
      click is the shopper opening the row in a tab, which the widget also lets
      through. An event something else already handled is left alone too. */
@@ -654,6 +692,8 @@
   ns.productForAnchor = productForAnchor;
   ns.needsSize = needsSize;
   ns.resolveSize = resolveSize;
+  ns.resolveQuantity = resolveQuantity;
+  ns.MAX_QUANTITY = MAX_QUANTITY;
   ns.guardBuyClicks = guardBuyClicks;
   ns.productForOrder = productForOrder;
   ns.renderReceipt = renderReceipt;
