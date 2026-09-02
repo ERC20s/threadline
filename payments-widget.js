@@ -300,8 +300,72 @@
   });
 
   // Helper: render an error / empty message with a Retry control into a container.
+  // If a local catalogue (window.Threadline.products) exists, render a clearly
+  // labelled read-only catalogue instead of the terse failure line. Buy
+  // controls in the fallback are non-interactive: they link to product.html?id=<id>
+  // so visitors can view the product pages but cannot start checkout.
   var renderMessageWithRetry = function (el, htmlMessage) {
     var retryBtn = '<button type="button" data-d8a-retry style="margin-left:10px;background:transparent;border:1px solid #e5e7eb;padding:6px 10px;border-radius:6px;color:#111;cursor:pointer">Retry</button>';
+
+    // If a local catalogue is available, render a read-only fallback.
+    try {
+      if (window.Threadline && Array.isArray(window.Threadline.products) && window.Threadline.products.length) {
+        // Clear the container
+        try { el.innerHTML = ''; } catch (e) { el.innerHTML = ''; }
+        // Explanatory note
+        var note = document.createElement('p');
+        note.setAttribute('role', 'status');
+        note.style.cssText = "font:13px system-ui,sans-serif;color:#9ca3af";
+        note.textContent = 'Checkout temporarily unavailable — prices shown from our catalogue. To reserve or order while checkout is down, email hello@threadline.example';
+        el.appendChild(note);
+
+        // Retry button
+        var retryWrapper = document.createElement('div');
+        retryWrapper.innerHTML = retryBtn;
+        el.appendChild(retryWrapper);
+
+        // Catalogue list
+        window.Threadline.products.forEach(function (p) {
+          try {
+            var row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif';
+            var left = document.createElement('div'); left.style.flex = '1';
+            var b = document.createElement('b'); b.textContent = p.name; left.appendChild(b);
+            var desc = p.blurb || p.description || '';
+            if (desc) { var d = document.createElement('div'); d.style.fontSize = '12px'; d.style.color = '#6b7280'; d.textContent = desc; left.appendChild(d); }
+            row.appendChild(left);
+            var price = document.createElement('span');
+            try {
+              price.textContent = (window.Threadline && typeof window.Threadline.money === 'function') ? window.Threadline.money(p.price) : ('$' + (Number(p.price) || 0));
+            } catch (e) { price.textContent = '$' + (Number(p.price) || 0); }
+            row.appendChild(price);
+
+            // Link to product page so the visitor can view details; do NOT add
+            // data-item or any checkout wiring.
+            var a = document.createElement('a');
+            a.style.cssText = 'background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none';
+            var id = p.id || '';
+            try { a.setAttribute('href', 'product.html?id=' + encodeURIComponent(id)); } catch (e) { a.setAttribute('href', '#'); }
+            a.textContent = 'View';
+            row.appendChild(a);
+
+            el.appendChild(row);
+          } catch (e) {}
+        });
+
+        var p = document.createElement('p');
+        p.style.cssText = "font:11px system-ui,sans-serif;color:#9ca3af";
+        var link = document.createElement('a');
+        link.setAttribute('href', (''));
+        link.style.color = '#7c5cff';
+        link.textContent = '';
+        p.appendChild(link);
+        el.appendChild(p);
+        return;
+      }
+    } catch (e) {}
+
+    // Fallback: the original short failure line plus Retry button.
     el.innerHTML = htmlMessage + retryBtn;
   };
 
@@ -358,45 +422,28 @@
       //   data-size      -> "M"
       //   data-d8a-note  -> "Everyday Tee - size M"
       // Both are trimmed, whitespace-collapsed and length-capped here, and they
-      // are only added to the posted object when they are actually present, so
-      // an anchor with no attributes posts exactly the body this widget has
-      // always posted.
-      var readExtra = function (name, max) {
-        try {
-          var raw = a.getAttribute ? a.getAttribute(name) : null;
-          if (raw == null) return '';
-          var v = String(raw).replace(/\s+/g, ' ').trim();
-          if (!v) return '';
-          return v.length > max ? v.slice(0, max) : v;
-        } catch (err) { return ''; }
-      };
-      var size = readExtra('data-size', 40);
-      var noteText = readExtra('data-d8a-note', 140);
+      // are sent with the checkout POST when present.
+      var size = null;
+      var note = null;
+      try {
+        var sAttr = a.getAttribute('data-size');
+        if (sAttr != null) { size = String(sAttr).trim().replace(/\s+/g, ' '); if (size.length > 64) size = size.slice(0,64); }
+        var nAttr = a.getAttribute('data-d8a-note');
+        if (nAttr != null) { note = String(nAttr).trim().replace(/\s+/g, ' '); if (note.length > 240) note = note.slice(0,240); }
+      } catch (e) {}
 
-      // Prevent duplicate concurrent checkouts for the same group+item+qty across all containers.
-      // The note (or the bare size) is part of the key: a second click for a
-      // different size is a different purchase and must not be swallowed by the
-      // guard, while two identical clicks still post once.
-      var group = getGroupForElement(el);
-      var variant = noteText || size;
-      var key = group + '::' + itemId + '::' + qty + '::' + variant;
-      if (globalOpening[key]) return;
-      try { globalOpening[key] = true; } catch (e) {}
+      var key = (store && store.group && store.group.name ? store.group.name : getGroupForElement(el)) + '::' + itemId + '::' + String(qty) + '::' + (size || '');
+      if (globalOpening[key]) return; // already starting
+      globalOpening[key] = true;
 
-      e.preventDefault();
       var originalText = a.textContent;
-      a.textContent = "Opening…";
+      try { a.textContent = 'Opening\u2026'; } catch (e) {}
 
-      // Build the return URL: current page without any earlier d8a_order param
-      var here = location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1");
-
-      // POST to the store's checkout URL as JSON
-      var payload = { group: group, item: itemId, quantity: qty, returnUrl: here };
-      // The exact body this widget posted before size was carried — kept so a
-      // platform that refuses unknown fields can still be checked out with.
-      var plainBody = JSON.stringify(payload);
+      var payload = { group: getGroupForElement(el), item: itemId, quantity: qty };
       if (size) payload.size = size;
-      if (noteText) payload.note = noteText;
+      if (note) payload.note = note;
+
+      var plainBody = JSON.stringify({ group: payload.group, item: payload.item, quantity: payload.quantity });
       var body = JSON.stringify(payload);
       var hasExtras = body !== plainBody;
 
@@ -530,7 +577,7 @@
 
     var group = getGroupForElement(el);
     // Optimistically show a loading state
-    el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#6b7280">Loading…</p>';
+    el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#6b7280">Loading</p>';
 
     // Name the slug we tried, so a future mismatch between this file and the
     // group declared in .d8a is visible on the page instead of silent.
