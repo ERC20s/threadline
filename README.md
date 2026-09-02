@@ -13,13 +13,32 @@ npx --yes serve -l 5004 .
 
 Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`.
 
+`serve.json` at the repository root is that server's configuration and `serve`
+reads it from the folder it serves. It exists for one reason: with clean URLs on
+(the default) a request for `/product.html?id=everyday-tee` is answered with a
+redirect to `/product`, and the query — the id of the piece — is dropped on the
+way, so every product link lands on the not-found panel. The file therefore sets
+
+```
+"cleanUrls": false
+```
+
+and adds internal `rewrites` so `/`, `/index`, `/product`, `/product/<id>`,
+`/products`, `/lookbook` and `/size-guide` still serve their `.html` files
+without a redirect — extensionless links people already have keep working, and
+nothing is redirected, so no query string is lost. If a run entry ever serves the
+site from another directory, pass the config explicitly with
+`serve -c serve.json`. A public host in front of the site can redirect on its
+own; the fallback in `Threadline.productIdFromLocation` (below) is what saves the
+link when it does.
+
 ## The pages
 
 | File | What it is |
 | --- | --- |
 | `index.html` | Landing page: header and nav, hero, featured products reconciled with the live shop, the group shop panel, about, size-guide link, contact, footer |
 | `products.html` | The catalogue: all pieces in a responsive grid with a category filter, each card links to `product.html?id=<id>` |
-| `product.html` | One piece, chosen with the `?id=` query parameter: photo, description, details, size selection, Buy |
+| `product.html` | One piece, chosen with the `?id=` query parameter (`/product/<id>` and `#<id>` also resolve): photo, description, details, size selection, Buy |
 | `lookbook.html` | Six looks rendered from the catalogue, every piece named in a look linked with its price |
 | `size-guide.html` | Body measurements, garment measurements (tops, bottoms, dresses, outerwear and knitwear), the one-size pieces and how to measure |
 
@@ -31,6 +50,17 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
   `items:` block of the root `.d8a` in the same change, with the same name and
   price, because that block is what the group actually sells. Images are placeholder URLs
   (picsum.photos, seeded) — replace the `image` values with real photography.
+- Which piece `product.html` shows is decided by
+  `Threadline.productIdFromLocation(location)` in `scripts/products.js`. Every
+  link the site builds is `productUrl(p)` — `product.html?id=<id>` — so the query
+  string is read first; when it is missing the helper falls back to the last path
+  segment (`/product/everyday-tee`) and then to the fragment
+  (`product.html#everyday-tee`). A candidate is only returned when `byId`
+  resolves it, so an id we do not make still shows the not-found panel and the
+  catalogue. `product.html` keeps its own inline `params.get("id")` read as a
+  second fallback. `productFromLocation(loc)` is the same thing returning the
+  piece. This is the belt to `serve.json`'s braces: it is what keeps a shared
+  link working if a host outside this repository strips the query.
 - Sizing help is part of the catalogue. Every entry in `scripts/products.js` may
   carry two optional fields: `sizeGuide`, the id of a section in
   `size-guide.html` (`body`, `tops`, `bottoms`, `dresses`, `outerwear`,
@@ -280,7 +310,14 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
   with "could not read .d8a" rather than passing quietly. The test's fetch mock
   now keeps the browser's real `fetch` in `window.__origFetch` before it is
   overridden, so non-store requests pass through instead of rejecting as
-  `unmocked`.
+  `unmocked`. Assertion 18 guards the product link: its `product-id-from-location`
+  case runs `Threadline.productIdFromLocation` over nine fake locations (query,
+  query plus `&size=`, an encoded id, `/product/<id>`, a fragment, query beating
+  a fragment, a bare `/product`, an id we do not make and an empty URL) and its
+  `serve-json-keeps-the-query` case fetches `../serve.json` (read-only) and fails
+  unless `cleanUrls` is `false` and a rewrite serves each of `index.html`,
+  `product.html`, `products.html`, `lookbook.html` and `size-guide.html`. Like
+  assertion 17 it needs the page served over http from the repository root.
 
 `.d8a` declares the group, the run entry and the payments block. Do not hand-edit
 its generated blocks.

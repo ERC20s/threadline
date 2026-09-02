@@ -121,7 +121,19 @@
       if (!T) return;
 
       var params = new URLSearchParams(location.search);
-      var product = T.byId(params.get("id") || "");
+      /* Which piece to show. Every link on the site is
+         Threadline.productUrl(p) = "product.html?id=<id>", so ?id= is still the
+         first thing read — but a server that redirects /product.html to the
+         extensionless /product drops the query, and the page then showed
+         "We couldn't find that piece" for every card and every shared link.
+         serve.json turns that redirect off; Threadline.productIdFromLocation
+         also accepts /product/<id> and #<id> so a host we do not control cannot
+         break the link outright. The inline read below stays as the fallback
+         for an older cached copy of scripts/products.js without the helper. */
+      var requestedId = (typeof T.productIdFromLocation === "function")
+        ? T.productIdFromLocation(location)
+        : null;
+      var product = T.byId(requestedId || params.get("id") || "");
       var status = document.getElementById("buy-status");
 
       var say = function (text, tone) {
