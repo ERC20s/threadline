@@ -142,6 +142,15 @@ thead th{background:var(--tint);font-size:0.8rem;letter-spacing:0.6px;text-trans
 tbody tr:hover{background:var(--tint)}
 .measure-steps{color:var(--muted);padding-left:18px}
 .measure-steps li{margin:6px 0}
+/* Jump list at the top of size-guide.html — one link per section id. */
+.guide-jump{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px}
+.guide-jump a{
+  font-size:0.82rem;font-weight:600;text-decoration:none;color:var(--accent);
+  border:1px solid var(--line);border-radius:999px;padding:5px 12px;background:#fff
+}
+.guide-jump a:hover{border-color:var(--accent)}
+/* An anchored section should not sit flush against the top of the window. */
+.section[id]{scroll-margin-top:16px}
 
 /* ---------- footer ---------- */
 footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);color:var(--muted);font-size:0.86rem}

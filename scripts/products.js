@@ -7,6 +7,16 @@
  * Images are placeholder URLs (picsum.photos, seeded so each item keeps the
  * same picture). Swap the `image` values for real photography before launch —
  * nothing else has to change.
+ *
+ * Two optional fields carry sizing help to product.html:
+ *   sizeGuide — the id of a section in size-guide.html ("tops", "bottoms",
+ *               "dresses", "outerwear", "one-size"). product.html links
+ *               "Open the size guide" at size-guide.html#<sizeGuide>; with no
+ *               value it links the page itself. Renaming a section id there
+ *               means changing the values here.
+ *   fitNote   — one short sentence about how this piece fits, shown above the
+ *               size buttons. With no value the page falls back to
+ *               "Fits run relaxed."
  */
 (function (global) {
   "use strict";
@@ -30,7 +40,9 @@
       blurb: "Soft combed cotton, cut for a modern relaxed fit.",
       description: "The tee we make first every season. Mid-weight combed cotton that keeps its shape through the wash, with a slightly dropped shoulder and a clean twin-needle hem.",
       details: ["100% combed organic cotton, 180gsm", "Relaxed fit — size down for a closer cut", "Machine wash cold, dry flat"],
-      sizes: CLOTHING_SIZES
+      sizes: CLOTHING_SIZES,
+      sizeGuide: "tops",
+      fitNote: "Cut relaxed with a dropped shoulder — size down for a closer fit."
     },
     {
       id: "relaxed-shirt",
@@ -43,7 +55,9 @@
       blurb: "An easy overshirt-weight button-down for every season.",
       description: "Washed cotton poplin with a soft collar and a single chest pocket. Roomy enough to layer over a tee, tidy enough to wear on its own.",
       details: ["Washed cotton poplin", "Boxy body, straight hem", "Corozo buttons"],
-      sizes: CLOTHING_SIZES
+      sizes: CLOTHING_SIZES,
+      sizeGuide: "tops",
+      fitNote: "Boxy and roomy enough to layer over a tee — take your usual size."
     },
     {
       id: "lightweight-hoodie",
@@ -56,7 +70,9 @@
       blurb: "Loopback cotton that works indoors and out.",
       description: "A three-season hoodie in loopback cotton — warm without the bulk. Ribbed cuffs, a lined hood and a flat drawcord that stays put.",
       details: ["100% loopback cotton, 300gsm", "Ribbed cuffs and hem", "Unisex sizing"],
-      sizes: CLOTHING_SIZES
+      sizes: CLOTHING_SIZES,
+      sizeGuide: "outerwear",
+      fitNote: "Unisex and cut to layer — take your usual size, or size up to wear a knit under it."
     },
     {
       id: "casual-pant",
@@ -69,7 +85,9 @@
       blurb: "A tapered everyday trouser with a comfortable waist.",
       description: "Cotton twill with a touch of stretch, a half-elastic waistband and a taper that lands just above the ankle. Deep pockets, no fuss.",
       details: ["97% cotton, 3% elastane twill", "Half-elastic waistband", "Tapered leg, unfinished 32\" inseam"],
-      sizes: CLOTHING_SIZES
+      sizes: CLOTHING_SIZES,
+      sizeGuide: "bottoms",
+      fitNote: "The half-elastic waist gives about an inch — take your usual size."
     },
     {
       id: "woven-shirt",
@@ -82,7 +100,9 @@
       blurb: "Textured yarn-dyed cotton with a soft, lived-in hand.",
       description: "Yarn-dyed on a slow loom so the weave shows its texture. It arrives already soft and only gets better with wear.",
       details: ["Yarn-dyed cotton", "Regular fit", "Curved shirttail hem"],
-      sizes: CLOTHING_SIZES
+      sizes: CLOTHING_SIZES,
+      sizeGuide: "tops",
+      fitNote: "A regular fit — closer than the Relaxed Shirt, so take your usual size."
     },
     {
       id: "classic-cap",
@@ -95,7 +115,9 @@
       blurb: "Washed cotton six-panel with a soft, unstructured crown.",
       description: "An unstructured cap in washed cotton canvas with an embroidered Threadline stitch mark and a brass adjuster.",
       details: ["Washed cotton canvas", "Unstructured six-panel", "Brass slider, one size"],
-      sizes: ONE_SIZE
+      sizes: ONE_SIZE,
+      sizeGuide: "one-size",
+      fitNote: "One size — the brass slider covers a 22″ to 24″ head."
     },
     {
       id: "merino-crew",
@@ -108,7 +130,9 @@
       blurb: "Fine-gauge merino that layers under anything.",
       description: "Fine-gauge merino spun by a small mill, knitted to a true crew neck. Warm, breathable and thin enough to sit under an overshirt.",
       details: ["100% extra-fine merino wool", "Fully fashioned shoulders", "Hand wash cool, dry flat"],
-      sizes: CLOTHING_SIZES
+      sizes: CLOTHING_SIZES,
+      sizeGuide: "outerwear",
+      fitNote: "Fine-gauge and closer than our canvas layers — take your usual size, or size up to wear it over a shirt."
     },
     {
       id: "canvas-overshirt",
@@ -121,7 +145,9 @@
       blurb: "The layer between a shirt and a coat.",
       description: "Heavy cotton canvas that softens as you wear it, with two patch pockets and a shirt collar. Our most-repaired, longest-lived piece.",
       details: ["10oz cotton canvas", "Two patch pockets", "Free repairs for five years"],
-      sizes: CLOTHING_SIZES
+      sizes: CLOTHING_SIZES,
+      sizeGuide: "outerwear",
+      fitNote: "Cut to go over a shirt or a knit — take your usual size; size down if you want it as a shirt."
     },
     {
       id: "linen-dress",
@@ -134,7 +160,9 @@
       blurb: "Washed European linen, cut long and loose.",
       description: "A simple column in washed linen with side seam pockets and a hem that falls mid-calf. Cool in high summer, easy over a knit in autumn.",
       details: ["100% washed European linen", "Side seam pockets", "Machine wash cold"],
-      sizes: CLOTHING_SIZES
+      sizes: CLOTHING_SIZES,
+      sizeGuide: "dresses",
+      fitNote: "Long and loose — take your usual size; the hem falls mid-calf at 5′7″."
     },
     {
       id: "ribbed-longsleeve",
@@ -147,7 +175,9 @@
       blurb: "A close-fitting rib that holds its shape.",
       description: "A 2x1 cotton rib with long sleeves and a neat neckband — the base layer that carries the rest of the wardrobe through winter.",
       details: ["2x1 cotton rib", "Close fit", "Ribbed neckband"],
-      sizes: CLOTHING_SIZES
+      sizes: CLOTHING_SIZES,
+      sizeGuide: "tops",
+      fitNote: "A close rib that stretches to fit — size up if you want it loose."
     },
     {
       id: "wool-scarf",
@@ -160,7 +190,9 @@
       blurb: "Woven in a small mill, finished with a hand-tied fringe.",
       description: "Lambswool woven in a single colourway with a hand-tied fringe. Generous enough to double over without bulk.",
       details: ["100% lambswool", "180cm x 30cm", "Hand-tied fringe"],
-      sizes: ONE_SIZE
+      sizes: ONE_SIZE,
+      sizeGuide: "one-size",
+      fitNote: "One size — 180cm x 30cm, long enough to double over."
     },
     {
       id: "denim-jacket",
@@ -173,7 +205,9 @@
       blurb: "Raw 12oz denim that fades to your own pattern.",
       description: "Unwashed 12oz selvedge denim, chain-stitched at the hem. It starts stiff and dark and becomes yours within a season.",
       details: ["12oz raw selvedge denim", "Chain-stitched hem", "Expect shrinkage on first wash"],
-      sizes: CLOTHING_SIZES
+      sizes: CLOTHING_SIZES,
+      sizeGuide: "outerwear",
+      fitNote: "Raw denim: stiff at first and it shrinks about half a size on the first wash — size up if you plan to wash it hot."
     }
   ];
 

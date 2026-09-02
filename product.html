@@ -43,7 +43,10 @@
 
           <div>
             <span class="field-label" id="size-label">Choose a size</span>
-            <p class="hint">Fits run relaxed. <a href="size-guide.html">Open the size guide</a>.</p>
+            <!-- Rewritten by the script below from the piece's `fitNote` and
+                 `sizeGuide` fields in scripts/products.js; the wording here is
+                 the fallback for a piece that names neither. -->
+            <p class="hint" id="fit-note">Fits run relaxed. <a href="size-guide.html" id="size-guide-link">Open the size guide</a>.</p>
             <div class="sizes" id="sizes" role="group" aria-labelledby="size-label"></div>
           </div>
 
@@ -164,6 +167,38 @@
       /* ---- size selection ---- */
       var chosenSize = params.get("size") || (product.sizes.length === 1 ? product.sizes[0] : "");
       var sizeBox = document.getElementById("sizes");
+      var oneSize = product.sizes.length === 1;
+
+      /* ---- sizing help, per piece ----
+         The label used to say "Choose a size" even for the Classic Cap, and the
+         hint said "Fits run relaxed" for every piece — wrong for a close rib and
+         for raw denim that shrinks. Both are now built from the catalogue:
+         `fitNote` is the sentence, `sizeGuide` is the section id in
+         size-guide.html. Anything unexpected falls back to today's wording and a
+         plain link to the page, so a piece with neither field reads as before. */
+      var GUIDE_SECTIONS = ["body", "tops", "bottoms", "dresses", "outerwear", "one-size", "how"];
+
+      var sizeGuideHref = function (p) {
+        var slug = String(p.sizeGuide || "");
+        return GUIDE_SECTIONS.indexOf(slug) === -1 ? "size-guide.html" : "size-guide.html#" + slug;
+      };
+
+      var sizeLabel = document.getElementById("size-label");
+      if (sizeLabel) sizeLabel.textContent = oneSize ? "One size" : "Choose a size";
+
+      var fitNote = document.getElementById("fit-note");
+      if (fitNote) {
+        fitNote.textContent = "";
+        fitNote.appendChild(document.createTextNode(
+          (product.fitNote || "Fits run relaxed.") + " "
+        ));
+        var guideLink = document.createElement("a");
+        guideLink.id = "size-guide-link";
+        guideLink.href = sizeGuideHref(product);
+        guideLink.textContent = oneSize ? "See the one-size measurements" : "Open the size guide";
+        fitNote.appendChild(guideLink);
+        fitNote.appendChild(document.createTextNode("."));
+      }
 
       var paintSizes = function () {
         Array.prototype.forEach.call(sizeBox.querySelectorAll("button"), function (b) {
