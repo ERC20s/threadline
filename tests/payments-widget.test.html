@@ -42,6 +42,11 @@
       <!-- Dedicated fixture for the checkout test: avoids adding another #group-store id -->
       <div id="group-store-checkout" data-d8a-group="checkout-group"></div>
     </div>
+    <div>
+      <h3>Checkout duplicate container (checkout-group)</h3>
+      <!-- Second container resolving to the same checkout-group to exercise cross-container deduplication -->
+      <div id="group-store" data-d8a-group="checkout-group"></div>
+    </div>
   </div>
 
   <script>
@@ -195,34 +200,36 @@
         }, 600);
       }, 200);
 
-      // 5) Prevent duplicate checkout POSTs when Buy is clicked twice quickly
-      // Find the Buy anchor inside the dedicated checkout fixture and click twice.
-      var checkoutAnchor = document.querySelector('#group-store-checkout a[data-item]') || document.querySelector('[data-d8a-group="checkout-group"] a[data-item]');
-      // If not present yet, wait a short while and retry once.
+      // 5) Prevent duplicate checkout POSTs when Buy is clicked twice quickly across two containers that resolve to the same group
+      // Find Buy anchors inside containers for checkout-group and click across them.
       function runCheckoutDupTest() {
-        var anchor = document.querySelector('#group-store-checkout a[data-item]') || document.querySelector('[data-d8a-group="checkout-group"] a[data-item]');
-        if (!anchor) {
-          // give the widget a bit more time
-          setTimeout(function() { runCheckoutDupTest(); }, 300);
-          return;
+        var anchors = Array.prototype.slice.call(document.querySelectorAll('#fixtures [data-d8a-group="checkout-group"] a[data-item]'));
+        // If we have two distinct anchors in two containers, click them once each to simulate concurrent clicks across containers.
+        if (anchors.length >= 2) {
+          try { anchors[0].click(); } catch (e) {}
+          try { anchors[1].click(); } catch (e) {}
+        } else {
+          // Fallback: use the dedicated checkout fixture and click twice rapidly on the same anchor.
+          var anchor = document.querySelector('#group-store-checkout a[data-item]') || document.querySelector('[data-d8a-group="checkout-group"] a[data-item]');
+          if (!anchor) {
+            setTimeout(function() { runCheckoutDupTest(); }, 300);
+            return;
+          }
+          try { anchor.click(); anchor.click(); } catch (e) {}
         }
-        try {
-          // Simulate two rapid clicks
-          anchor.click();
-          anchor.click();
-        } catch (e) {}
 
         // Wait up to 2000ms for the mocked checkout POST to be observed.
         var seenPromise = window.__testCheckoutSeen || Promise.resolve(null);
         var timeout = new Promise(function (resolve) { setTimeout(function () { resolve('timeout'); }, 2000); });
         Promise.race([seenPromise, timeout]).then(function (res) {
           var count = window.__testCheckoutCount || 0;
-          var stillInDOM = !!(document.querySelector('#group-store-checkout a[data-item]') || document.querySelector('[data-d8a-group="checkout-group"] a[data-item]'));
+          // ensure at least one of the anchors is still present in the DOM
+          var stillInDOM = !!(document.querySelector('#group-store-checkout a[data-item]') || document.querySelectorAll('#fixtures [data-d8a-group="checkout-group"] a[data-item]').length);
           var ok = (count === 1) && stillInDOM;
           note('prevent-duplicate-checkout', ok, 'checkout POSTs=' + count + ' anchorPresent=' + stillInDOM + ' waited=' + String(res));
         }).catch(function (e) {
           var count = window.__testCheckoutCount || 0;
-          var stillInDOM = !!(document.querySelector('#group-store-checkout a[data-item]') || document.querySelector('[data-d8a-group="checkout-group"] a[data-item]'));
+          var stillInDOM = !!(document.querySelector('#group-store-checkout a[data-item]') || document.querySelectorAll('#fixtures [data-d8a-group="checkout-group"] a[data-item]').length);
           note('prevent-duplicate-checkout', false, 'error waiting for checkout count: ' + String(e) + ' count=' + count + ' anchorPresent=' + stillInDOM);
         });
       }
