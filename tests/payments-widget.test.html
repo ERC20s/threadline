@@ -120,6 +120,13 @@
       return Promise.resolve({ ok: !!ok, status: ok?200:500, json: function(){ return Promise.resolve(obj); } });
     }
 
+    // Keep the browser's own fetch BEFORE the override, so the passthrough at
+    // the bottom of the mock is a real request and not a dead branch. Without
+    // this nothing ever assigned window.__origFetch, so every request that is
+    // not a store call rejected with 'unmocked' — which is what assertion 17
+    // (it reads ../.d8a from disk) needs to work.
+    window.__origFetch = (typeof window.fetch === 'function') ? window.fetch.bind(window) : null;
+
     window.fetch = function (url, opts) {
       // count
       try {
@@ -253,6 +260,14 @@
   <script src="../payments-widget.js"></script>
 
   <script>
+  // The real catalogue, copied the moment scripts/products.js has run. Later
+  // assertions (9 and 16) replace Threadline.products with small stubs, and
+  // assertion 17 resolves asynchronously, so it must compare against this
+  // snapshot rather than against whatever Threadline.products holds by then.
+  var CATALOGUE_SNAPSHOT = (window.Threadline && Array.isArray(window.Threadline.products))
+    ? window.Threadline.products.slice()
+    : [];
+
   // The container the read-only checkout-group assertions (7 and 8) inspect.
   // payments-widget.js only fills elements it finds with #group-store, so the
   // #group-store-checkout box is only usable once it has rows; otherwise fall
@@ -1063,6 +1078,108 @@
         } finally {
           T.products = savedProducts;
         }
+      })();
+
+      // 17) The shop and the catalogue must agree. The items: block of the root
+      // .d8a is what the group actually sells; scripts/products.js is what the
+      // site draws. When they drift, reconcileGrid repaints a card with "Price
+      // from the group shop.", a piece with no row is flagged "Not in the shop
+      // yet." and product.html disables Buy for it — and nobody sees it until a
+      // shopper tries to buy. This assertion only READS ../.d8a; it never
+      // writes it, and it touches no generated block.
+      (function runItemsBlockTest() {
+        var NAME = 'd8a-items-match-catalogue';
+        var T = window.Threadline;
+        var catalogue = (CATALOGUE_SNAPSHOT || []).filter(function (p) {
+          return p && p.name;
+        });
+        var key = (T && typeof T.normaliseKey === 'function')
+          ? T.normaliseKey
+          : function (s) { return String(s == null ? '' : s).trim().toLowerCase().replace(/\s+/g, ' '); };
+
+        // A small copy of the items: rules, kept in the test only: one line per
+        // piece, indented two spaces, `Name = $12.00 — description` with the
+        // description optional. The block starts at the column-0 `items:` key
+        // and ends at the next column-0 `key:` line; # comments are skipped.
+        function parseItemsBlock(text) {
+          var lines = String(text).split(/\r?\n/);
+          var out = { rows: [], problems: [], found: false };
+          var inBlock = false;
+          for (var i = 0; i < lines.length; i++) {
+            var line = lines[i];
+            if (/^\s*$/.test(line)) continue;                 // blank lines do not end the block
+            if (/^#/.test(line)) continue;                    // column-0 comment
+            if (/^[A-Za-z0-9_.-]+\s*:/.test(line)) {          // a column-0 key ends the block
+              inBlock = /^items\s*:/.test(line);
+              if (inBlock) out.found = true;
+              continue;
+            }
+            if (!inBlock) continue;
+            var body = line.replace(/^\s+/, '');
+            if (!body || body.charAt(0) === '#') continue;     // indented comment
+            var m = body.match(/^(.+?)\s*=\s*\$(\d+\.\d{2})(?:\s+—\s+(.*))?$/);
+            if (!m) { out.problems.push('unreadable items line: ' + body); continue; }
+            out.rows.push({ name: m[1].trim(), price: m[2], description: (m[3] || '').trim(), raw: body });
+          }
+          return out;
+        }
+
+        function compare(parsed) {
+          var problems = parsed.problems.slice();
+          var warnings = [];
+          if (!parsed.found) { problems.push('no column-0 items: block in .d8a'); return { problems: problems, warnings: warnings, rows: parsed.rows }; }
+          if (!parsed.rows.length) problems.push('the items: block is empty — every piece is paused');
+          if (!catalogue.length) problems.push('window.Threadline.products was empty when the page loaded');
+
+          var byKey = {};
+          parsed.rows.forEach(function (row) {
+            var k = key(row.name);
+            if (byKey[k]) problems.push('two items lines name the same piece: ' + row.name);
+            byKey[k] = row;
+          });
+
+          var seen = {};
+          catalogue.forEach(function (p) {
+            var k = key(p.name);
+            seen[k] = true;
+            var row = byKey[k];
+            if (!row) { problems.push('not on sale (no items line): ' + p.name); return; }
+            var want = Number(p.price).toFixed(2);
+            if (row.price !== want) {
+              problems.push('price differs for ' + p.name + ': .d8a $' + row.price + ', catalogue $' + want);
+            }
+            if (row.name !== p.name) {
+              warnings.push('name spelled differently: .d8a "' + row.name + '" vs catalogue "' + p.name + '"');
+            }
+          });
+          parsed.rows.forEach(function (row) {
+            if (!seen[key(row.name)]) problems.push('items line names nothing we make: ' + row.name);
+          });
+          return { problems: problems, warnings: warnings, rows: parsed.rows };
+        }
+
+        fetch('../.d8a', { cache: 'no-store' })
+          .then(function (r) {
+            if (!r || !r.ok || typeof r.text !== 'function') {
+              throw new Error('HTTP ' + (r && r.status ? r.status : '?'));
+            }
+            return r.text();
+          })
+          .then(function (text) {
+            var result = compare(parseItemsBlock(text));
+            if (result.warnings.length) console.warn(NAME, result.warnings.join(' | '));
+            note(NAME, result.problems.length === 0,
+              result.problems.length
+                ? (result.rows.length + ' items lines vs ' + catalogue.length + ' catalogue pieces — ' + result.problems.join(' | '))
+                : (result.rows.length + ' items lines match ' + catalogue.length + ' catalogue pieces' +
+                   (result.warnings.length ? ' (warnings: ' + result.warnings.join(' | ') + ')' : '')));
+          })
+          .catch(function (err) {
+            // Say so plainly rather than passing quietly: a static server that
+            // hides dotfiles, or the page opened over file://, lands here.
+            note(NAME, false, 'could not read .d8a (' + String(err && err.message ? err.message : err) +
+              ') — serve the repository root and open this page over http, e.g. the `site` entry in .d8a');
+          });
       })();
 
       // Final aggregator after a bit more time

@@ -267,7 +267,20 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
   to the order's own `itemName` and still show the size, the `mailto:` must carry
   `Order:`, `Piece:` and `Size:` correctly encoded, and a second
   `renderReceipt` for the same order id must return the element already there
-  rather than a second receipt.
+  rather than a second receipt. Assertion 17 guards the two lists that must
+  agree: it fetches `../.d8a` (read-only), parses the indented lines under the
+  column-0 `items:` key as `Name = $00.00 — description`, and compares them with
+  the catalogue snapshot taken from `window.Threadline.products` when the page
+  loaded — it fails, naming the pieces, when a catalogue piece has no `items:`
+  line, when an `items:` line names nothing we make, or when a price differs
+  from `Number(p.price).toFixed(2)`; names are matched through
+  `Threadline.normaliseKey` and a spelling difference is only a console warning.
+  Because it reads a dotfile over http, serve the repository root (the `site`
+  run entry) — over `file://`, or behind a server that hides dotfiles, it fails
+  with "could not read .d8a" rather than passing quietly. The test's fetch mock
+  now keeps the browser's real `fetch` in `window.__origFetch` before it is
+  overridden, so non-store requests pass through instead of rejecting as
+  `unmocked`.
 
 `.d8a` declares the group, the run entry and the payments block. Do not hand-edit
 its generated blocks.
