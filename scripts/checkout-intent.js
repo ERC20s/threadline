@@ -15,6 +15,7 @@
  *   Threadline.buyRowPrice(anchor)                        -> string ("" if none)
  *   Threadline.samePrice(a, b)                            -> boolean
  *   Threadline.shopPriceIndex(container)                  -> index (see below)
+ *   Threadline.reconcileGrid(grid, index, options)        -> unlisted count
  *   Threadline.productForAnchor(anchor)                   -> catalogue product | null
  *   Threadline.needsSize(product)                         -> boolean
  *   Threadline.guardBuyClicks(container, decide)          -> dispose()
@@ -58,6 +59,23 @@
  * match at all means "not in the shop yet". A container with no rows gives
  * size 0, which callers must read as "the shop said nothing" — never as
  * "nothing is on sale".
+ *
+ * reconcileGrid(grid, index, options) is the other half of that pass: it walks
+ * the cards scripts/products.js rendered (a.card, each stamped with
+ * data-product-id) and makes each one agree with the index —
+ *
+ *   - a shop row whose price really differs from the card's .price repaints the
+ *     .price and adds the note "Price from the group shop.";
+ *   - a card the shop has no row for gets "Not in the shop yet." and counts
+ *     towards the returned number;
+ *   - a card that already agrees loses any note it was carrying.
+ *
+ * It returns the number of unlisted cards, so a page can say "2 are not in the
+ * shop yet" in its own status line. An index of size 0 (or no index at all)
+ * means the shop has not spoken: the grid is left exactly as written and the
+ * answer is 0. The card link itself is never disabled — the product page and
+ * the shop panel are both still reachable. index.html and products.html both
+ * call this, so there is one implementation of "reconcile a grid".
  *
  * productForAnchor maps a rendered widget row back to an entry in the catalogue
  * (scripts/products.js, window.Threadline.products): the normalised platform
@@ -215,6 +233,100 @@
     };
   };
 
+  /* ---- repainting a rendered grid from that index -------------------------
+     Lifted verbatim from the paintCard/paintGrid/setNote block that used to
+     live inline in products.html, so index.html can do the same thing without
+     a second copy. */
+
+  var PRICE_NOTE = "Price from the group shop.";
+  var UNLISTED_NOTE = "Not in the shop yet.";
+
+  /* One soft line under a card. Empty text removes the line again, so a card
+     that stops disagreeing with the shop stops carrying a note. */
+  var setCardNote = function (cardEl, text) {
+    if (!cardEl || !cardEl.querySelector) return;
+    var body = cardEl.querySelector(".card-body") || cardEl;
+    var note = cardEl.querySelector("[data-shop-note]");
+    if (!text) {
+      if (note && note.parentNode) note.parentNode.removeChild(note);
+      return;
+    }
+    if (!note) {
+      note = document.createElement("p");
+      note.className = "hint";
+      note.setAttribute("data-shop-note", "");
+      body.appendChild(note);
+    }
+    note.textContent = text;
+  };
+
+  /* The catalogue entry a rendered card stands for. scripts/products.js stamps
+     every card with data-product-id, so ns.byId is the direct answer; when the
+     catalogue is not loaded (the test page loads this file on its own) we fall
+     back to the id on the card plus the title it is showing, which is all
+     index.lookup needs. */
+  var cardProduct = function (cardEl) {
+    var id = "";
+    try {
+      id = (cardEl.dataset && cardEl.dataset.productId) ||
+        (cardEl.getAttribute ? (cardEl.getAttribute("data-product-id") || "") : "");
+    } catch (e) { id = ""; }
+    if (!id) return null;
+    if (typeof ns.byId === "function") {
+      var hit = ns.byId(id);
+      if (hit) return hit;
+    }
+    var label = cardEl.querySelector ? cardEl.querySelector(".name") : null;
+    var name = (label && label.textContent) ? String(label.textContent).replace(/\s+/g, " ").trim() : "";
+    return { id: id, name: name };
+  };
+
+  /* true when this card is not sold by the shop at all. */
+  var reconcileCard = function (cardEl, index, opts) {
+    var product = cardProduct(cardEl);
+    if (!product) return false;
+    var row = index.lookup(product.id, product.name);
+    var priceEl = cardEl.querySelector ? cardEl.querySelector(".price") : null;
+
+    if (!row) {
+      setCardNote(cardEl, opts.unlistedNote);
+      return true;
+    }
+    if (priceEl && row.price && !samePrice(row.price, priceEl.textContent)) {
+      priceEl.textContent = row.price;
+      setCardNote(cardEl, opts.priceNote);
+    } else {
+      setCardNote(cardEl, "");
+    }
+    return false;
+  };
+
+  var reconcileGrid = function (grid, index, options) {
+    if (!grid || !grid.querySelectorAll) return 0;
+    /* No index, or a panel that rendered nothing, means "the shop said
+       nothing" — never "nothing is on sale". Leave the grid as written. */
+    if (!index || !index.size || typeof index.lookup !== "function") return 0;
+
+    var settings = options || {};
+    var opts = {
+      priceNote: settings.priceNote || PRICE_NOTE,
+      unlistedNote: settings.unlistedNote || UNLISTED_NOTE
+    };
+
+    var cards = [];
+    try {
+      cards = Array.prototype.slice.call(grid.querySelectorAll(settings.cardSelector || ".card"));
+    } catch (e) { cards = []; }
+
+    var unlisted = 0;
+    for (var i = 0; i < cards.length; i++) {
+      try {
+        if (reconcileCard(cards[i], index, opts)) unlisted++;
+      } catch (e) {}
+    }
+    return unlisted;
+  };
+
   /* ---- the sized-garment guard -------------------------------------------
      The shop panel sells a platform item; the catalogue knows whether that
      item is a garment that has to be ordered in a size. These three pieces
@@ -359,6 +471,9 @@
   ns.buyRowName = buyRowName;
   ns.samePrice = samePrice;
   ns.shopPriceIndex = shopPriceIndex;
+  ns.reconcileGrid = reconcileGrid;
+  ns.GRID_PRICE_NOTE = PRICE_NOTE;
+  ns.GRID_UNLISTED_NOTE = UNLISTED_NOTE;
   ns.normaliseKey = normaliseKey;
   ns.storePanelFailed = storePanelFailed;
   ns.productForAnchor = productForAnchor;

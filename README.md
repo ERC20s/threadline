@@ -17,7 +17,7 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
 
 | File | What it is |
 | --- | --- |
-| `index.html` | Landing page: header and nav, hero, featured products, about, size-guide link, contact, footer |
+| `index.html` | Landing page: header and nav, hero, featured products reconciled with the live shop, the group shop panel, about, size-guide link, contact, footer |
 | `products.html` | The catalogue: all pieces in a responsive grid with a category filter, each card links to `product.html?id=<id>` |
 | `product.html` | One piece, chosen with the `?id=` query parameter: photo, description, details, size selection, Buy |
 | `lookbook.html` | Six looks, each linking to the piece it shows |
@@ -75,6 +75,28 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
   The card link is never disabled and the grid is repainted after every filter
   click, because `renderGrid` rebuilds the cards each time. The tolerant price
   compare (`Threadline.samePrice`) is shared with `product.html`.
+- The repaint itself is one shared helper: `Threadline.reconcileGrid(grid,
+  index, options)` in `scripts/checkout-intent.js`. It walks the `.card`
+  elements in a rendered grid, looks each one up in a `shopPriceIndex` (id
+  first, title second), repaints `.price` when the shop's price really differs
+  and adds `Price from the group shop.`, marks a card the shop has no row for
+  with `Not in the shop yet.`, clears the note from a card that agrees, and
+  returns the number of unlisted cards. No index, or an index of size 0, means
+  "the shop said nothing": the grid is left exactly as written and the answer is
+  `0`. `index.html` and `products.html` both call it, so there is one
+  implementation.
+- `index.html` is wired into the shop the same way. It loads
+  `scripts/checkout-intent.js` and `payments-widget.js` after
+  `scripts/products.js`, carries its own `<div id="group-store"
+  data-d8a-group="d8aaaa-batch_threadline" data-default-quantity="1">` in a
+  store panel below the featured grid (the widget fills every `#group-store` it
+  finds), waits for `whenBuyAnchor(panel, null, …)`, builds
+  `shopPriceIndex(panel)` and calls `reconcileGrid` on `#featured-grid`,
+  reporting any unlisted pieces in `#featured-status`. The panel is guarded with
+  `guardBuyClicks`, so a featured sized garment goes to its product page instead
+  of a sizeless checkout. Loading the widget here also means a buyer who returns
+  to the home page with `?d8a_order=…` has the order verified and the receipt
+  line shown, which only happened on the shop pages before.
 - No sized garment can be bought without a size, from either page. The panel's
   own Buy links post a checkout for the platform item alone, so a click there
   used to pay for an Everyday Tee with no size on the order and none in the
@@ -122,7 +144,12 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
   `data-size`/`data-d8a-note` and clicks it, then reads the recorded request
   bodies: the first POST must carry `size` and `note`, a url-less answer must
   produce exactly one plain retry, and the unstamped `checkout-group` body must
-  still have only `group,item,quantity,returnUrl`.
+  still have only `group,item,quantity,returnUrl`. Its `reconcile-grid`
+  fixture builds catalogue-shaped cards and reconciles them against the
+  `checkout-group` index: a stale price is repainted and noted, a card showing
+  the same money in another shape is left alone, an unlisted card is flagged and
+  counted, a card that stops disagreeing loses its note, and an empty (or
+  missing) index leaves the grid untouched and returns `0`.
 
 `.d8a` declares the group, the run entry and the payments block. Do not hand-edit
 its generated blocks.

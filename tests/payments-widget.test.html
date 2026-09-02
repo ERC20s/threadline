@@ -76,6 +76,15 @@
            instead of navigating the test page away. -->
       <div id="group-store" data-d8a-group="note-group"></div>
     </div>
+    <div>
+      <h3>Grid reconcile (reconcileGrid)</h3>
+      <!-- Catalogue-style cards, built by test 11 below and repainted from the
+           checkout-group panel's rows. Deliberately NOT an id="group-store"
+           container: the widget must never fill these, they stand in for the
+           grid scripts/products.js renders on index.html and products.html. -->
+      <div id="reconcile-grid" class="grid"></div>
+      <div id="reconcile-grid-untouched" class="grid"></div>
+    </div>
   </div>
 
   <script>
@@ -580,6 +589,106 @@
             'checkout-group body keys=' + JSON.stringify(keys));
         }, 700);
       }, 1300);
+
+      // 11) Threadline.reconcileGrid: the shared repaint index.html and
+      // products.html both run over their rendered cards. Read-only over the
+      // checkout fixture's index (item c1, "Checkout Tee", "$15"), so the
+      // checkout counts above are untouched.
+      setTimeout(function runReconcileTest(attempt) {
+        var T = window.Threadline;
+        var container = checkoutFixture();
+        var anchor = container && container.querySelector('a[data-item="c1"]');
+
+        if (!anchor && (attempt || 0) < 8) {
+          setTimeout(function () { runReconcileTest((attempt || 0) + 1); }, 200);
+          return;
+        }
+        if (!T || typeof T.reconcileGrid !== 'function') {
+          note('reconcile-grid-repaints-price', false, 'Threadline.reconcileGrid missing');
+          return;
+        }
+        if (!anchor) {
+          note('reconcile-grid-repaints-price', false, 'checkout fixture rendered no Buy anchor');
+          return;
+        }
+
+        // A catalogue card, the shape scripts/products.js renders:
+        // a.card[data-product-id] > .card-body > (.name, .price)
+        function makeCard(id, name, price) {
+          var card = document.createElement('a');
+          card.className = 'card';
+          card.href = 'product.html?id=' + id;
+          card.setAttribute('data-product-id', id);
+          var body = document.createElement('div');
+          body.className = 'card-body';
+          var h = document.createElement('h3');
+          h.className = 'name';
+          h.textContent = name;
+          body.appendChild(h);
+          var p = document.createElement('div');
+          p.className = 'price';
+          p.textContent = price;
+          body.appendChild(p);
+          card.appendChild(body);
+          return card;
+        }
+
+        function noteText(card) {
+          var n = card.querySelector('[data-shop-note]');
+          return n ? n.textContent : '';
+        }
+        function priceText(card) {
+          return card.querySelector('.price').textContent;
+        }
+
+        var grid = document.getElementById('reconcile-grid');
+        grid.innerHTML = '';
+        // Priced wrong on the page (the catalogue says $99, the shop says $15).
+        var stale = makeCard('c1', 'Checkout Tee', '$99');
+        // Same money in another shape — no repaint, no note.
+        var agreeing = makeCard('no-such-id', 'Checkout Tee', '15.00');
+        // The shop sells no such row: flagged, price left alone.
+        var unlistedCard = makeCard('everyday-tee', 'Everyday Tee', '$38');
+        grid.appendChild(stale);
+        grid.appendChild(agreeing);
+        grid.appendChild(unlistedCard);
+
+        var index = T.shopPriceIndex(container);
+        var unlisted = T.reconcileGrid(grid, index);
+
+        note('reconcile-grid-repaints-price',
+          priceText(stale) === '$15' && noteText(stale) === 'Price from the group shop.',
+          'price=' + JSON.stringify(priceText(stale)) + ' note=' + JSON.stringify(noteText(stale)));
+
+        note('reconcile-grid-leaves-agreeing-card',
+          priceText(agreeing) === '15.00' && noteText(agreeing) === '',
+          'price=' + JSON.stringify(priceText(agreeing)) + ' note=' + JSON.stringify(noteText(agreeing)));
+
+        note('reconcile-grid-flags-unlisted',
+          unlisted === 1 && noteText(unlistedCard) === 'Not in the shop yet.' && priceText(unlistedCard) === '$38',
+          'unlisted=' + unlisted + ' note=' + JSON.stringify(noteText(unlistedCard)) +
+          ' price=' + JSON.stringify(priceText(unlistedCard)));
+
+        // A repaint that stops disagreeing drops its note again: the same card,
+        // reconciled against an index whose price now matches what it shows.
+        var second = T.reconcileGrid(grid, index);
+        note('reconcile-grid-clears-stale-note',
+          second === 1 && noteText(stale) === '',
+          'unlisted=' + second + ' note=' + JSON.stringify(noteText(stale)));
+
+        // A panel that rendered no rows means "the shop said nothing": the grid
+        // must be left exactly as written, and the answer must be 0.
+        var quiet = document.getElementById('reconcile-grid-untouched');
+        quiet.innerHTML = '';
+        var untouched = makeCard('c1', 'Checkout Tee', '$99');
+        quiet.appendChild(untouched);
+        var emptyIndex = T.shopPriceIndex(document.createElement('div'));
+        var quietCount = T.reconcileGrid(quiet, emptyIndex) + T.reconcileGrid(quiet, null);
+        note('reconcile-grid-empty-panel-noop',
+          quietCount === 0 && priceText(untouched) === '$99' && noteText(untouched) === '',
+          'count=' + quietCount + ' price=' + JSON.stringify(priceText(untouched)) +
+          ' note=' + JSON.stringify(noteText(untouched)));
+      }, 1000);
 
       // Final aggregator after a bit more time
       setTimeout(function(){
