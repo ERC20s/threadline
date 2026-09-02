@@ -302,6 +302,37 @@
           .catch(function () { /* panel failed or timed out: leave the page as written */ });
       }
 
+      /* ---- the same guard on the panel's own Buy links ----
+         The Buy button above insists on a size; the widget's rows in the panel
+         below did not. A click there posted a checkout for the bare item, so the
+         order arrived with no size on it and no size in the return URL. Guard
+         the panel in the capture phase (before payments-widget.js's own click
+         handler):
+           - this piece, no size chosen -> say "Choose a size first" and focus
+             the size buttons, exactly like the Buy button does;
+           - this piece with a size chosen -> let the click through, so the
+             existing checkout path and its duplicate-click guard are unchanged;
+           - another sized piece listed in the panel -> open its product page;
+           - one-size pieces and rows with no catalogue match -> untouched. */
+      if (panel && T.guardBuyClicks) {
+        T.guardBuyClicks(panel, function (info) {
+          var piece = info.product;
+          if (!piece || !info.needsSize) return false;
+
+          if (piece.id === product.id) {
+            if (chosenSize) return false;
+            say("Choose a size first.", "error");
+            var firstSize = sizeBox.querySelector("button");
+            if (firstSize) firstSize.focus();
+            return true;
+          }
+
+          /* A different sized garment: its sizes live on its own page. */
+          location.href = T.productUrl(piece);
+          return true;
+        });
+      }
+
       buy.addEventListener("click", function () {
         if (pending) return;
         if (notListed) { sayNotListed(true); return; }

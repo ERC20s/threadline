@@ -208,6 +208,25 @@
 
       show("All");
 
+      /* ---- no sized garment leaves the panel without a size ----
+         The panel's own Buy links post a checkout for the platform item and
+         nothing else: no size travels with the order and none comes back in the
+         receipt, so a tee bought here cannot be fulfilled. Guard the panel in
+         the capture phase (before payments-widget.js's own click handler) and
+         send a sized piece to its product page, where the size buttons are.
+         One-size pieces (Classic Cap, Lambswool Scarf) and rows we cannot match
+         to the catalogue are left exactly as they are. */
+      if (panel && T.guardBuyClicks) {
+        T.guardBuyClicks(panel, function (info) {
+          if (!info.product || !info.needsSize) return false;
+          if (status) {
+            status.textContent = info.product.name + " is made in sizes — choose one on the product page.";
+          }
+          location.href = T.productUrl(info.product);
+          return true;
+        });
+      }
+
       /* Wait for the shop panel — no matchFn, so this resolves as soon as
          payments-widget.js has rendered any row — then index it once and
          repaint the category on screen. A panel that fails, times out or

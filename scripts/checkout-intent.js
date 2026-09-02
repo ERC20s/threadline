@@ -15,6 +15,9 @@
  *   Threadline.buyRowPrice(anchor)                        -> string ("" if none)
  *   Threadline.samePrice(a, b)                            -> boolean
  *   Threadline.shopPriceIndex(container)                  -> index (see below)
+ *   Threadline.productForAnchor(anchor)                   -> catalogue product | null
+ *   Threadline.needsSize(product)                         -> boolean
+ *   Threadline.guardBuyClicks(container, decide)          -> dispose()
  *
  * whenBuyAnchor resolves with the first matching `a[data-item]` already inside
  * the container, otherwise it watches the container (MutationObserver, with a
@@ -55,6 +58,27 @@
  * match at all means "not in the shop yet". A container with no rows gives
  * size 0, which callers must read as "the shop said nothing" — never as
  * "nothing is on sale".
+ *
+ * productForAnchor maps a rendered widget row back to an entry in the catalogue
+ * (scripts/products.js, window.Threadline.products): the normalised platform
+ * item id first, the normalised row title second — the same two keys
+ * shopPriceIndex and product.html already match on. No catalogue loaded, or no
+ * entry for the row, gives null, which every caller must read as "not ours to
+ * touch".
+ *
+ * guardBuyClicks(container, decide) is the sized-garment guard. payments-widget
+ * .js listens for Buy clicks on the container in the bubbling phase; this
+ * attaches a listener on the same container in the CAPTURE phase, so it sees
+ * the click first. For every plain left-click on an a[data-item] it calls
+ *
+ *   decide({ anchor, product, needsSize, event }) -> truthy to stop the click
+ *
+ * and, when the answer is truthy, calls preventDefault() plus stopPropagation()
+ * — which ends the dispatch before the widget's own bubble listener runs, so no
+ * checkout is posted and the anchor's href is not followed. Modified clicks
+ * (ctrl/cmd/shift/alt, a non-primary button) and target="_blank" rows are
+ * passed through untouched, exactly as the widget passes them through. It
+ * returns a dispose() that detaches the guard again.
  *
  * It never posts to checkout itself: the caller clicks the widget's own Buy
  * link, so payments-widget.js keeps ownership of the checkout POST and of its
@@ -191,6 +215,95 @@
     };
   };
 
+  /* ---- the sized-garment guard -------------------------------------------
+     The shop panel sells a platform item; the catalogue knows whether that
+     item is a garment that has to be ordered in a size. These three pieces
+     join the two so a page can stop a sizeless checkout before it starts. */
+
+  /* The catalogue entry this widget row is selling, or null. Read from
+     ns.products at call time, so it works whether scripts/products.js loaded
+     before this file or not at all (tests load this file on its own). */
+  var productForAnchor = function (anchor) {
+    var list = ns.products;
+    if (!anchor || !list || !list.length) return null;
+
+    var idKey = normaliseKey(anchor.getAttribute ? anchor.getAttribute("data-item") : "");
+    var nameKey = normaliseKey(buyRowName(anchor));
+    var nameHit = null;
+
+    for (var i = 0; i < list.length; i++) {
+      var p = list[i];
+      if (!p) continue;
+      /* Id wins outright; a title match is only the fallback, and only the
+         first one, so two pieces sharing a name cannot flip the answer. */
+      if (idKey && normaliseKey(p.id) === idKey) return p;
+      if (!nameHit && nameKey && normaliseKey(p.name) === nameKey) nameHit = p;
+    }
+    return nameHit;
+  };
+
+  /* A piece with one size (Classic Cap, Lambswool Scarf: ONE_SIZE) can be
+     bought straight from the panel; anything with a real size range cannot. */
+  var needsSize = function (product) {
+    return !!(product && product.sizes && product.sizes.length > 1);
+  };
+
+  /* Only ordinary left-clicks are ours: a ctrl/cmd/shift/alt click or a middle
+     click is the shopper opening the row in a tab, which the widget also lets
+     through. An event something else already handled is left alone too. */
+  var isPlainClick = function (e) {
+    if (!e || e.defaultPrevented) return false;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return false;
+    if (typeof e.button === "number" && e.button !== 0) return false;
+    return true;
+  };
+
+  var guardBuyClicks = function (container, decide) {
+    var noop = function () {};
+    if (!container || !container.addEventListener || typeof decide !== "function") return noop;
+    /* One guard per container: a second call would ask twice and could stop a
+       click the first guard already let through. */
+    if (container.getAttribute && container.getAttribute("data-threadline-buy-guard")) return noop;
+
+    var onClick = function (e) {
+      var anchor = null;
+      try {
+        anchor = (e.target && e.target.closest) ? e.target.closest("a[data-item]") : null;
+      } catch (err) { anchor = null; }
+      if (!anchor) return;
+      if (container.contains && !container.contains(anchor)) return;
+      if (anchor.getAttribute && anchor.getAttribute("target") === "_blank") return;
+      if (!isPlainClick(e)) return;
+
+      var product = productForAnchor(anchor);
+      var stop = false;
+      try {
+        stop = !!decide({
+          anchor: anchor,
+          product: product,
+          needsSize: needsSize(product),
+          event: e
+        });
+      } catch (err) { stop = false; }
+      if (!stop) return;
+
+      /* preventDefault stops the href being followed; stopPropagation ends the
+         dispatch here, before payments-widget.js's bubble listener on this same
+         container can post a checkout. stopImmediatePropagation is deliberately
+         not used: other capture listeners on the page are none of our business. */
+      if (e.preventDefault) e.preventDefault();
+      if (e.stopPropagation) e.stopPropagation();
+    };
+
+    container.addEventListener("click", onClick, true);
+    if (container.setAttribute) container.setAttribute("data-threadline-buy-guard", "1");
+
+    return function dispose() {
+      try { container.removeEventListener("click", onClick, true); } catch (err) {}
+      try { if (container.removeAttribute) container.removeAttribute("data-threadline-buy-guard"); } catch (err) {}
+    };
+  };
+
   var whenBuyAnchor = function (container, matchFn, timeoutMs) {
     var limit = (typeof timeoutMs === "number" && timeoutMs > 0) ? timeoutMs : DEFAULT_TIMEOUT;
 
@@ -248,6 +361,9 @@
   ns.shopPriceIndex = shopPriceIndex;
   ns.normaliseKey = normaliseKey;
   ns.storePanelFailed = storePanelFailed;
+  ns.productForAnchor = productForAnchor;
+  ns.needsSize = needsSize;
+  ns.guardBuyClicks = guardBuyClicks;
   ns.whenBuyAnchor = whenBuyAnchor;
   ns.BUY_ANCHOR_TIMEOUT = DEFAULT_TIMEOUT;
 })(window);
