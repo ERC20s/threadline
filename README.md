@@ -351,6 +351,25 @@ link when it does.
   unless `cleanUrls` is `false` and a rewrite serves each of `index.html`,
   `product.html`, `products.html`, `lookbook.html` and `size-guide.html`. Like
   assertion 17 it needs the page served over http from the repository root.
+  Assertion 20 (`noscript-links-match-catalogue`) guards the last hand-copied
+  copies of the catalogue: it fetches `../products.html`, `../lookbook.html` and
+  `../index.html` (read-only, through the same `__origFetch` passthrough),
+  collects every `href="product.html?id=<id>"` with its link text, and compares
+  both with the catalogue snapshot. It fails, naming the page and the piece,
+  when an id resolves to nothing we make, when a printed `— $NN` differs from
+  `Threadline.money(p.price)`, or when the `<noscript>` list in `products.html`
+  or `lookbook.html` is missing a catalogue piece; `index.html` links only a few
+  pieces on purpose, so it is checked for dead ids and wrong prices but not for
+  coverage. Link text that reads differently from the catalogue name (the home
+  page writes "the Everyday Tee") is a console warning only, as in assertion 17.
+  Like assertions 17 and 18 it needs the page served over http from the
+  repository root. The practical consequence: adding, renaming or repricing a
+  garment in `scripts/products.js` now means updating the two `<noscript>` lists
+  in the same change, which is exactly what this assertion is for. `product.html`
+  itself carries no such list — it renders entirely from the catalogue, so it
+  carries a `<noscript>` block instead, pointing a script-less visitor at
+  `products.html`, the size guide and `hello@threadline.example`; its
+  `#product-image` has no `src` attribute until the script sets a real one.
 
 `.d8a` declares the group, the run entry and the payments block. Do not hand-edit
 its generated blocks.

@@ -1332,6 +1332,150 @@
         }, 700);
       }, 2300);
 
+      // 20) The hand-copied no-JS product lists must still match the catalogue.
+      // products.html and lookbook.html each carry a <noscript> list of
+      // `product.html?id=<id>">Name — $NN` links, and index.html hand-writes a
+      // few more product links in its prose and footer. They are the only place
+      // on the site where a piece's id, name and price are typed by hand instead
+      // of being rendered from scripts/products.js, so they rot silently: add,
+      // rename or reprice a garment and the shopper without JavaScript gets a
+      // dead link or yesterday's price, and nobody sees it. This assertion only
+      // READS the three pages; it writes nothing and touches no generated block.
+      (function runNoScriptLinksTest() {
+        var NAME = 'noscript-links-match-catalogue';
+        var T = window.Threadline;
+        var catalogue = (CATALOGUE_SNAPSHOT || []).filter(function (p) {
+          return p && p.id && p.name;
+        });
+        var key = (T && typeof T.normaliseKey === 'function')
+          ? T.normaliseKey
+          : function (s) { return String(s == null ? '' : s).trim().toLowerCase().replace(/\s+/g, ' '); };
+        var money = (T && typeof T.money === 'function')
+          ? T.money
+          : function (n) { return '$' + Number(n).toFixed(0); };
+
+        // The catalogue by id, taken from the snapshot rather than from
+        // Threadline.byId: assertions 9, 16 and the guard test install product
+        // stubs, and this one resolves asynchronously.
+        var byId = {};
+        catalogue.forEach(function (p) { byId[p.id] = p; });
+
+        // `complete: true` means the page promises a link for EVERY piece we
+        // make (the two <noscript> lists). index.html only links a few, so it is
+        // checked for dead ids and wrong prices, not for coverage.
+        var PAGES = [
+          { file: 'products.html', complete: true },
+          { file: 'lookbook.html', complete: true },
+          { file: 'index.html', complete: false }
+        ];
+
+        // Raw text, not DOMParser: the links live inside <noscript>, which a
+        // parsed document may keep as plain text depending on the scripting
+        // flag. The markup here is ours and one anchor per line.
+        var LINK = /<a\b[^>]*href="product\.html\?id=([^"&#]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+
+        function textOf(html) {
+          return String(html)
+            .replace(/<[^>]*>/g, '')
+            .replace(/&amp;/g, '&').replace(/&rsquo;/g, '’')
+            .replace(/&mdash;/g, '—').replace(/&nbsp;/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        }
+
+        function linksIn(html) {
+          var out = [];
+          var m;
+          LINK.lastIndex = 0;
+          while ((m = LINK.exec(html)) !== null) {
+            var id = m[1];
+            try { id = decodeURIComponent(id); } catch (e) {}
+            out.push({ id: id, label: textOf(m[2]) });
+          }
+          return out;
+        }
+
+        function checkPage(page, html) {
+          var problems = [];
+          var warnings = [];
+          var links = linksIn(html);
+          if (!links.length) {
+            problems.push(page.file + ': no product.html?id= links found at all');
+            return { problems: problems, warnings: warnings, links: links };
+          }
+          var seen = {};
+          links.forEach(function (link) {
+            var p = byId[link.id];
+            if (!p) {
+              problems.push(page.file + ': link to a piece we do not make — id "' + link.id + '"');
+              return;
+            }
+            seen[p.id] = true;
+            // "Everyday Tee — $38": the price half is optional (index.html
+            // writes bare names), but a printed price must be the real one.
+            var priced = link.label.match(/^([\s\S]*?)\s*—\s*(\$[\d.,]+)$/);
+            var shownName = priced ? priced[1] : link.label;
+            if (priced && priced[2] !== money(p.price)) {
+              problems.push(page.file + ': ' + p.name + ' is printed at ' + priced[2] +
+                ', the catalogue says ' + money(p.price));
+            }
+            if (shownName && key(shownName) !== key(p.name) &&
+                key(shownName).indexOf(key(p.name)) === -1) {
+              warnings.push(page.file + ': link text "' + shownName + '" vs catalogue "' + p.name + '"');
+            }
+          });
+          if (page.complete) {
+            catalogue.forEach(function (p) {
+              if (!seen[p.id]) {
+                problems.push(page.file + ': no no-script link for ' + p.name + ' (' + p.id + ')');
+              }
+            });
+          }
+          return { problems: problems, warnings: warnings, links: links };
+        }
+
+        function read(file) {
+          return fetch('../' + file, { cache: 'no-store' }).then(function (r) {
+            if (!r || !r.ok || typeof r.text !== 'function') {
+              throw new Error(file + ' HTTP ' + (r && r.status ? r.status : '?'));
+            }
+            return r.text();
+          });
+        }
+
+        if (!catalogue.length) {
+          note(NAME, false, 'window.Threadline.products was empty when the page loaded');
+          return;
+        }
+
+        Promise.all(PAGES.map(function (page) {
+          return read(page.file).then(function (html) { return checkPage(page, html); });
+        })).then(function (results) {
+          var problems = [];
+          var warnings = [];
+          var total = 0;
+          results.forEach(function (r) {
+            problems = problems.concat(r.problems);
+            warnings = warnings.concat(r.warnings);
+            total += r.links.length;
+          });
+          // A different spelling is a judgement call, not a broken link: warn
+          // like assertion 17 does and let the assertion pass.
+          if (warnings.length) console.warn(NAME, warnings.join(' | '));
+          note(NAME, problems.length === 0,
+            problems.length
+              ? (total + ' hand-written product links vs ' + catalogue.length + ' catalogue pieces — ' + problems.join(' | '))
+              : (total + ' hand-written product links across ' + PAGES.length + ' pages match ' +
+                 catalogue.length + ' catalogue pieces' +
+                 (warnings.length ? ' (warnings: ' + warnings.join(' | ') + ')' : '')));
+        }).catch(function (err) {
+          // Same failure mode as assertions 17 and 18: say so rather than
+          // passing quietly when the page is not served over http.
+          note(NAME, false, 'could not read the pages (' + String(err && err.message ? err.message : err) +
+            ') — serve the repository root and open this page over http, e.g. the `site` entry in .d8a');
+        });
+      })();
+
       // Final aggregator after a bit more time
       setTimeout(function(){
         note('final', true, 'Manual-run tests completed; review individual PASS/FAIL lines above.');

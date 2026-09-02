@@ -29,7 +29,10 @@
       <!-- Filled by the script below from ?id=<product id>; scripts/products.js is the catalogue. -->
       <section class="product" id="product" aria-live="polite">
         <div class="media">
-          <img id="product-image" src="" alt="" width="900" height="1100">
+          <!-- No src= until the script sets a real one: an empty src makes the
+               browser re-request this document as an image before the piece is
+               known, which costs a round trip and logs a broken image. -->
+          <img id="product-image" alt="" width="900" height="1100">
         </div>
         <div class="meta">
           <p class="kicker" id="product-category"></p>
@@ -66,6 +69,21 @@
             <a class="btn btn-ghost" href="products.html">Back to the shop</a>
           </p>
           <p class="status" id="buy-status" role="status"></p>
+
+          <!-- This page renders entirely from scripts/products.js, so without
+               JavaScript everything above stays on "Loading…" and the size and
+               quantity buttons never appear. Say so, and point at the pages
+               that do work without scripts. -->
+          <noscript>
+            <p class="note">This page needs JavaScript: the piece, its price, its
+              sizes and the Buy button are all rendered from
+              <code>scripts/products.js</code>. Without it, browse the
+              <a href="products.html">full collection</a> — that page lists every
+              piece and its price as plain links — read the
+              <a href="size-guide.html">size guide</a>, or email
+              <a href="mailto:hello@threadline.example">hello@threadline.example</a>
+              with the piece and size you want and we will take the order by hand.</p>
+          </noscript>
         </div>
       </section>
 
