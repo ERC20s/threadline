@@ -153,7 +153,10 @@
       var show = function () {
         T.renderGrid(grid, T.featured());
         var unlisted = (shopIndex && T.reconcileGrid) ? T.reconcileGrid(grid, shopIndex) : 0;
-        if (status) {
+        /* A receipt in the status line outranks the grid's own count: the shop
+           panel can render (and this pass run again) after a returning buyer's
+           order has been verified, and that must not wipe the confirmation. */
+        if (status && !(T.receiptIn && T.receiptIn(status))) {
           status.textContent = unlisted
             ? unlisted + (unlisted === 1 ? " featured piece is" : " featured pieces are") +
               " not in the shop yet — the rest check out at the price shown."
@@ -181,6 +184,25 @@
           return true;
         });
       }
+
+      /* ---- a buyer who comes back paid is told so, here ----
+         The one-size pieces (Classic Cap, Lambswool Scarf) pass the guard
+         above, so a checkout really does start and end on this page. The
+         widget's own line is a small green "Paid: … — order …" inside the
+         panel; the real confirmation — piece, quantity, size and a prefilled
+         email — is written into #featured-status by the shared helper in
+         scripts/checkout-intent.js, the same one product.html uses. */
+      document.addEventListener("group-store:paid", function (e) {
+        var order = e && e.detail ? e.detail : null;
+        if (!order || !status) return;
+        if (T.renderReceipt) {
+          T.renderReceipt(status, order, { focus: true });
+          return;
+        }
+        /* checkout-intent.js failed to load: still say something true. */
+        status.textContent = "Thank you — order " + (order.id || "") +
+          " is paid. A confirmation email is on its way.";
+      });
 
       /* Wait for the shop panel — no matchFn, so this resolves as soon as
          payments-widget.js has rendered any row — then index it once and

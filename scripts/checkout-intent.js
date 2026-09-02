@@ -20,6 +20,8 @@
  *   Threadline.needsSize(product)                         -> boolean
  *   Threadline.resolveSize(product, requested)            -> size ("" if none)
  *   Threadline.guardBuyClicks(container, decide)          -> dispose()
+ *   Threadline.productForOrder(order)                     -> catalogue product | null
+ *   Threadline.renderReceipt(target, order, options)      -> element | null
  *
  * whenBuyAnchor resolves with the first matching `a[data-item]` already inside
  * the container, otherwise it watches the container (MutationObserver, with a
@@ -116,6 +118,31 @@
  * It never posts to checkout itself: the caller clicks the widget's own Buy
  * link, so payments-widget.js keeps ownership of the checkout POST and of its
  * duplicate-checkout guard.
+ *
+ * productForOrder(order) / renderReceipt(target, order, options) are the paid
+ * receipt. payments-widget.js verifies a returning ?d8a_order=<id> and fires
+ * "group-store:paid" with the order — but its own line inside #group-store is
+ * only "Paid: <name> — order <id>", which on the home page and the shop grid
+ * sits far below the fold. These two build one real confirmation, so index
+ * .html, products.html and product.html all say the same thing:
+ *
+ *   - productForOrder maps the order back to the catalogue the way
+ *     productForAnchor maps a widget row: the normalised platform item id
+ *     (order.itemId / order.item) first, the normalised order.itemName second.
+ *     No match gives null and the receipt falls back to the platform's own
+ *     wording (order.itemName), never to a guess;
+ *   - renderReceipt writes "Thank you — order <id> is paid: <piece> [×qty]
+ *     [, size <S>]. A confirmation email is on its way." into `target` and
+ *     appends a prefilled mailto to hello@threadline.example carrying the order
+ *     id, the piece and the size, so an order can be fulfilled even if the
+ *     platform dropped the size field.
+ *
+ * The receipt element is stamped data-receipt-order="<id>"; a second call for
+ * the same order id into the same target returns the element already there
+ * instead of a second receipt (the event can fire again on a re-render, and a
+ * page may host more than one #group-store). Callers can also read that stamp
+ * to stop their own status line overwriting a receipt. Options:
+ * { product, size, focus, tone, mailText }.
  */
 (function (global) {
   "use strict";
@@ -448,6 +475,122 @@
     };
   };
 
+  /* ---- the paid-order receipt --------------------------------------------
+     payments-widget.js verifies the ?d8a_order= a buyer comes back with and
+     fires "group-store:paid". Every page that hosts a #group-store panel can
+     end a purchase properly with these two, instead of leaving the shopper
+     with the widget's own small green line. */
+
+  var CONTACT_EMAIL = "hello@threadline.example";
+  var RECEIPT_ATTR = "data-receipt-order";
+
+  /* The platform item the order was for. Different platforms have named this
+     field differently, so all three spellings are read before we give up. */
+  var orderItemId = function (order) {
+    if (!order) return "";
+    return String(order.itemId || order.item || order.item_id || "");
+  };
+
+  /* The catalogue entry a paid order stands for, or null. Same two keys, same
+     precedence as productForAnchor: id outright, first title match second. */
+  var productForOrder = function (order) {
+    var list = ns.products;
+    if (!order || !list || !list.length) return null;
+
+    var idKey = normaliseKey(orderItemId(order));
+    var nameKey = normaliseKey(order.itemName || order.name || "");
+    var nameHit = null;
+
+    for (var i = 0; i < list.length; i++) {
+      var p = list[i];
+      if (!p) continue;
+      if (idKey && normaliseKey(p.id) === idKey) return p;
+      if (!nameHit && nameKey && normaliseKey(p.name) === nameKey) nameHit = p;
+    }
+    return nameHit;
+  };
+
+  /* A prefilled email that carries everything we need to pack the order. The
+     size is sent with the checkout, but the platform only stores it if it
+     accepted the extra field — this is the fallback that always works. */
+  var receiptMailto = function (order, pieceName, size) {
+    var orderId = (order && order.id) ? String(order.id) : "";
+    var lines = [
+      "Order: " + (orderId || "(no order id)"),
+      "Piece: " + (pieceName || "(not named)"),
+      "Size: " + (size || "not chosen"),
+      "",
+      "Please confirm my order."
+    ].join("\n");
+    return "mailto:" + CONTACT_EMAIL +
+      "?subject=" + encodeURIComponent("Threadline order " + orderId) +
+      "&body=" + encodeURIComponent(lines);
+  };
+
+  var receiptIn = function (target, orderId) {
+    try {
+      if (!target || !target.querySelector) return null;
+      return orderId
+        ? target.querySelector("[" + RECEIPT_ATTR + "=\"" + orderId + "\"]")
+        : target.querySelector("[" + RECEIPT_ATTR + "]");
+    } catch (e) { return null; }
+  };
+
+  var renderReceipt = function (target, order, options) {
+    if (!target || !target.appendChild || !order) return null;
+    var opts = options || {};
+    var orderId = order.id ? String(order.id) : "";
+
+    /* Already shown here: the event fires once per verified order, but a page
+       with two panels — or a handler re-registered on a re-render — must not
+       hand the shopper two receipts. */
+    var already = receiptIn(target, orderId);
+    if (already) return already;
+
+    var product = opts.product || productForOrder(order);
+    var pieceName = (product && product.name) || (order.itemName ? String(order.itemName) : "");
+    var size = (opts.size !== undefined && opts.size !== null)
+      ? String(opts.size)
+      : String(order.size || "");
+    var quantity = Number(order.quantity) > 1 ? Number(order.quantity) : 0;
+
+    var sentence = "Thank you — order " + (orderId || "(no order id)") + " is paid";
+    if (pieceName) sentence += ": " + pieceName;
+    if (quantity) sentence += " ×" + quantity;
+    if (size) sentence += ", size " + size;
+    sentence += ". A confirmation email is on its way.";
+
+    /* The receipt replaces whatever the status line was saying: a leftover
+       "Opening checkout…" under a paid order reads as a failure. */
+    target.textContent = "";
+
+    var box = document.createElement("span");
+    box.setAttribute(RECEIPT_ATTR, orderId);
+    box.appendChild(document.createTextNode(sentence + " "));
+
+    var mail = document.createElement("a");
+    mail.href = receiptMailto(order, pieceName, size);
+    mail.textContent = opts.mailText ||
+      (size ? "Email us the size for this order" : "Email us about this order");
+    box.appendChild(mail);
+    target.appendChild(box);
+
+    if (target.setAttribute) target.setAttribute("data-tone", opts.tone || "ok");
+
+    /* Only when the caller asks: the product page says it in place, the home
+       page and the grid move the shopper to the line they came back for. */
+    if (opts.focus && target.focus) {
+      try {
+        if (target.hasAttribute && !target.hasAttribute("tabindex")) {
+          target.setAttribute("tabindex", "-1");
+        }
+        target.focus();
+      } catch (e) {}
+    }
+
+    return box;
+  };
+
   var whenBuyAnchor = function (container, matchFn, timeoutMs) {
     var limit = (typeof timeoutMs === "number" && timeoutMs > 0) ? timeoutMs : DEFAULT_TIMEOUT;
 
@@ -512,6 +655,12 @@
   ns.needsSize = needsSize;
   ns.resolveSize = resolveSize;
   ns.guardBuyClicks = guardBuyClicks;
+  ns.productForOrder = productForOrder;
+  ns.renderReceipt = renderReceipt;
+  ns.receiptIn = receiptIn;
+  ns.receiptMailto = receiptMailto;
+  ns.RECEIPT_ATTR = RECEIPT_ATTR;
+  ns.CONTACT_EMAIL = CONTACT_EMAIL;
   ns.whenBuyAnchor = whenBuyAnchor;
   ns.BUY_ANCHOR_TIMEOUT = DEFAULT_TIMEOUT;
 })(window);

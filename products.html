@@ -148,7 +148,11 @@
         /* renderGrid rebuilds the cards on every filter click, so the live
            prices and notes have to be painted again each time. */
         var unlisted = paintGrid();
-        if (status) {
+        /* A receipt in the status line outranks the count: the shop panel can
+           render (and this pass run again, or a filter be clicked) after a
+           returning buyer's order was verified, and the confirmation must not
+           be wiped by "12 pieces in the collection." */
+        if (status && !(T.receiptIn && T.receiptIn(status))) {
           status.textContent = list.length + (list.length === 1 ? " piece" : " pieces") +
             (category === "All" ? " in the collection." : " in " + category + ".") +
             (unlisted ? " " + unlisted + (unlisted === 1 ? " is" : " are") + " not in the shop yet." : "");
@@ -231,6 +235,24 @@
           return true;
         });
       }
+
+      /* ---- a buyer who comes back paid is told so, here ----
+         One-size pieces (Classic Cap, Lambswool Scarf) pass the guard above, so
+         a checkout can start and finish on this page; until now the only sign
+         of payment was the widget's small green line inside the panel, far
+         below this grid. The shared helper in scripts/checkout-intent.js writes
+         the real confirmation — piece, quantity, size and a prefilled email —
+         into #catalogue-status and moves focus to it. */
+      document.addEventListener("group-store:paid", function (e) {
+        var order = e && e.detail ? e.detail : null;
+        if (!order || !status) return;
+        if (T.renderReceipt) {
+          T.renderReceipt(status, order, { focus: true });
+          return;
+        }
+        status.textContent = "Thank you — order " + (order.id || "") +
+          " is paid. A confirmation email is on its way.";
+      });
 
       /* Wait for the shop panel — no matchFn, so this resolves as soon as
          payments-widget.js has rendered any row — then index it once and

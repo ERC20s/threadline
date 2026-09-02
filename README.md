@@ -139,8 +139,9 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
   reporting any unlisted pieces in `#featured-status`. The panel is guarded with
   `guardBuyClicks`, so a featured sized garment goes to its product page instead
   of a sizeless checkout. Loading the widget here also means a buyer who returns
-  to the home page with `?d8a_order=…` has the order verified and the receipt
-  line shown, which only happened on the shop pages before.
+  to the home page with `?d8a_order=…` has the order verified, and a
+  `group-store:paid` handler renders the full receipt into `#featured-status`
+  (see the shared receipt below).
 - No sized garment can be bought without a size, from either page. The panel's
   own Buy links post a checkout for the platform item alone, so a click there
   used to pay for an Everyday Tee with no size on the order and none in the
@@ -199,10 +200,34 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
   different purchase. If the first POST answers without a `url` the widget
   retries **once** with exactly the body it used to send, before the existing
   anchor-href fallback — the cover for a platform that refuses unknown fields.
-  An anchor with no attributes posts an unchanged body. The receipt line on
-  `product.html` also offers a prefilled `mailto:hello@threadline.example`
-  carrying the order id, the piece and the size, so fulfilment is possible even
-  if the platform stored no note.
+  An anchor with no attributes posts an unchanged body. The receipt (see the
+  next point) also offers a prefilled `mailto:hello@threadline.example` carrying
+  the order id, the piece and the size, so fulfilment is possible even if the
+  platform stored no note.
+- A paid buyer gets a real confirmation wherever they come back. `payments-
+  widget.js` verifies `?d8a_order=<id>` and fires `group-store:paid`, but its own
+  line inside `#group-store` is only `Paid: <name> — order <id>` — on
+  `products.html` that sits far below the fold, and `index.html` and
+  `products.html` had no handler at all, although one-size pieces (Classic Cap,
+  Lambswool Scarf) pass the size guard and really do check out there. Two shared
+  helpers in `scripts/checkout-intent.js` now do it once for all three pages:
+  `Threadline.productForOrder(order)` maps the order back to the catalogue
+  (normalised `order.itemId`/`order.item` first, `order.itemName` second, `null`
+  when we do not sell it), and `Threadline.renderReceipt(target, order, options)`
+  writes `Thank you — order <id> is paid: <piece> [×qty][, size <S>]. A
+  confirmation email is on its way.` into the page's status line, appends the
+  prefilled `mailto:`, and sets `data-tone="ok"`. Options are `{ product, size,
+  focus, tone, mailText }`. The element is stamped
+  `data-receipt-order="<id>"`, so a second call for the same order returns the
+  element already there instead of a second receipt, and
+  `Threadline.receiptIn(target[, id])` lets a page check before it overwrites its
+  own status line — `index.html`, `products.html` and `product.html` all use that
+  so a late grid reconcile ("12 pieces in the collection.", "isn't listed in the
+  shop panel yet") cannot wipe a confirmation. `index.html` renders into
+  `#featured-status` and `products.html` into `#catalogue-status`, both with
+  `focus: true`; `product.html` renders into `#buy-status` and passes the piece
+  and the size it has on screen. An order for something not in the catalogue
+  degrades to the platform's own `itemName`, never to a guess.
 - `tests/payments-widget.test.html` is the browser test for the widget; open it
   at http://localhost:5004/tests/payments-widget.test.html while the site is
   served. Its `intent-group` fixture answers late on purpose, to prove a queued
@@ -235,7 +260,14 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
   must resolve through `byId`, every catalogue piece must be worn by at least
   one look, `looks()` must carry the catalogue name through, a stub look naming
   an id we do not make must print it without a link, and the real render must
-  produce one `figure.look` per look with one priced link per named piece.
+  produce one `figure.look` per look with one priced link per named piece. Its
+  receipt cases (assertion 16) render into a detached element against a
+  two-entry catalogue stub that is restored immediately: a known item must be
+  named from the catalogue and show `×2`, an item we do not sell must fall back
+  to the order's own `itemName` and still show the size, the `mailto:` must carry
+  `Order:`, `Piece:` and `Size:` correctly encoded, and a second
+  `renderReceipt` for the same order id must return the element already there
+  rather than a second receipt.
 
 `.d8a` declares the group, the run entry and the payments block. Do not hand-edit
 its generated blocks.
