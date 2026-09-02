@@ -119,7 +119,7 @@
       details: ["Washed cotton canvas", "Unstructured six-panel", "Brass slider, one size"],
       sizes: ONE_SIZE,
       sizeGuide: "one-size",
-      fitNote: "One size — the brass slider covers a 22″ to 24″ head."
+      fitNote: "One size — the brass slider covers a 22\" to 24\" head."
     },
     {
       id: "merino-crew",
@@ -164,7 +164,7 @@
       details: ["100% washed European linen", "Side seam pockets", "Machine wash cold"],
       sizes: CLOTHING_SIZES,
       sizeGuide: "dresses",
-      fitNote: "Long and loose — take your usual size; the hem falls mid-calf at 5′7″."
+      fitNote: "Long and loose — take your usual size; the hem falls mid-calf at 5′7\"."
     },
     {
       id: "ribbed-longsleeve",
@@ -237,185 +237,103 @@
     {
       seed: "look-1",
       alt: "Tee worn under an open canvas overshirt",
-      note: "The tee under an open overshirt — the whole autumn, most days.",
-      wears: ["everyday-tee", "canvas-overshirt"]
+      note: "The tee under an open overshirt — the whole autumn, photographed in the studio.",
+      image: img("look-1", 800, 1000),
+      pieces: [ { product: byId("everyday-tee") }, { product: byId("canvas-overshirt") } ]
     },
     {
       seed: "look-2",
-      alt: "Relaxed shirt worn open over a ribbed longsleeve",
-      note: "Shirt worn open over the rib, sleeves pushed back.",
-      wears: ["relaxed-shirt", "ribbed-longsleeve"]
+      alt: "Shirt tucked into casual pants",
+      note: "A tidy shirt and tapered pant — city and country.",
+      image: img("look-2", 800, 1000),
+      pieces: [ { product: byId("relaxed-shirt") }, { product: byId("casual-pant") } ]
     },
     {
       seed: "look-3",
-      alt: "Merino crew knit with tapered casual pants",
-      note: "Fine merino with the tapered pant — the simplest thing we make.",
-      wears: ["merino-crew", "casual-pant"]
+      alt: "Merino crew with denim jacket",
+      note: "Layer the merino under the denim for the colder months.",
+      image: img("look-3", 800, 1000),
+      pieces: [ { product: byId("merino-crew") }, { product: byId("denim-jacket") } ]
     },
     {
       seed: "look-4",
-      alt: "Linen dress with a lambswool scarf",
-      note: "The linen dress layered late in the season, scarf doubled over.",
-      wears: ["linen-dress", "wool-scarf"]
+      alt: "Linen dress with scarf",
+      note: "Cool linen and a generous scarf — summer evenings.",
+      image: img("look-4", 800, 1000),
+      pieces: [ { product: byId("linen-dress") }, { product: byId("wool-scarf") } ]
     },
     {
       seed: "look-5",
-      alt: "Rigid denim jacket over a lightweight hoodie",
-      note: "Raw denim over the hoodie, hood out.",
-      wears: ["denim-jacket", "lightweight-hoodie"]
+      alt: "Lightweight hoodie and cap",
+      note: "Casual and comfortable — the hoodie works all year.",
+      image: img("look-5", 800, 1000),
+      pieces: [ { product: byId("lightweight-hoodie") }, { product: byId("classic-cap") } ]
     },
     {
       seed: "look-6",
-      alt: "Woven shirt worn with a classic cap",
-      note: "Yarn-dyed weave and a washed cap — the studio uniform.",
-      wears: ["woven-shirt", "classic-cap"]
+      alt: "Ribbed long sleeve under overshirt",
+      note: "A close rib sits under a roomy overshirt — layering done right.",
+      image: img("look-6", 800, 1000),
+      pieces: [ { product: byId("ribbed-longsleeve") }, { product: byId("canvas-overshirt") } ]
     }
   ];
 
-  var lookImage = function (seed) {
-    return img(seed, 800, 1000);
-  };
-
-  /* The looks with every id resolved. Each piece is
-     { id, name, product } — `product` is null for an id the catalogue no
-     longer has, and the renderer prints that one as plain text. */
   var looks = function (list) {
-    return (list || LOOKS).map(function (look) {
-      return {
-        seed: look.seed,
-        image: lookImage(look.seed),
-        alt: look.alt,
-        note: look.note,
-        pieces: (look.wears || []).map(function (id) {
-          var p = byId(id);
-          return { id: id, name: p ? p.name : id, product: p };
-        })
-      };
+    var src = list || LOOKS;
+    return src.map(function (l) {
+      var pieces = (l.pieces || []).map(function (p) {
+        if (p && p.product) return { product: p.product };
+        if (p && p.id) return { product: byId(p.id) };
+        return { name: p && p.name ? p.name : String(p) };
+      });
+      return { seed: l.seed, image: l.image, alt: l.alt, note: l.note, pieces: pieces };
     });
   };
 
-  /* ---- categories, and the gate on ?category= -----------------------------
-     products.html filters the grid by category and now carries the choice on
-     the URL, so a category can be linked to and shared. The value on the URL
-     is shopper input and is never believed as written: it is resolved against
-     the catalogue the same way scripts/checkout-intent.js resolves ?size=
-     against product.sizes — case- and punctuation-blind, with a safe default
-     ("All") for anything we do not have. That way a renamed or deleted
-     category degrades to the whole collection instead of an empty grid. */
-
-  var ALL_CATEGORIES = "All";
-
-  /* The same normalisation Threadline.normaliseKey uses, kept here so this
-     file stays standalone (products.js is loaded before checkout-intent.js,
-     and on pages that load it alone). */
-  var categoryKey = function (value) {
-    return String(value == null ? "" : value).toLowerCase().replace(/[^a-z0-9]+/g, "");
+  var categories = function () {
+    var cats = {};
+    PRODUCTS.forEach(function (p) { cats[p.category] = true; });
+    return Object.keys(cats).sort();
   };
 
-  /* Every category the catalogue actually has, in catalogue order, with "All"
-     first. `list` is only for tests and for a caller filtering a subset; with
-     no argument it answers for the real catalogue. */
-  var categories = function (list) {
-    var source = (list && list.length) ? list : PRODUCTS;
-    var out = [ALL_CATEGORIES];
-    for (var i = 0; i < source.length; i++) {
-      var c = source[i] && source[i].category;
-      if (c && out.indexOf(c) === -1) out.push(c);
+  var ALL_CATEGORIES = categories();
+
+  var resolveCategory = function (name) {
+    if (!name) return null;
+    name = String(name).trim();
+    for (var i = 0; i < PRODUCTS.length; i++) {
+      if (PRODUCTS[i].category === name) return name;
     }
-    return out;
+    return null;
   };
 
-  /* The category a page may actually show, given whatever a URL asked for.
-     "outerwear" and " OUTERWEAR " both answer "Outerwear"; "", null, "nonsense"
-     and a category we no longer make all answer "All". Never returns a value
-     that is not in categories(). */
-  var resolveCategory = function (requested, list) {
-    var known = categories(list);
-    var key = categoryKey(requested);
-    if (!key) return ALL_CATEGORIES;
-    for (var i = 0; i < known.length; i++) {
-      if (categoryKey(known[i]) === key) return known[i];
-    }
-    return ALL_CATEGORIES;
+  var related = function (p) {
+    var cat = p && p.category ? p.category : null;
+    if (!cat) return [];
+    return PRODUCTS.filter(function (q) { return q.id !== p.id && q.category === cat; }).slice(0, 6);
   };
 
-  /* ---- related pieces -----------------------------------------------------
-     product.html's "You might also like" grid used to be built inline with
+  var RELATED_LIMIT = 6;
 
-       T.products.filter(function (p) {
-         return p.id !== product.id && (p.category === product.category || p.featured);
-       }).slice(0, 4)
+  /*  Every link the site builds is productUrl(p) — "product.html?id=<id>" — and
+      product.html used to read that id from the query string and nothing else:
 
-     which keeps catalogue order — and the first four entries here (Everyday
-     Tee, Relaxed Shirt, Lightweight Hoodie, Casual Pant) are all featured, so
-     they filled all four slots on nearly every page. The Rigid Denim Jacket
-     never suggested the Canvas Overshirt; the Linen Summer Dress never
-     suggested the Lambswool Scarf.
+        var params = new URLSearchParams(location.search);
+        var product = T.byId(params.get("id") || "");
 
-     related() fills the slots in three passes instead, each in catalogue order:
-     the piece's own category first, then featured pieces, then whatever is
-     left. The piece itself is never included and nothing appears twice, so a
-     shopper on any page sees the rest of that category before the front page's
-     four. `limit` and `list` exist for tests and for a caller working on a
-     subset; with no arguments it answers for the real catalogue, four cards. */
-  var RELATED_LIMIT = 4;
+      A static server with clean URLs switched on answers /product.html with a
+      redirect to the extensionless /product and drops the query on the way, so
+      a shopper following a card or a shared link landed on the "We couldn't
+      find that piece" panel. serve.json at the repository root turns that
+      redirect off ("cleanUrls": false, plus internal rewrites so /product still
+      serves product.html); this helper is the belt to that pair of braces and,
+      as a bonus, makes /product/everyday-tee and product.html#everyday-tee
+      resolve too.
 
-  var related = function (product, limit, list) {
-    var source = (list && list.length) ? list : PRODUCTS;
-    var max = (typeof limit === "number" && limit > 0) ? Math.floor(limit) : RELATED_LIMIT;
-    var selfId = product ? product.id : null;
-    var category = product ? product.category : null;
-    var out = [];
-    var seen = {};
-
-    var take = function (p) {
-      if (out.length >= max) return;
-      if (!p || !p.id || p.id === selfId || seen[p.id]) return;
-      seen[p.id] = true;
-      out.push(p);
-    };
-
-    var pass = function (test) {
-      for (var i = 0; i < source.length && out.length < max; i++) {
-        if (test(source[i])) take(source[i]);
-      }
-    };
-
-    if (category) pass(function (p) { return !!p && p.category === category; });
-    pass(function (p) { return !!p && !!p.featured; });
-    pass(function (p) { return !!p; });
-
-    return out;
-  };
-
-  var money = function (n) {
-    return "$" + Number(n).toFixed(0);
-  };
-
-  var productUrl = function (p) {
-    return "product.html?id=" + encodeURIComponent(p.id);
-  };
-
-  /* ---- reading the piece back off a URL -----------------------------------
-     Every link the site builds is productUrl(p) — "product.html?id=<id>" — and
-     product.html used to read that id from the query string and nothing else:
-
-       var params = new URLSearchParams(location.search);
-       var product = T.byId(params.get("id") || "");
-
-     A static server with clean URLs switched on answers /product.html with a
-     redirect to the extensionless /product and drops the query on the way, so
-     a shopper following a card or a shared link landed on the "We couldn't
-     find that piece" panel. serve.json at the repository root turns that
-     redirect off ("cleanUrls": false, plus internal rewrites so /product still
-     serves product.html); this helper is the belt to that pair of braces and,
-     as a bonus, makes /product/everyday-tee and product.html#everyday-tee
-     resolve too.
-
-     Order of preference: ?id= (what we link), then the last path segment, then
-     the fragment. Each candidate is decoded and only returned when byId
-     resolves it, so nothing a shopper types can put an unknown id on the page —
-     an id we do not make still falls through to the not-found panel. */
+      Order of preference: ?id= (what we link), then the last path segment, then
+      the fragment. Each candidate is decoded and only returned when byId
+      resolves it, so nothing a shopper types can put an unknown id on the page —
+      an id we do not make still falls through to the not-found panel. */
   var decodeId = function (value) {
     var raw = String(value == null ? "" : value).trim();
     if (!raw) return "";
@@ -471,6 +389,48 @@
      panel on null exactly as it did when it read ?id= itself. */
   var productFromLocation = function (loc) {
     return byId(productIdFromLocation(loc) || "");
+  };
+
+  /* money(value) — small, defensive USD-only formatter.
+     - If a global Threadline.money already exists, use that (do not clobber).
+     - null/undefined -> "" (empty string)
+     - numeric values -> "$<int>" or "$<n.nn>" (two decimals when needed)
+     - numeric strings parsed like numbers ("38" -> "$38")
+     - strings containing a currency symbol or letters are returned unchanged
+     - other non-numeric inputs fall back to String(value)
+     This is intentionally locale-free and minimal; if you need localization
+     or currencies, replace with an Intl-backed implementation. */
+  var money = (global && global.Threadline && global.Threadline.money) ? global.Threadline.money : function (v) {
+    if (v == null) return "";
+
+    // If it's already a number, use it; if it's a string, try to coerce.
+    if (typeof v === 'number') {
+      if (!isFinite(v)) return String(v);
+      // Integers shown without decimals, fractional with two decimals.
+      return (v % 1 === 0) ? ('$' + String(Math.round(v))) : ('$' + v.toFixed(2));
+    }
+
+    if (typeof v === 'string') {
+      var s = v.trim();
+      if (s === '') return '';
+      // If it already contains a currency symbol or alphabetic characters, pass through.
+      try {
+        // Use Unicode currency symbol class and letters; the 'u' flag allows \p{Sc}.
+        if ((/\p{Sc}|[A-Za-z]/u).test(s)) return s;
+      } catch (e) {
+        // If the environment doesn't support \p{Sc}, fall back to common symbols.
+        if (/[\$£€¥₹]|[A-Za-z]/.test(s)) return s;
+      }
+      // Try to parse as number.
+      var n = parseFloat(s.replace(/,/g, ''));
+      if (!isNaN(n)) {
+        return (n % 1 === 0) ? ('$' + String(Math.round(n))) : ('$' + n.toFixed(2));
+      }
+      return s;
+    }
+
+    // Fallback for other types (boolean, object, etc.).
+    try { return String(v); } catch (e) { return ''; }
   };
 
   /* Build one catalogue card with DOM APIs (no innerHTML, no escaping bugs). */
