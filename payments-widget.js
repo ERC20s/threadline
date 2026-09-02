@@ -4,7 +4,11 @@
   window.__d8aPaymentsWidgetInstalled = true;
 
   var BASE = "https://d8a.com";
-  var GROUP = "batch-threadline";
+  // The group slug this site sells for. Must match the `group:` line and the
+  // items/verify URLs generated in the root .d8a file
+  // (group: d8a:d8aaaa-batch_threadline). A container may override it with
+  // data-d8a-group; see getGroupForElement below.
+  var GROUP = "d8aaaa-batch_threadline";
   var esc = function (s) {
     return String(s).replace(/[&<>\"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; });
   };
@@ -398,10 +402,14 @@
     // Optimistically show a loading state
     el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#6b7280">Loading…</p>';
 
+    // Name the slug we tried, so a future mismatch between this file and the
+    // group declared in .d8a is visible on the page instead of silent.
+    var failure = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">There was an error loading the store (group ' + esc(group) + ').</p>';
+
     var promise = fetchStoreForGroup(group);
     promise.then(function (s) {
       if (!s) {
-        renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">There was an error loading the store.</p>');
+        renderMessageWithRetry(el, failure);
         ensureRetryListener(el);
         return;
       }
@@ -409,7 +417,7 @@
       try { el.__d8a_store = s; } catch (e) {}
       buildItemsInto(el, s);
     }).catch(function () {
-      renderMessageWithRetry(el, '<p style="font:13px system-ui,sans-serif;color:#9ca3af">There was an error loading the store.</p>');
+      renderMessageWithRetry(el, failure);
       ensureRetryListener(el);
     });
   };
