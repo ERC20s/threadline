@@ -3,93 +3,240 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Threadline — Product</title>
-  <style>
-    :root{--max-width:980px;--gap:18px;--accent:#7c5cff;--muted:#6b7280}
-    html,body{height:100%}
-    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;margin:0;padding:24px;box-sizing:border-box;color:#0f172a;background:#fff;display:flex;justify-content:center}
-    .wrap{width:100%;max-width:var(--max-width)}
-    header h1{font-size:1.25rem;margin:0 0 8px}
-    .note{margin:0 0 16px;color:var(--muted);font-size:0.95rem}
-    a{color:var(--accent);text-decoration:none}
-    a:focus{outline:3px solid rgba(124,92,255,0.18);outline-offset:3px}
-
-    .product{display:grid;gap:var(--gap)}
-    /* Mobile-first: image then details stacked */
-    .media{width:100%}
-    .media svg{width:100%;height:auto;display:block;border-radius:8px;background:linear-gradient(180deg,#f8f6ff,#fff);}
-    .meta{padding:6px 2px}
-    .price{font-weight:700;font-size:1.1rem;margin:6px 0;color:#111827}
-    .description{color:var(--muted);margin:8px 0 12px}
-
-    .sizes{display:flex;gap:8px;flex-wrap:wrap}
-    .size{display:inline-flex;align-items:center;justify-content:center;padding:8px 12px;border-radius:999px;border:1px solid #e6e6e6;background:#fff;color:#111827;font-weight:600;min-width:44px;text-align:center}
-    .size[aria-disabled="true"]{opacity:0.7}
-
-    .actions{margin-top:18px}
-
-    /* Wider: two-column layout */
-    @media(min-width:800px){
-      .product{grid-template-columns:1fr 360px;align-items:start}
-      .media{order:0}
-      .meta{order:1}
-    }
-  </style>
+  <title>Product — Threadline Clothing Co.</title>
+  <meta name="description" content="A single Threadline piece: photograph, description, size selection and checkout through the group's payments widget.">
+  <link rel="stylesheet" href="styles/main.css">
 </head>
 <body>
-  <main class="wrap">
-    <header>
-      <h1 id="page-heading">Threadline — Product</h1>
-      <p class="note">This is a static, responsive product detail placeholder. Replace copy, price and the SVG with real assets before publishing.</p>
+  <div class="main">
+    <a class="skip-link" href="#content">Skip to content</a>
+
+    <header class="header">
+      <div class="brand"><a href="index.html">Threadline<small>Clothing Co.</small></a></div>
+      <nav class="nav" aria-label="Site navigation">
+        <a href="index.html">Home</a>
+        <a href="products.html" aria-current="page">Shop</a>
+        <a href="lookbook.html">Lookbook</a>
+        <a href="index.html#about">About</a>
+        <a href="size-guide.html">Size guide</a>
+        <a href="index.html#contact">Contact</a>
+      </nav>
     </header>
 
-    <section class="product" aria-labelledby="page-heading">
-      <div class="media" aria-hidden="false">
-        <!-- Inline SVG placeholder: responsive product block -->
-        <svg viewBox="0 0 800 800" role="img" aria-label="Product image placeholder">
-          <defs>
-            <linearGradient id="g" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0" stop-color="#f3f0ff"/>
-              <stop offset="1" stop-color="#ffffff"/>
-            </linearGradient>
-          </defs>
-          <rect x="0" y="0" width="800" height="800" fill="url(#g)" rx="12"/>
-          <!-- simple garment silhouette -->
-          <g transform="translate(200,160) scale(0.8)" fill="#e6e6ea">
-            <path d="M160 0c-20 0-28 10-40 24-6 8-20 18-40 18s-34-10-40-18C0 10-8 0-28 0L0 40c10 14 20 20 36 34 20 20 44 36 76 36s56-16 76-36C450 60 470 46 480 34L508 0c-20 0-28 10-40 24-6 8-20 18-40 18s-34-10-40-18C360 10 352 0 332 0z"/>
-          </g>
-          <!-- product badge -->
-          <g transform="translate(520,560)">
-            <rect x="0" y="0" width="220" height="60" rx="10" fill="#7c5cff"/>
-            <text x="110" y="38" fill="#fff" font-size="20" font-family="system-ui,Arial" text-anchor="middle" font-weight="700">FEATURE</text>
-          </g>
-        </svg>
-      </div>
+    <main id="content">
+      <p class="breadcrumb"><a href="index.html">Home</a> &rsaquo; <a href="products.html">Shop</a> &rsaquo; <span id="crumb">Product</span></p>
 
-      <div class="meta">
-        <h2 style="margin:0 0 6px">Everyday Tee</h2>
-        <div class="price">$38</div>
-        <p class="description">A clean, everyday tee in soft cotton. Cut for a modern relaxed fit — pairs with all your wardrobe staples.</p>
-
-        <div>
-          <label style="display:block;font-weight:600;margin-bottom:8px">Sizes</label>
-          <div class="sizes" role="list">
-            <span class="size" role="listitem" aria-disabled="true">XS</span>
-            <span class="size" role="listitem" aria-disabled="true">S</span>
-            <span class="size" role="listitem" aria-disabled="true">M</span>
-            <span class="size" role="listitem" aria-disabled="true">L</span>
-            <span class="size" role="listitem" aria-disabled="true">XL</span>
-          </div>
+      <!-- Filled by the script below from ?id=<product id>; scripts/products.js is the catalogue. -->
+      <section class="product" id="product" aria-live="polite">
+        <div class="media">
+          <img id="product-image" src="" alt="" width="900" height="1100">
         </div>
+        <div class="meta">
+          <p class="kicker" id="product-category"></p>
+          <h1 id="product-name">Loading…</h1>
+          <div class="price" id="product-price"></div>
+          <p class="description" id="product-description"></p>
+          <ul class="details" id="product-details"></ul>
 
-        <p class="actions"><a href="/products.html">Back to products</a></p>
+          <div>
+            <span class="field-label" id="size-label">Choose a size</span>
+            <p class="hint">Fits run relaxed. <a href="size-guide.html">Open the size guide</a>.</p>
+            <div class="sizes" id="sizes" role="group" aria-labelledby="size-label"></div>
+          </div>
 
-        <!-- d8a payments widget: inserted from the repository .d8a payments: block. The container may accept a data-default-quantity attribute, e.g. data-default-quantity="1". Individual Buy links may set data-quantity to override. -->
+          <p class="actions">
+            <button type="button" class="btn" id="buy" aria-describedby="buy-status">Buy</button>
+            <a class="btn btn-ghost" href="products.html">Back to the shop</a>
+          </p>
+          <p class="status" id="buy-status" role="status"></p>
+        </div>
+      </section>
+
+      <!-- Shown instead of the product when ?id= is missing or unknown. -->
+      <section id="not-found" hidden>
+        <h1>We couldn't find that piece</h1>
+        <p class="note">The link may be out of date. Everything we currently make is below.</p>
+        <div class="grid" id="fallback-grid"></div>
+      </section>
+
+      <section class="store-panel" aria-labelledby="store-heading">
+        <h2 id="store-heading">Checkout</h2>
+        <p>Buy sends you to the group's checkout for this piece; you come back here with your receipt. Prices in the panel are set on the group's Admin tab.</p>
+        <!-- d8a payments widget container from the repository .d8a payments: block.
+             payments-widget.js renders the group's items here and owns the checkout POST. -->
         <div id="group-store" aria-live="polite" data-default-quantity="1"><p>Loading store…</p></div>
         <noscript><p>Shop: <a href="https://d8a.com/g/batch-threadline">https://d8a.com/g/batch-threadline</a></p></noscript>
-        <script src="payments-widget.js"></script>
+      </section>
+
+      <section class="section" aria-labelledby="more-heading">
+        <div class="section-head">
+          <h2 id="more-heading">You might also like</h2>
+          <a href="products.html">See all products &rarr;</a>
+        </div>
+        <div class="grid" id="related-grid"></div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="footer-cols">
+        <div>
+          <h2>Shop</h2>
+          <ul>
+            <li><a href="products.html">All products</a></li>
+            <li><a href="lookbook.html">Lookbook</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Help</h2>
+          <ul>
+            <li><a href="size-guide.html">Size guide</a></li>
+            <li><a href="index.html#contact">Contact &amp; returns</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Threadline</h2>
+          <ul>
+            <li><a href="index.html#about">About the brand</a></li>
+            <li><a href="mailto:hello@threadline.example">hello@threadline.example</a></li>
+          </ul>
+        </div>
       </div>
-    </section>
-  </main>
+      <div>Threadline Clothing Co. — small-batch apparel. Product photography is placeholder imagery.</div>
+    </footer>
+  </div>
+
+  <script src="scripts/products.js"></script>
+  <script src="payments-widget.js"></script>
+  <script>
+    (function () {
+      var T = window.Threadline;
+      if (!T) return;
+
+      var params = new URLSearchParams(location.search);
+      var product = T.byId(params.get("id") || "");
+      var status = document.getElementById("buy-status");
+
+      var say = function (text, tone) {
+        if (!status) return;
+        status.textContent = text;
+        if (tone) { status.setAttribute("data-tone", tone); } else { status.removeAttribute("data-tone"); }
+      };
+
+      /* No id, or an id we do not sell: show the catalogue instead of a broken page. */
+      if (!product) {
+        document.getElementById("product").hidden = true;
+        var nf = document.getElementById("not-found");
+        nf.hidden = false;
+        T.renderGrid(document.getElementById("fallback-grid"), T.products);
+        document.getElementById("crumb").textContent = "Not found";
+        document.title = "Not found — Threadline Clothing Co.";
+        return;
+      }
+
+      /* ---- render the piece ---- */
+      document.title = product.name + " — Threadline Clothing Co.";
+      document.getElementById("crumb").textContent = product.name;
+      document.getElementById("product-category").textContent = product.category;
+      document.getElementById("product-name").textContent = product.name;
+      document.getElementById("product-price").textContent = T.money(product.price);
+      document.getElementById("product-description").textContent = product.description;
+
+      var image = document.getElementById("product-image");
+      image.src = product.image;
+      image.alt = product.alt || product.name;
+
+      var details = document.getElementById("product-details");
+      product.details.forEach(function (d) {
+        var li = document.createElement("li");
+        li.textContent = d;
+        details.appendChild(li);
+      });
+
+      T.renderGrid(document.getElementById("related-grid"), T.products.filter(function (p) {
+        return p.id !== product.id && (p.category === product.category || p.featured);
+      }).slice(0, 4));
+
+      /* ---- size selection ---- */
+      var chosenSize = params.get("size") || (product.sizes.length === 1 ? product.sizes[0] : "");
+      var sizeBox = document.getElementById("sizes");
+
+      var paintSizes = function () {
+        Array.prototype.forEach.call(sizeBox.querySelectorAll("button"), function (b) {
+          b.setAttribute("aria-pressed", b.dataset.size === chosenSize ? "true" : "false");
+        });
+      };
+
+      product.sizes.forEach(function (s) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "size";
+        b.dataset.size = s;
+        b.textContent = s;
+        b.setAttribute("aria-pressed", "false");
+        b.addEventListener("click", function () {
+          chosenSize = s;
+          paintSizes();
+          say("Size " + s + " selected.");
+          /* Keep the size on the URL: payments-widget.js builds its returnUrl from
+             location.href, so the choice survives the trip to checkout and back. */
+          try {
+            var url = new URL(location.href);
+            url.searchParams.set("size", s);
+            history.replaceState(null, "", url.toString());
+          } catch (e) {}
+        });
+        sizeBox.appendChild(b);
+      });
+      paintSizes();
+
+      /* ---- Buy: hand off to the widget's own Buy link for this item ---- */
+      var normalise = function (s) {
+        return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+      };
+
+      var widgetAnchorFor = function (name) {
+        var wanted = normalise(name);
+        var anchors = document.querySelectorAll("#group-store a[data-item]");
+        for (var i = 0; i < anchors.length; i++) {
+          var row = anchors[i].parentNode;
+          var label = row && row.querySelector ? row.querySelector("b") : null;
+          var text = label ? label.textContent : "";
+          if (normalise(text) === wanted || normalise(anchors[i].getAttribute("data-item")) === normalise(product.id)) {
+            return anchors[i];
+          }
+        }
+        return null;
+      };
+
+      var buy = document.getElementById("buy");
+      buy.addEventListener("click", function () {
+        if (!chosenSize) {
+          say("Choose a size first.", "error");
+          var first = sizeBox.querySelector("button");
+          if (first) first.focus();
+          return;
+        }
+        var anchor = widgetAnchorFor(product.name);
+        if (anchor) {
+          say("Opening checkout for " + product.name + ", size " + chosenSize + "…");
+          /* payments-widget.js listens on the #group-store container and owns the
+             checkout POST (including its duplicate-click guard), so we click its
+             own link rather than posting a second time from here. */
+          anchor.click();
+          return;
+        }
+        say("This piece isn't listed in the shop panel yet. Pick it in Checkout below, or email hello@threadline.example and we'll reserve size " + chosenSize + ".", "error");
+        var panel = document.getElementById("group-store");
+        if (panel && panel.scrollIntoView) panel.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+
+      /* ---- receipt: the widget fires this once the platform confirms payment ---- */
+      document.addEventListener("group-store:paid", function (e) {
+        var order = e && e.detail ? e.detail : null;
+        say("Thank you — order " + (order && order.id ? order.id : "") + " is paid" +
+          (chosenSize ? " (size " + chosenSize + ")" : "") + ". A confirmation email is on its way.", "ok");
+      });
+    })();
+  </script>
 </body>
 </html>

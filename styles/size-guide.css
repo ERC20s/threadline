@@ -1,39 +1,6 @@
-/* styles/size-guide.css - scoped size guide stylesheet */
-:root{
-  --max-width: 900px;
-  --gap: 16px;
-  --accent: #7c5cff;
-}
-html,body{height:100%;}
-body{font-family:system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;line-height:1.4;color:#0f172a;margin:0;padding:24px;display:flex;justify-content:center}
-main{width:100%;max-width:var(--max-width)}
-header h1{font-size:1.25rem;margin:0 0 8px}
-.note{margin:0 0 18px;color:#374151;font-size:0.95rem}
-.actions{margin-top:18px}
-a{color:var(--accent);text-decoration:none}
-a:focus{outline:3px solid rgba(124,92,255,0.2);outline-offset:3px}
-
-/* Table base styles (semantic markup preserved) */
-table{width:100%;border-collapse:collapse;border:0}
-caption{caption-side:top;text-align:left;font-weight:600;padding-bottom:8px}
-.col-headers th{font-weight:600;text-align:left;padding:8px 6px;color:#0f172a}
-td{padding:8px 6px;border-top:1px solid #e6e6e6}
-
-/* Mobile-first: visually stack rows but keep the table semantics for screen readers */
-@media (max-width:599px){
-  /* hide the visual header row but keep it available to screen readers */
-  .col-headers{position:relative}
-  .col-headers th{position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden}
-
-  tbody tr{display:block;border:1px solid #e6e6e6;border-radius:8px;padding:10px;margin-bottom:12px}
-  td{display:block;padding:6px 8px;border:0}
-  td[data-label]{position:relative;padding-left:110px}
-  td[data-label]::before{content:attr(data-label);position:absolute;left:10px;top:6px;font-weight:600;color:#374151}
-}
-
-/* Desktop/tablet: regular table layout with borders */
-@media (min-width:600px){
-  table{border:1px solid #e6e6e6;border-radius:6px}
-  tbody tr{display:table-row}
-  td{display:table-cell;border-left:1px solid transparent}
-}
+/* styles/size-guide.css — retired.
+   The site now has one stylesheet: styles/main.css, which carries the size-guide
+   table rules (.table-wrap, table, caption, .measure-steps). This file only
+   forwards to it so any old bookmark or copied <link> keeps working; nothing in
+   the repository links it any more, and it can be deleted once nothing does. */
+@import url("main.css");

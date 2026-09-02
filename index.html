@@ -3,125 +3,123 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Threadline — Home</title>
+  <title>Threadline Clothing Co. — small-batch wardrobe essentials</title>
+  <meta name="description" content="Threadline Clothing Co. makes small-batch wardrobe essentials: tees, shirts, knitwear and outer layers, made in short runs at honest prices.">
   <link rel="stylesheet" href="styles/main.css">
 </head>
 <body>
-  <main class="main">
+  <div class="main">
+    <a class="skip-link" href="#content">Skip to content</a>
+
     <header class="header">
-      <div class="brand">Threadline</div>
+      <div class="brand"><a href="index.html">Threadline<small>Clothing Co.</small></a></div>
       <nav class="nav" aria-label="Site navigation">
-        <a href="/">Home</a>
-        <a href="products.html">Products</a>
-        <a href="product.html">Product</a>
-        <a href="size-guide.html">Size Guide</a>
+        <a href="index.html" aria-current="page">Home</a>
+        <a href="products.html">Shop</a>
+        <a href="lookbook.html">Lookbook</a>
+        <a href="#about">About</a>
+        <a href="size-guide.html">Size guide</a>
         <a href="#contact">Contact</a>
       </nav>
     </header>
 
-    <section class="hero" aria-labelledby="home-hero">
-      <div>
-        <h1 id="home-hero">Small-batch essentials, thoughtfully made</h1>
-        <p>Clean wardrobe staples — tees, shirts and outer layers designed for everyday life. Small runs, sustainable partners, honest prices.</p>
-      </div>
-      <div style="min-width:180px;text-align:right">
-        <p style="margin:0;font-weight:700;color:#111827">Free shipping over $100</p>
-        <p style="margin:6px 0 0;color:var(--muted);font-size:0.95rem">Shop small. Shop better.</p>
-      </div>
-    </section>
+    <main id="content">
+      <section class="hero" aria-labelledby="home-hero">
+        <div>
+          <p class="kicker">Autumn collection</p>
+          <h1 id="home-hero">Small-batch essentials, thoughtfully made</h1>
+          <p>Clean wardrobe staples — tees, shirts, knitwear and outer layers designed for everyday life. Short runs, mills we have visited, prices we can explain.</p>
+          <p class="actions"><a class="btn" href="products.html">Shop the collection</a> <a class="btn btn-ghost" href="lookbook.html">See the lookbook</a></p>
+        </div>
+        <div class="hero-aside">
+          <p><strong>Free shipping over $100</strong></p>
+          <p>30-day returns, five-year repairs.</p>
+          <p><a href="size-guide.html">Find your size &rarr;</a></p>
+        </div>
+      </section>
 
-    <section aria-labelledby="products-heading">
-      <h2 id="products-heading">Featured products</h2>
-      <div class="grid" role="list">
+      <section class="section" aria-labelledby="featured-heading">
+        <div class="section-head">
+          <h2 id="featured-heading">Featured pieces</h2>
+          <a href="products.html">See all products &rarr;</a>
+        </div>
+        <div class="grid" id="featured-grid"></div>
+        <noscript>
+          <p class="note">Product cards need JavaScript to render. The full catalogue is on the
+            <a href="products.html">shop page</a>, and each item has its own page, for example
+            <a href="product.html?id=everyday-tee">the Everyday Tee</a>.</p>
+        </noscript>
+      </section>
 
-        <a class="card" role="listitem" href="products.html#p1" aria-labelledby="p1-name">
-          <div class="thumb">
-            <svg viewBox="0 0 400 400" role="img" aria-label="Everyday tee preview">
-              <defs>
-                <linearGradient id="g-1" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0" stop-color="#f3f0ff"/>
-                  <stop offset="1" stop-color="#ffffff"/>
-                </linearGradient>
-              </defs>
-              <rect width="400" height="400" rx="8" fill="url(#g-1)"/>
-            </svg>
-          </div>
+      <section class="section" id="about" aria-labelledby="about-heading">
+        <div class="section-head">
+          <h2 id="about-heading">About Threadline</h2>
+        </div>
+        <div class="about">
           <div>
-            <h3 id="p1-name" class="name">Everyday Tee</h3>
-            <div class="price">$38</div>
+            <p>Threadline Clothing Co. is a small brand run by a handful of people. We design a short list of garments, make them in runs of a few hundred, and keep making them until the fabric stops being available.</p>
+            <p>Everything is cut and sewn by two family-run workshops we visit each season. We publish what a garment costs us to make, we repair what we sell, and we would rather reprint a good tee than launch a new one every month.</p>
+            <p><a href="size-guide.html">Read the size guide</a> before you order — our fits run relaxed, and the chart lists the flat measurements of every piece.</p>
           </div>
-        </a>
+          <ul class="values">
+            <li><strong>Short runs</strong>Only what we can sell through, so nothing ends up in a landfill.</li>
+            <li><strong>Named makers</strong>Two workshops, both visited, both paid on 14-day terms.</li>
+            <li><strong>Repairs, not replacements</strong>Free repairs on outerwear for five years.</li>
+          </ul>
+        </div>
+      </section>
 
-        <a class="card" role="listitem" href="products.html#p2" aria-labelledby="p2-name">
-          <div class="thumb">
-            <svg viewBox="0 0 400 400" role="img" aria-label="Relaxed shirt preview">
-              <defs>
-                <linearGradient id="g-2" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0" stop-color="#fff7ed"/>
-                  <stop offset="1" stop-color="#ffffff"/>
-                </linearGradient>
-              </defs>
-              <rect width="400" height="400" rx="8" fill="url(#g-2)"/>
-            </svg>
-          </div>
-          <div>
-            <h3 id="p2-name" class="name">Relaxed Shirt</h3>
-            <div class="price">$48</div>
-          </div>
-        </a>
-
-        <a class="card" role="listitem" href="products.html#p3" aria-labelledby="p3-name">
-          <div class="thumb">
-            <svg viewBox="0 0 400 400" role="img" aria-label="Lightweight hoodie preview">
-              <defs>
-                <linearGradient id="g-3" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0" stop-color="#effaf9"/>
-                  <stop offset="1" stop-color="#ffffff"/>
-                </linearGradient>
-              </defs>
-              <rect width="400" height="400" rx="8" fill="url(#g-3)"/>
-            </svg>
-          </div>
-          <div>
-            <h3 id="p3-name" class="name">Lightweight Hoodie</h3>
-            <div class="price">$68</div>
-          </div>
-        </a>
-
-        <a class="card" role="listitem" href="products.html#p4" aria-labelledby="p4-name">
-          <div class="thumb">
-            <svg viewBox="0 0 400 400" role="img" aria-label="Casual pant preview">
-              <defs>
-                <linearGradient id="g-4" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0" stop-color="#f8fafc"/>
-                  <stop offset="1" stop-color="#ffffff"/>
-                </linearGradient>
-              </defs>
-              <rect width="400" height="400" rx="8" fill="url(#g-4)"/>
-            </svg>
-          </div>
-          <div>
-            <h3 id="p4-name" class="name">Casual Pant</h3>
-            <div class="price">$58</div>
-          </div>
-        </a>
-
-      </div>
-      <div class="actions">
-        <a href="products.html">See all products</a>
-      </div>
-    </section>
-
-    <section id="contact" aria-labelledby="contact-heading" class="contact">
-      <h2 id="contact-heading">Contact</h2>
-      <p>If you have questions about sizing, stock or collaborations, email hello@threadline.example or use the contact form on the store page.</p>
-      <p class="actions"><a href="/products.html">Visit the shop</a></p>
-    </section>
+      <section class="contact" id="contact" aria-labelledby="contact-heading">
+        <h2 id="contact-heading">Contact</h2>
+        <p>Questions about sizing, stock, repairs or stockists? We answer every message, usually within two working days.</p>
+        <dl>
+          <dt>Email</dt>
+          <dd><a href="mailto:hello@threadline.example">hello@threadline.example</a></dd>
+          <dt>Studio</dt>
+          <dd>Unit 4, Old Weaving Works, Bristol — open Thursdays, 10:00 to 16:00.</dd>
+          <dt>Returns</dt>
+          <dd>30 days, unworn, in the original packaging. Email us for a label.</dd>
+        </dl>
+        <p class="actions"><a class="btn" href="products.html">Visit the shop</a> <a class="btn btn-ghost" href="size-guide.html">Size guide</a></p>
+      </section>
+    </main>
 
     <footer>
-      <div>Threadline Clothing Co. — small batch apparel</div>
-      <div style="margin-top:6px">Built with a simple static site and the group's embedded payments widget.</div>
+      <div class="footer-cols">
+        <div>
+          <h2>Shop</h2>
+          <ul>
+            <li><a href="products.html">All products</a></li>
+            <li><a href="product.html?id=everyday-tee">Everyday Tee</a></li>
+            <li><a href="product.html?id=canvas-overshirt">Canvas Overshirt</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Help</h2>
+          <ul>
+            <li><a href="size-guide.html">Size guide</a></li>
+            <li><a href="#contact">Contact &amp; returns</a></li>
+            <li><a href="lookbook.html">Lookbook</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Threadline</h2>
+          <ul>
+            <li><a href="#about">About the brand</a></li>
+            <li><a href="mailto:hello@threadline.example">hello@threadline.example</a></li>
+          </ul>
+        </div>
+      </div>
+      <div>Threadline Clothing Co. — small-batch apparel. Product photography is placeholder imagery.</div>
     </footer>
-  </main>
+  </div>
+
+  <script src="scripts/products.js"></script>
+  <script>
+    (function () {
+      var grid = document.getElementById("featured-grid");
+      if (window.Threadline && grid) window.Threadline.renderGrid(grid, window.Threadline.featured());
+    })();
+  </script>
 </body>
 </html>

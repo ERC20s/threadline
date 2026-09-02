@@ -3,162 +3,136 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Threadline — Products</title>
-  <style>
-    :root{--max-width:980px;--gap:16px;--accent:#7c5cff;--muted:#6b7280}
-    html,body{height:100%}
-    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;margin:0;padding:24px;box-sizing:border-box;color:#0f172a;background:#fff;display:flex;justify-content:center}
-    .wrap{width:100%;max-width:var(--max-width)}
-    header h1{font-size:1.25rem;margin:0 0 8px}
-    .note{margin:0 0 16px;color:var(--muted);font-size:0.95rem}
-    a{color:var(--accent);text-decoration:none}
-    a:focus{outline:3px solid rgba(124,92,255,0.18);outline-offset:3px}
-
-    .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--gap)}
-    @media(min-width:800px){.grid{grid-template-columns:repeat(4,1fr)}}
-
-    .card{display:flex;flex-direction:column;gap:10px;text-decoration:none;color:inherit}
-    .thumb{border-radius:8px;overflow:hidden;background:#fff}
-    .thumb svg{display:block;width:100%;height:auto}
-
-    .name{font-weight:700;margin:0;font-size:0.95rem}
-    .price{color:#111827;font-weight:700}
-
-    .card:focus{box-shadow:0 0 0 4px rgba(124,92,255,0.08),0 2px 8px rgba(2,6,23,0.06);border-radius:8px}
-
-    .actions{margin-top:18px}
-  </style>
+  <title>Shop — Threadline Clothing Co.</title>
+  <meta name="description" content="The full Threadline catalogue: tees, shirts, knitwear, outerwear, dresses and accessories, made in short runs.">
+  <link rel="stylesheet" href="styles/main.css">
 </head>
 <body>
-  <main class="wrap">
-    <header>
-      <h1 id="page-heading">Threadline — Products</h1>
-      <p class="note">A responsive product grid of placeholder items. Each thumbnail contains its own inline SVG <defs> with a unique gradient id to avoid duplicate references; SVGs expose accessible names. Replace placeholders with real assets before publishing.</p>
+  <div class="main">
+    <a class="skip-link" href="#content">Skip to content</a>
+
+    <header class="header">
+      <div class="brand"><a href="index.html">Threadline<small>Clothing Co.</small></a></div>
+      <nav class="nav" aria-label="Site navigation">
+        <a href="index.html">Home</a>
+        <a href="products.html" aria-current="page">Shop</a>
+        <a href="lookbook.html">Lookbook</a>
+        <a href="index.html#about">About</a>
+        <a href="size-guide.html">Size guide</a>
+        <a href="index.html#contact">Contact</a>
+      </nav>
     </header>
 
-    <section aria-labelledby="page-heading">
-      <div class="grid" role="list">
+    <main id="content">
+      <p class="breadcrumb"><a href="index.html">Home</a> &rsaquo; Shop</p>
+      <h1 id="page-heading">The collection</h1>
+      <p class="note">Every piece we currently make, in the sizes we currently hold. Fits run relaxed — check the <a href="size-guide.html">size guide</a> before ordering.</p>
 
-        <a class="card" role="listitem" href="product.html" aria-labelledby="p1-name">
-          <div class="thumb">
-            <svg viewBox="0 0 400 400" role="img" aria-label="Everyday tee preview">
-              <defs>
-                <linearGradient id="g-1" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0" stop-color="#f3f0ff"/>
-                  <stop offset="1" stop-color="#ffffff"/>
-                </linearGradient>
-              </defs>
-              <rect width="400" height="400" rx="8" fill="url(#g-1)"/>
-              <g transform="translate(80,80) scale(0.6)" fill="#e6e6ea">
-                <path d="M160 0c-20 0-28 10-40 24-6 8-20 18-40 18s-34-10-40-18C0 10-8 0-28 0L0 40c10 14 20 20 36 34 20 20 44 36 76 36s56-16 76-36C450 60 470 46 480 34L508 0c-20 0-28 10-40 24-6 8-20 18-40 18s-34-10-40-18C360 10 352 0 332 0z"/>
-              </g>
-            </svg>
-          </div>
-          <div>
-            <h3 id="p1-name" class="name">Everyday Tee</h3>
-            <div class="price">$38</div>
-          </div>
-        </a>
+      <section aria-labelledby="page-heading">
+        <div class="actions" id="filters" role="group" aria-label="Filter by category"></div>
+        <div class="grid" id="catalogue-grid"></div>
+        <p class="status" id="catalogue-status" role="status"></p>
 
-        <a class="card" role="listitem" href="product.html" aria-labelledby="p2-name">
-          <div class="thumb">
-            <svg viewBox="0 0 400 400" role="img" aria-label="Relaxed shirt preview">
-              <defs>
-                <linearGradient id="g-2" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0" stop-color="#fff7ed"/>
-                  <stop offset="1" stop-color="#ffffff"/>
-                </linearGradient>
-              </defs>
-              <rect width="400" height="400" rx="8" fill="url(#g-2)"/>
-            </svg>
-          </div>
-          <div>
-            <h3 id="p2-name" class="name">Relaxed Shirt</h3>
-            <div class="price">$48</div>
-          </div>
-        </a>
+        <noscript>
+          <p class="note">The grid is rendered from <code>scripts/products.js</code>. Without JavaScript, use these direct links:</p>
+          <ul>
+            <li><a href="product.html?id=everyday-tee">Everyday Tee — $38</a></li>
+            <li><a href="product.html?id=relaxed-shirt">Relaxed Shirt — $48</a></li>
+            <li><a href="product.html?id=lightweight-hoodie">Lightweight Hoodie — $68</a></li>
+            <li><a href="product.html?id=casual-pant">Casual Pant — $58</a></li>
+            <li><a href="product.html?id=woven-shirt">Woven Shirt — $52</a></li>
+            <li><a href="product.html?id=classic-cap">Classic Cap — $22</a></li>
+            <li><a href="product.html?id=merino-crew">Merino Crew Knit — $88</a></li>
+            <li><a href="product.html?id=canvas-overshirt">Canvas Overshirt — $94</a></li>
+            <li><a href="product.html?id=linen-dress">Linen Summer Dress — $76</a></li>
+            <li><a href="product.html?id=ribbed-longsleeve">Ribbed Longsleeve — $44</a></li>
+            <li><a href="product.html?id=wool-scarf">Lambswool Scarf — $46</a></li>
+            <li><a href="product.html?id=denim-jacket">Rigid Denim Jacket — $118</a></li>
+          </ul>
+        </noscript>
+      </section>
 
-        <a class="card" role="listitem" href="product.html" aria-labelledby="p3-name">
-          <div class="thumb">
-            <svg viewBox="0 0 400 400" role="img" aria-label="Lightweight hoodie preview">
-              <defs>
-                <linearGradient id="g-3" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0" stop-color="#effaf9"/>
-                  <stop offset="1" stop-color="#ffffff"/>
-                </linearGradient>
-              </defs>
-              <rect width="400" height="400" rx="8" fill="url(#g-3)"/>
-            </svg>
-          </div>
-          <div>
-            <h3 id="p3-name" class="name">Lightweight Hoodie</h3>
-            <div class="price">$68</div>
-          </div>
-        </a>
-
-        <a class="card" role="listitem" href="product.html" aria-labelledby="p4-name">
-          <div class="thumb">
-            <svg viewBox="0 0 400 400" role="img" aria-label="Casual pant preview">
-              <defs>
-                <linearGradient id="g-4" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0" stop-color="#f8fafc"/>
-                  <stop offset="1" stop-color="#ffffff"/>
-                </linearGradient>
-              </defs>
-              <rect width="400" height="400" rx="8" fill="url(#g-4)"/>
-            </svg>
-          </div>
-          <div>
-            <h3 id="p4-name" class="name">Casual Pant</h3>
-            <div class="price">$58</div>
-          </div>
-        </a>
-
-        <a class="card" role="listitem" href="product.html" aria-labelledby="p5-name">
-          <div class="thumb">
-            <svg viewBox="0 0 400 400" role="img" aria-label="Woven shirt preview">
-              <defs>
-                <linearGradient id="g-5" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0" stop-color="#fff1f2"/>
-                  <stop offset="1" stop-color="#ffffff"/>
-                </linearGradient>
-              </defs>
-              <rect width="400" height="400" rx="8" fill="url(#g-5)"/>
-            </svg>
-          </div>
-          <div>
-            <h3 id="p5-name" class="name">Woven Shirt</h3>
-            <div class="price">$52</div>
-          </div>
-        </a>
-
-        <a class="card" role="listitem" href="product.html" aria-labelledby="p6-name">
-          <div class="thumb">
-            <svg viewBox="0 0 400 400" role="img" aria-label="Classic cap preview">
-              <defs>
-                <linearGradient id="g-6" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0" stop-color="#eef2ff"/>
-                  <stop offset="1" stop-color="#ffffff"/>
-                </linearGradient>
-              </defs>
-              <rect width="400" height="400" rx="8" fill="url(#g-6)"/>
-            </svg>
-          </div>
-          <div>
-            <h3 id="p6-name" class="name">Classic Cap</h3>
-            <div class="price">$22</div>
-          </div>
-        </a>
-
-      </div>
-
-      <div class="actions">
-        <!-- d8a payments widget: copied from the repository .d8a payments block / product.html. The container may accept a data-default-quantity attribute, e.g. data-default-quantity="1". Individual Buy links may set data-quantity to override. -->
+      <section class="store-panel" aria-labelledby="store-heading">
+        <h2 id="store-heading">Buy direct from the group shop</h2>
+        <p>Items and prices come from the group's shop; card payments land in the group's shared balance.</p>
+        <!-- d8a payments widget: the container from the repository .d8a payments: block.
+             data-default-quantity is read by payments-widget.js; a Buy link may override it
+             with data-quantity. -->
         <div id="group-store" aria-live="polite" data-default-quantity="1"><p>Loading store…</p></div>
         <noscript><p>Shop: <a href="https://d8a.com/g/batch-threadline">https://d8a.com/g/batch-threadline</a></p></noscript>
-        <script src="payments-widget.js"></script>
+      </section>
+    </main>
+
+    <footer>
+      <div class="footer-cols">
+        <div>
+          <h2>Shop</h2>
+          <ul>
+            <li><a href="products.html">All products</a></li>
+            <li><a href="lookbook.html">Lookbook</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Help</h2>
+          <ul>
+            <li><a href="size-guide.html">Size guide</a></li>
+            <li><a href="index.html#contact">Contact &amp; returns</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Threadline</h2>
+          <ul>
+            <li><a href="index.html#about">About the brand</a></li>
+            <li><a href="mailto:hello@threadline.example">hello@threadline.example</a></li>
+          </ul>
+        </div>
       </div>
-    </section>
-  </main>
+      <div>Threadline Clothing Co. — small-batch apparel. Product photography is placeholder imagery.</div>
+    </footer>
+  </div>
+
+  <script src="scripts/products.js"></script>
+  <script src="payments-widget.js"></script>
+  <script>
+    (function () {
+      var T = window.Threadline;
+      var grid = document.getElementById("catalogue-grid");
+      var filters = document.getElementById("filters");
+      var status = document.getElementById("catalogue-status");
+      if (!T || !grid) return;
+
+      var categories = ["All"];
+      T.products.forEach(function (p) {
+        if (categories.indexOf(p.category) === -1) categories.push(p.category);
+      });
+
+      var show = function (category) {
+        var list = category === "All" ? T.products : T.products.filter(function (p) {
+          return p.category === category;
+        });
+        T.renderGrid(grid, list);
+        if (status) {
+          status.textContent = list.length + (list.length === 1 ? " piece" : " pieces") +
+            (category === "All" ? " in the collection." : " in " + category + ".");
+        }
+        Array.prototype.forEach.call(filters.querySelectorAll("button"), function (b) {
+          b.setAttribute("aria-pressed", b.dataset.category === category ? "true" : "false");
+        });
+      };
+
+      categories.forEach(function (c) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "size";
+        b.dataset.category = c;
+        b.textContent = c;
+        b.setAttribute("aria-pressed", c === "All" ? "true" : "false");
+        b.addEventListener("click", function () { show(c); });
+        filters.appendChild(b);
+      });
+
+      show("All");
+    })();
+  </script>
 </body>
 </html>
