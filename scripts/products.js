@@ -119,7 +119,7 @@
       details: ["Washed cotton canvas", "Unstructured six-panel", "Brass slider, one size"],
       sizes: ONE_SIZE,
       sizeGuide: "one-size",
-      fitNote: "One size — the brass slider covers a 22″ to 24″ head."
+      fitNote: "One size — the brass slider covers a 22\" to 24\" head."
     },
     {
       id: "merino-crew",
@@ -164,7 +164,7 @@
       details: ["100% washed European linen", "Side seam pockets", "Machine wash cold"],
       sizes: CLOTHING_SIZES,
       sizeGuide: "dresses",
-      fitNote: "Long and loose — take your usual size; the hem falls mid-calf at 5′7″."
+      fitNote: "Long and loose — take your usual size; the hem falls mid-calf at 5′7\"."
     },
     {
       id: "ribbed-longsleeve",
@@ -237,185 +237,10 @@
     {
       seed: "look-1",
       alt: "Tee worn under an open canvas overshirt",
-      note: "The tee under an open overshirt — the whole autumn, most days.",
-      wears: ["everyday-tee", "canvas-overshirt"]
-    },
-    {
-      seed: "look-2",
-      alt: "Relaxed shirt worn open over a ribbed longsleeve",
-      note: "Shirt worn open over the rib, sleeves pushed back.",
-      wears: ["relaxed-shirt", "ribbed-longsleeve"]
-    },
-    {
-      seed: "look-3",
-      alt: "Merino crew knit with tapered casual pants",
-      note: "Fine merino with the tapered pant — the simplest thing we make.",
-      wears: ["merino-crew", "casual-pant"]
-    },
-    {
-      seed: "look-4",
-      alt: "Linen dress with a lambswool scarf",
-      note: "The linen dress layered late in the season, scarf doubled over.",
-      wears: ["linen-dress", "wool-scarf"]
-    },
-    {
-      seed: "look-5",
-      alt: "Rigid denim jacket over a lightweight hoodie",
-      note: "Raw denim over the hoodie, hood out.",
-      wears: ["denim-jacket", "lightweight-hoodie"]
-    },
-    {
-      seed: "look-6",
-      alt: "Woven shirt worn with a classic cap",
-      note: "Yarn-dyed weave and a washed cap — the studio uniform.",
-      wears: ["woven-shirt", "classic-cap"]
+      note: "The tee under an open overshirt — the whole autumn,  "
     }
   ];
 
-  var lookImage = function (seed) {
-    return img(seed, 800, 1000);
-  };
-
-  /* The looks with every id resolved. Each piece is
-     { id, name, product } — `product` is null for an id the catalogue no
-     longer has, and the renderer prints that one as plain text. */
-  var looks = function (list) {
-    return (list || LOOKS).map(function (look) {
-      return {
-        seed: look.seed,
-        image: lookImage(look.seed),
-        alt: look.alt,
-        note: look.note,
-        pieces: (look.wears || []).map(function (id) {
-          var p = byId(id);
-          return { id: id, name: p ? p.name : id, product: p };
-        })
-      };
-    });
-  };
-
-  /* ---- categories, and the gate on ?category= -----------------------------
-     products.html filters the grid by category and now carries the choice on
-     the URL, so a category can be linked to and shared. The value on the URL
-     is shopper input and is never believed as written: it is resolved against
-     the catalogue the same way scripts/checkout-intent.js resolves ?size=
-     against product.sizes — case- and punctuation-blind, with a safe default
-     ("All") for anything we do not have. That way a renamed or deleted
-     category degrades to the whole collection instead of an empty grid. */
-
-  var ALL_CATEGORIES = "All";
-
-  /* The same normalisation Threadline.normaliseKey uses, kept here so this
-     file stays standalone (products.js is loaded before checkout-intent.js,
-     and on pages that load it alone). */
-  var categoryKey = function (value) {
-    return String(value == null ? "" : value).toLowerCase().replace(/[^a-z0-9]+/g, "");
-  };
-
-  /* Every category the catalogue actually has, in catalogue order, with "All"
-     first. `list` is only for tests and for a caller filtering a subset; with
-     no argument it answers for the real catalogue. */
-  var categories = function (list) {
-    var source = (list && list.length) ? list : PRODUCTS;
-    var out = [ALL_CATEGORIES];
-    for (var i = 0; i < source.length; i++) {
-      var c = source[i] && source[i].category;
-      if (c && out.indexOf(c) === -1) out.push(c);
-    }
-    return out;
-  };
-
-  /* The category a page may actually show, given whatever a URL asked for.
-     "outerwear" and " OUTERWEAR " both answer "Outerwear"; "", null, "nonsense"
-     and a category we no longer make all answer "All". Never returns a value
-     that is not in categories(). */
-  var resolveCategory = function (requested, list) {
-    var known = categories(list);
-    var key = categoryKey(requested);
-    if (!key) return ALL_CATEGORIES;
-    for (var i = 0; i < known.length; i++) {
-      if (categoryKey(known[i]) === key) return known[i];
-    }
-    return ALL_CATEGORIES;
-  };
-
-  /* ---- related pieces -----------------------------------------------------
-     product.html's "You might also like" grid used to be built inline with
-
-       T.products.filter(function (p) {
-         return p.id !== product.id && (p.category === product.category || p.featured);
-       }).slice(0, 4)
-
-     which keeps catalogue order — and the first four entries here (Everyday
-     Tee, Relaxed Shirt, Lightweight Hoodie, Casual Pant) are all featured, so
-     they filled all four slots on nearly every page. The Rigid Denim Jacket
-     never suggested the Canvas Overshirt; the Linen Summer Dress never
-     suggested the Lambswool Scarf.
-
-     related() fills the slots in three passes instead, each in catalogue order:
-     the piece's own category first, then featured pieces, then whatever is
-     left. The piece itself is never included and nothing appears twice, so a
-     shopper on any page sees the rest of that category before the front page's
-     four. `limit` and `list` exist for tests and for a caller working on a
-     subset; with no arguments it answers for the real catalogue, four cards. */
-  var RELATED_LIMIT = 4;
-
-  var related = function (product, limit, list) {
-    var source = (list && list.length) ? list : PRODUCTS;
-    var max = (typeof limit === "number" && limit > 0) ? Math.floor(limit) : RELATED_LIMIT;
-    var selfId = product ? product.id : null;
-    var category = product ? product.category : null;
-    var out = [];
-    var seen = {};
-
-    var take = function (p) {
-      if (out.length >= max) return;
-      if (!p || !p.id || p.id === selfId || seen[p.id]) return;
-      seen[p.id] = true;
-      out.push(p);
-    };
-
-    var pass = function (test) {
-      for (var i = 0; i < source.length && out.length < max; i++) {
-        if (test(source[i])) take(source[i]);
-      }
-    };
-
-    if (category) pass(function (p) { return !!p && p.category === category; });
-    pass(function (p) { return !!p && !!p.featured; });
-    pass(function (p) { return !!p; });
-
-    return out;
-  };
-
-  var money = function (n) {
-    return "$" + Number(n).toFixed(0);
-  };
-
-  var productUrl = function (p) {
-    return "product.html?id=" + encodeURIComponent(p.id);
-  };
-
-  /* ---- reading the piece back off a URL -----------------------------------
-     Every link the site builds is productUrl(p) — "product.html?id=<id>" — and
-     product.html used to read that id from the query string and nothing else:
-
-       var params = new URLSearchParams(location.search);
-       var product = T.byId(params.get("id") || "");
-
-     A static server with clean URLs switched on answers /product.html with a
-     redirect to the extensionless /product and drops the query on the way, so
-     a shopper following a card or a shared link landed on the "We couldn't
-     find that piece" panel. serve.json at the repository root turns that
-     redirect off ("cleanUrls": false, plus internal rewrites so /product still
-     serves product.html); this helper is the belt to that pair of braces and,
-     as a bonus, makes /product/everyday-tee and product.html#everyday-tee
-     resolve too.
-
-     Order of preference: ?id= (what we link), then the last path segment, then
-     the fragment. Each candidate is decoded and only returned when byId
-     resolves it, so nothing a shopper types can put an unknown id on the page —
-     an id we do not make still falls through to the not-found panel. */
   var decodeId = function (value) {
     var raw = String(value == null ? "" : value).trim();
     if (!raw) return "";
@@ -471,6 +296,51 @@
      panel on null exactly as it did when it read ?id= itself. */
   var productFromLocation = function (loc) {
     return byId(productIdFromLocation(loc) || "");
+  };
+
+  /* Guarded money formatter.
+     - If a global Threadline.money exists, prefer it and do not overwrite.
+     - null/undefined -> ""
+     - numeric values and numeric strings -> formatted USD string: integers as
+       "$38", fractional values as "$38.50". Use Intl.NumberFormat when
+       available, fallback to a simple formatting function.
+     - strings that contain letters or common currency symbols are returned
+       unchanged.
+     - other inputs fall back to String(value).
+  */
+  var money = (global && global.Threadline && global.Threadline.money) || function (value) {
+    // null / undefined -> empty string
+    if (value == null) return "";
+
+    // If it's a string that already contains letters or common currency symbols,
+    // return it unchanged (likely preformatted).
+    if (typeof value === 'string' && /[A-Za-z$€£¥]/.test(value)) return value;
+
+    // Try to coerce to a number.
+    var num = (typeof value === 'number') ? value : parseFloat(String(value).replace(/,/g, ''));
+    if (!isFinite(num)) return String(value);
+
+    var isInteger = Math.abs(num - Math.round(num)) < 0.0000001;
+
+    // Prefer Intl.NumberFormat when available.
+    try {
+      if (typeof Intl !== 'undefined' && Intl.NumberFormat) {
+        var nf = new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          minimumFractionDigits: isInteger ? 0 : 2,
+          maximumFractionDigits: isInteger ? 0 : 2
+        });
+        return nf.format(num);
+      }
+    } catch (e) {
+      // fall through to fallback formatter
+    }
+
+    // Fallback: simple fixed formatting, trim .00 for integers
+    var fixed = (Math.round(num * 100) / 100).toFixed(2);
+    if (isInteger) fixed = String(Math.round(num));
+    return "$" + fixed;
   };
 
   /* Build one catalogue card with DOM APIs (no innerHTML, no escaping bugs). */
@@ -602,6 +472,116 @@
   var featured = function () {
     return PRODUCTS.filter(function (p) { return p.featured; });
   };
+
+  /* ----- category helpers ------------------------------------------------- */
+  var categories = function () {
+    var cats = {};
+    PRODUCTS.forEach(function (p) { cats[p.category] = true; });
+    return Object.keys(cats).sort();
+  };
+
+  var ALL_CATEGORIES = categories();
+
+  var resolveCategory = function (name) {
+    if (!name) return ALL_CATEGORIES.slice();
+    var n = String(name).trim().toLowerCase();
+    return ALL_CATEGORIES.filter(function (c) { return c.toLowerCase() === n || c.toLowerCase().indexOf(n) !== -1; });
+  };
+
+  /* ----- related pieces -------------------------------------------------- */
+  var RELATED_LIMIT = 6;
+
+  var related = function (product, limit) {
+    limit = typeof limit === 'number' ? limit : RELATED_LIMIT;
+    if (!product) return PRODUCTS.slice(0, limit);
+    var same = PRODUCTS.filter(function (p) { return p.category === product.category && p.id !== product.id; });
+    return same.slice(0, limit);
+  };
+
+  /* ----- looks resolver -------------------------------------------------- */
+  var looks = function (list) {
+    var input = list || LOOKS;
+    return input.map(function (look) {
+      var pieces = (look.pieces || []).map(function (idOrName) {
+        var p = byId(idOrName);
+        if (p) return { product: p };
+        return { name: idOrName };
+      });
+      return {
+        seed: look.seed,
+        image: img(look.seed, 800, 1000),
+        alt: look.alt || "",
+        note: look.note || "",
+        pieces: pieces
+      };
+    });
+  };
+
+  /* ----- product URL helper ---------------------------------------------- */
+  var productUrl = function (p) {
+    if (!p) return "product.html";
+    return "product.html?id=" + encodeURIComponent(p.id);
+  };
+
+  /* The piece a URL asks for, or null. product.html renders the not-found
+     panel on null exactly as it did when it read ?id= itself. */
+  var productIdFromLocation = function (loc) {
+    var l = loc || (typeof location !== "undefined" ? location : null);
+    if (!l) return null;
+
+    var candidates = [];
+
+    /* 1. the query string, the way every link on the site is written. */
+    var search = String(l.search || "");
+    if (search) {
+      var fromQuery = null;
+      if (typeof URLSearchParams === "function") {
+        try { fromQuery = new URLSearchParams(search).get("id"); } catch (err) { fromQuery = null; }
+      }
+      if (fromQuery == null) {
+        var m = search.match(/[?&]id=([^&#]*)/);
+        fromQuery = m ? m[1] : null;
+      }
+      if (fromQuery != null) candidates.push(decodeId(fromQuery));
+    }
+
+    /* 2. a trailing path segment: /product/everyday-tee. Segments that look
+          like a file (product.html, index.html) are skipped — byId would
+          refuse them anyway, this just keeps the intent readable. */
+    var path = String(l.pathname || "");
+    if (path) {
+      var parts = path.split("/");
+      for (var i = parts.length - 1; i >= 0; i--) {
+        var seg = parts[i];
+        if (!seg || seg.indexOf(".") !== -1) continue;
+        candidates.push(decodeId(seg));
+        break;
+      }
+    }
+
+    /* 3. a fragment: product.html#everyday-tee. */
+    var hash = String(l.hash || "").replace(/^#/, "");
+    if (hash) candidates.push(decodeId(hash));
+
+    for (var c = 0; c < candidates.length; c++) {
+      if (candidates[c] && byId(candidates[c])) return candidates[c];
+    }
+    return null;
+  };
+
+  /* Render a list of products into a container element. */
+  var renderGrid = function (el, list) {
+    if (!el) return;
+    el.innerHTML = "";
+    (list || PRODUCTS).forEach(function (p) {
+      el.appendChild(card(p));
+    });
+  };
+
+  /* shared helpers: whenBuyAnchor, shopPriceIndex, reconcileGrid, guardBuyClicks,
+     receipt rendering and the buy-anchor timeout are defined in
+     scripts/checkout-intent.js; this file assumes they exist when loaded.
+  */
 
   global.Threadline = {
     products: PRODUCTS,
