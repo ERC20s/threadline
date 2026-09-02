@@ -82,6 +82,34 @@
         </div>
       </section>
 
+      <!-- The account form. scripts/account.js posts it to the accounts service
+           (server/index.js), which stores the person in MongoDB. Leave
+           data-accounts-base empty for same origin (nginx proxies /api to the
+           `api` run entry); set it to http://localhost:4010 when the static
+           site and the service are served on different ports in development. -->
+      <section class="section" id="account" aria-labelledby="account-heading">
+        <h2 id="account-heading">Create an account</h2>
+        <p>One address, one list: restock notes for the pieces you asked about, the new season before it goes public, and nothing else. Your order emails still come from the shop.</p>
+        <form class="account-form" data-account-form data-account-source="home" data-accounts-base="" novalidate>
+          <div class="account-field">
+            <label for="account-name">Name <span class="hint">optional</span></label>
+            <input id="account-name" name="name" type="text" autocomplete="name" maxlength="80" placeholder="Ada Weaver">
+          </div>
+          <div class="account-field">
+            <label for="account-email">Email</label>
+            <input id="account-email" name="email" type="email" autocomplete="email" maxlength="200" required placeholder="you@example.com">
+          </div>
+          <label class="account-consent">
+            <input id="account-consent" name="consent" type="checkbox" value="yes">
+            Email me when a piece I looked at is back in stock.
+          </label>
+          <p class="actions"><button class="btn" type="submit">Create account</button></p>
+          <p class="hint" data-account-status role="status" aria-live="polite"></p>
+        </form>
+        <p class="hint">We keep your name, your email and that one choice — nothing else, no tracking, no sharing. Ask us at <a href="mailto:hello@threadline.example">hello@threadline.example</a> to see or delete what we hold.</p>
+        <noscript><p class="hint">Accounts need JavaScript. Email <a href="mailto:hello@threadline.example">hello@threadline.example</a> and we'll add you by hand.</p></noscript>
+      </section>
+
       <section class="contact" id="contact" aria-labelledby="contact-heading">
         <h2 id="contact-heading">Contact</h2>
         <p>Questions about sizing, stock, repairs or stockists? We answer every message, usually within two working days.</p>
@@ -119,6 +147,7 @@
           <h2>Threadline</h2>
           <ul>
             <li><a href="#about">About the brand</a></li>
+            <li><a href="#account">Create an account</a></li>
             <li><a href="mailto:hello@threadline.example">hello@threadline.example</a></li>
           </ul>
         </div>
@@ -133,6 +162,9 @@
        window.Threadline namespace, and before payments-widget.js, which fills
        #group-store. -->
   <script src="scripts/checkout-intent.js"></script>
+  <!-- The account form above: wires itself on load and posts to the accounts
+       service, which keeps the site's users in MongoDB. -->
+  <script src="scripts/account.js"></script>
   <script src="payments-widget.js"></script>
   <script>
     (function () {

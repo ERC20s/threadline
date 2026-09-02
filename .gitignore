@@ -1,0 +1,8 @@
+# Installed dependencies for the accounts service (server/) — never committed.
+node_modules/
+server/node_modules/
+
+# Real setting values live on the box (/etc/d8a/keys.env), never in the repo.
+# .env.example carries the NAMES only.
+.env
+.env.local

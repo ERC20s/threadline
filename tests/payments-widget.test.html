@@ -257,6 +257,10 @@
        change its answers. -->
   <script src="../scripts/products.js"></script>
   <script src="../scripts/checkout-intent.js"></script>
+  <!-- The account form's helpers (assertion 22). It wires any
+       form[data-account-form] on load; this page has none, so loading it here
+       is inert apart from the pure functions it exports. -->
+  <script src="../scripts/account.js"></script>
   <script src="../payments-widget.js"></script>
 
   <script>
@@ -1581,6 +1585,107 @@
           note('shop-down-rejects-store-error',
             reason === 'store-error' && T.isShopDownReason(err),
             'rejection reason=' + reason);
+        });
+      })();
+
+      // ---- assertion 22: the account form ------------------------------
+      // scripts/account.js posts a sign-up to the accounts service
+      // (server/index.js), which stores the person in MongoDB. Two things must
+      // hold: the browser must refuse exactly what the service refuses (so we
+      // never show "you're on the list" for an address that was never stored),
+      // and a failing service must say so instead of pretending. Everything
+      // here runs over a DETACHED form with window.fetch stubbed and restored,
+      // so it cannot disturb the recorded checkout POSTs above.
+      (function runAccountFormTest() {
+        var T = window.Threadline;
+        if (!T || typeof T.validEmail !== 'function' || typeof T.signUp !== 'function' ||
+            typeof T.wireAccountForm !== 'function') {
+          note('account-form-helpers', false, 'Threadline.validEmail/signUp/wireAccountForm missing');
+          return;
+        }
+
+        var good = ['ada@example.com', ' Ada@Example.com ', 'a.b+tag@mail.example.co.uk'];
+        var bad = ['', '   ', 'ada', 'ada@', '@example.com', 'ada@example', 'a b@example.com', null];
+        var emailOk = good.every(function (v) { return T.validEmail(v); }) &&
+          bad.every(function (v) { return !T.validEmail(v); }) &&
+          T.normaliseEmail(' Ada@Example.com ') === 'ada@example.com';
+        note('account-email-rule', emailOk,
+          'good=' + JSON.stringify(good.map(T.validEmail)) +
+          ' bad=' + JSON.stringify(bad.map(T.validEmail)));
+
+        // Where the service is: empty attribute = same origin; an absolute
+        // http(s) origin is used as written; junk is ignored rather than
+        // producing a broken URL.
+        var mk = function (value) {
+          var f = document.createElement('form');
+          if (value !== null) f.setAttribute('data-accounts-base', value);
+          return f;
+        };
+        note('account-base-resolution',
+          T.accountsBase(mk('')) === '' &&
+          T.accountsBase(mk('http://localhost:4010/')) === 'http://localhost:4010' &&
+          T.accountsBase(mk('javascript:alert(1)')) === '' &&
+          T.accountsUrl('/api/users', mk('http://localhost:4010')) === 'http://localhost:4010/api/users',
+          'base=' + JSON.stringify(T.accountsBase(mk('http://localhost:4010/'))));
+
+        // A bad address never reaches the network.
+        var touched = false;
+        var realFetch = window.fetch;
+        window.fetch = function () { touched = true; return realFetch.apply(this, arguments); };
+        T.signUp({ email: 'not-an-address' }).then(function (result) {
+          note('account-bad-email-never-posts',
+            result.ok === false && touched === false && !!result.error,
+            'posted=' + touched + ' error=' + JSON.stringify(result.error));
+          window.fetch = realFetch;
+
+          // The form itself: a stubbed service that answers 201 must produce a
+          // thank-you, and one that fails must say the service is not
+          // answering AND offer the mailto — never "you're on the list".
+          var form = document.createElement('form');
+          form.setAttribute('data-account-form', '');
+          form.innerHTML = '<input name="name" value="Ada"><input name="email" value="ada@example.com">' +
+            '<input type="checkbox" name="consent" checked>' +
+            '<p data-account-status></p><button type="submit">Create account</button>';
+          var status = form.querySelector('[data-account-status]');
+          var sent = null;
+          window.fetch = function (url, opts) {
+            sent = { url: String(url), body: JSON.parse((opts && opts.body) || '{}') };
+            return Promise.resolve({
+              ok: true, status: 201,
+              json: function () { return Promise.resolve({ ok: true, user: { email: 'ada@example.com', returning: false } }); }
+            });
+          };
+          T.wireAccountForm(form);
+          form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+
+          setTimeout(function () {
+            note('account-signup-posts-and-thanks',
+              !!sent && /\/api\/users$/.test(sent.url) &&
+              sent.body.email === 'ada@example.com' && sent.body.name === 'Ada' &&
+              sent.body.consent === true &&
+              /thank you/i.test(String(status.textContent || '')) &&
+              status.getAttribute('data-tone') === 'ok',
+              'posted=' + JSON.stringify(sent) + ' text=' + JSON.stringify(String(status.textContent || '').slice(0, 120)));
+
+            // Now the service is down.
+            var down = document.createElement('form');
+            down.innerHTML = form.innerHTML;
+            var downStatus = down.querySelector('[data-account-status]');
+            window.fetch = function () { return Promise.reject(new Error('offline')); };
+            T.wireAccountForm(down);
+            down.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+
+            setTimeout(function () {
+              var text = String(downStatus.textContent || '');
+              var mail = downStatus.querySelector('a[href^="mailto:"]');
+              note('account-service-down-is-honest',
+                /couldn't save/i.test(text) && !/thank you/i.test(text) &&
+                !!mail && String(mail.getAttribute('href')).indexOf(T.CONTACT_EMAIL) !== -1 &&
+                downStatus.getAttribute('data-tone') === 'error',
+                'text=' + JSON.stringify(text.slice(0, 140)));
+              window.fetch = realFetch;
+            }, 120);
+          }, 120);
         });
       })();
 
