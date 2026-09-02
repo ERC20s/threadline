@@ -105,10 +105,17 @@
       var status = document.getElementById("catalogue-status");
       if (!T || !grid) return;
 
-      var categories = ["All"];
-      T.products.forEach(function (p) {
-        if (categories.indexOf(p.category) === -1) categories.push(p.category);
-      });
+      /* The filter buttons are built from the catalogue itself (Tops, Shirts,
+         Knitwear, Bottoms, Accessories, Outerwear, Dresses), with "All" first.
+         Threadline.categories() owns that list now, so the same order is
+         available to anything else that wants to link a category. */
+      var categories = T.categories ? T.categories() : (function () {
+        var out = ["All"];
+        T.products.forEach(function (p) {
+          if (out.indexOf(p.category) === -1) out.push(p.category);
+        });
+        return out;
+      })();
 
       /* ---- reconcile the grid with the live shop ----
          The prices in scripts/products.js are ours; the money is taken by
@@ -157,6 +164,27 @@
       /* The category on screen, so the shop's answer repaints the right list. */
       var current = "All";
 
+      /* ---- the category on the URL ----
+         The filter used to be invisible to the address bar: every visit landed
+         on the whole collection and no one could link "the outerwear". The
+         chosen category now lives in ?category=, written with replaceState so
+         the Back button is not filled with filter clicks.
+
+         Only the category key is touched. Every other parameter is carried
+         over untouched — notably ?d8a_order=<id>, which a returning buyer
+         needs for payments-widget.js to verify the order. "All" removes the
+         parameter rather than writing ?category=All. */
+      var CATEGORY_PARAM = "category";
+
+      var putCategoryOnUrl = function (category) {
+        try {
+          var url = new URL(location.href);
+          if (category && category !== "All") { url.searchParams.set(CATEGORY_PARAM, category); }
+          else { url.searchParams.delete(CATEGORY_PARAM); }
+          history.replaceState(null, "", url.toString());
+        } catch (e) {}
+      };
+
       categories.forEach(function (c) {
         var b = document.createElement("button");
         b.type = "button";
@@ -164,11 +192,26 @@
         b.dataset.category = c;
         b.textContent = c;
         b.setAttribute("aria-pressed", c === "All" ? "true" : "false");
-        b.addEventListener("click", function () { show(c); });
+        b.addEventListener("click", function () {
+          show(c);
+          putCategoryOnUrl(c);
+        });
         filters.appendChild(b);
       });
 
-      show("All");
+      /* ?category= is shopper input, so it is resolved against the catalogue
+         before anything is filtered: "outerwear" opens Outerwear, a category we
+         do not make (or junk, or nothing at all) opens the whole collection.
+         A value we had to correct is rewritten on the URL at once, so what is
+         shared next is a link that works. */
+      var params = new URLSearchParams(location.search);
+      var requestedCategory = params.get(CATEGORY_PARAM);
+      var initialCategory = T.resolveCategory ? T.resolveCategory(requestedCategory) : "All";
+
+      show(initialCategory);
+      if (requestedCategory !== null && requestedCategory !== initialCategory) {
+        putCategoryOnUrl(initialCategory);
+      }
 
       /* ---- no sized garment leaves the panel without a size ----
          The panel's own Buy links post a checkout for the platform item and

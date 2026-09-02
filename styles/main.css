@@ -71,6 +71,10 @@ a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid rgb
 .section-head h2{margin:0;font-size:1.25rem}
 .section-head a{font-weight:600;font-size:0.92rem}
 .kicker{font-size:0.68rem;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted)}
+/* The product page kicker is a link into products.html?category=… — it keeps
+   the muted kicker look and only picks up the accent on hover/focus. */
+.kicker a{color:inherit}
+.kicker a:hover,.kicker a:focus-visible{color:var(--accent);text-decoration:underline}
 .note{margin:0 0 16px;color:var(--muted);font-size:0.95rem}
 
 /* ---------- product grid ---------- */
