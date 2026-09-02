@@ -20,7 +20,7 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
 | `index.html` | Landing page: header and nav, hero, featured products reconciled with the live shop, the group shop panel, about, size-guide link, contact, footer |
 | `products.html` | The catalogue: all pieces in a responsive grid with a category filter, each card links to `product.html?id=<id>` |
 | `product.html` | One piece, chosen with the `?id=` query parameter: photo, description, details, size selection, Buy |
-| `lookbook.html` | Six looks, each linking to the piece it shows |
+| `lookbook.html` | Six looks rendered from the catalogue, every piece named in a look linked with its price |
 | `size-guide.html` | Body measurements, garment measurements (tops, bottoms, dresses, outerwear and knitwear), the one-size pieces and how to measure |
 
 ## How it fits together
@@ -47,6 +47,18 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
   Overshirt, the Rigid Denim Jacket, the Merino Crew Knit and the two one-size
   pieces. As on the older tables, the numbers are illustrative — the note at
   the top of the page says so and must stay until real specs replace them.
+- The lookbook is part of the catalogue too. `scripts/products.js` carries a
+  `LOOKS` list — photo seed, alt text, a short note and the catalogue ids each
+  look wears — plus `Threadline.looks()` (resolves the ids through `byId`) and
+  `Threadline.renderLooks(el)` (builds the figures with DOM APIs, same style as
+  `card`/`renderGrid`). `lookbook.html` is now an empty `.lookbook` container
+  filled on load, so every piece named in a look is a link to
+  `product.html?id=<id>` with the catalogue price, and nothing on the page is
+  hand-copied. An id the catalogue no longer has is printed as plain text
+  (`.look-piece-missing`) rather than as a dead link, and a `<noscript>` list of
+  direct links mirrors the one in `products.html`. Adding a garment means adding
+  it to a look: assertion 14 in `tests/payments-widget.test.html` fails if a
+  look names an unknown id or if a catalogue piece appears in no look.
 - `styles/main.css` is the only stylesheet; every page links it. No frameworks.
   `styles/size-guide.css` is retired and simply imports `main.css`.
 - `payments-widget.js` is the group's shop widget. Pages that sell carry the
@@ -204,7 +216,12 @@ Then open http://localhost:5004/ — this is the `site` entry declared in `.d8a`
   `categories()` must start with `All` and list each category once,
   `"outerwear"` must resolve to `"Outerwear"`, junk/empty/`null` must resolve to
   `"All"`, every answer must be a category the filter buttons have, and the
-  `?category=` rewrite must leave `?d8a_order=` alone.
+  `?category=` rewrite must leave `?d8a_order=` alone. Its lookbook cases
+  (assertion 14) render into a detached element: every id in `Threadline.LOOKS`
+  must resolve through `byId`, every catalogue piece must be worn by at least
+  one look, `looks()` must carry the catalogue name through, a stub look naming
+  an id we do not make must print it without a link, and the real render must
+  produce one `figure.look` per look with one priced link per named piece.
 
 `.d8a` declares the group, the run entry and the payments block. Do not hand-edit
 its generated blocks.

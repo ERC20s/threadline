@@ -828,6 +828,82 @@
         }
       })();
 
+      // 14) Threadline.LOOKS / Threadline.looks / Threadline.renderLooks:
+      // lookbook.html no longer hard-codes its figures, so every id a look
+      // wears has to resolve through byId, and every piece in the catalogue
+      // has to be worn by at least one look — otherwise a piece is invisible
+      // on the lookbook or a caption links to the "not found" panel in
+      // product.html. Pure rendering into a detached element: no fixture, no
+      // checkout, so the counts above are untouched.
+      (function runLookbookTest() {
+        var T = window.Threadline;
+        if (!T || !T.LOOKS || typeof T.looks !== 'function' || typeof T.renderLooks !== 'function') {
+          note('looks-resolve-against-catalogue', false, 'Threadline.LOOKS/looks/renderLooks missing');
+          return;
+        }
+
+        // a) every id named in a look is a real catalogue id
+        var unknown = [];
+        T.LOOKS.forEach(function (look) {
+          (look.wears || []).forEach(function (id) {
+            if (!T.byId(id)) unknown.push(look.seed + ':' + id);
+          });
+        });
+        note('looks-resolve-against-catalogue', unknown.length === 0,
+          'looks=' + T.LOOKS.length + ' unknownIds=' + JSON.stringify(unknown));
+
+        // b) every catalogue piece is worn by at least one look
+        var worn = {};
+        T.LOOKS.forEach(function (look) {
+          (look.wears || []).forEach(function (id) { worn[id] = true; });
+        });
+        var missing = T.products.filter(function (p) { return !worn[p.id]; })
+          .map(function (p) { return p.id; });
+        note('looks-cover-every-piece', missing.length === 0,
+          'catalogue=' + T.products.length + ' notInAnyLook=' + JSON.stringify(missing));
+
+        // c) looks() carries the catalogue name and product through
+        var resolved = T.looks();
+        var carried = resolved.length === T.LOOKS.length && resolved.every(function (look) {
+          return look.image && look.pieces.length > 0 && look.pieces.every(function (piece) {
+            return piece.product && piece.product.name === piece.name;
+          });
+        });
+        note('looks-carry-catalogue-names', carried,
+          'resolved=' + JSON.stringify(resolved.map(function (l) {
+            return l.pieces.map(function (p) { return p.name; }).join('+');
+          })));
+
+        // d) an id we no longer make is named but never linked
+        var stub = T.looks([{ seed: 'stub', alt: 'stub', note: 'stub', wears: ['everyday-tee', 'gone-forever'] }]);
+        var holder = document.createElement('div');
+        T.renderLooks(holder, [{ seed: 'stub', alt: 'stub', note: 'stub', wears: ['everyday-tee', 'gone-forever'] }]);
+        var links = holder.querySelectorAll('.look-pieces a[data-product-id]');
+        note('looks-never-link-an-unknown-id',
+          stub[0].pieces.length === 2 && stub[0].pieces[1].product === null &&
+          links.length === 1 && links[0].getAttribute('href') === 'product.html?id=everyday-tee' &&
+          holder.querySelectorAll('.look-piece-missing').length === 1,
+          'links=' + links.length + ' html=' + holder.innerHTML.replace(/\s+/g, ' ').slice(0, 240));
+
+        // e) the real render: one figure per look, every piece linked with its
+        // catalogue price, and no duplicate figure
+        var live = document.createElement('div');
+        var count = T.renderLooks(live);
+        var figures = live.querySelectorAll('figure.look');
+        var anchors = live.querySelectorAll('.look-pieces a[data-product-id]');
+        var pieceCount = T.LOOKS.reduce(function (n, look) { return n + (look.wears || []).length; }, 0);
+        var pricesOk = Array.prototype.every.call(anchors, function (a) {
+          var p = T.byId(a.dataset.productId);
+          var li = a.parentNode;
+          return p && li.textContent.indexOf(T.money(p.price)) !== -1;
+        });
+        note('render-looks-links-every-named-piece',
+          count === T.LOOKS.length && figures.length === T.LOOKS.length &&
+          anchors.length === pieceCount && pricesOk,
+          'figures=' + figures.length + ' links=' + anchors.length +
+          ' expectedLinks=' + pieceCount + ' pricesOk=' + pricesOk);
+      })();
+
       // Final aggregator after a bit more time
       setTimeout(function(){
         note('final', true, 'Manual-run tests completed; review individual PASS/FAIL lines above.');
