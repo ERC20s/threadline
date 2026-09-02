@@ -987,6 +987,84 @@
           }).join(','));
       })();
 
+      // 16) Threadline.productForOrder / Threadline.renderReceipt: the paid
+      // receipt index.html, products.html and product.html now share. Before
+      // this, only product.html said anything when a buyer came back with
+      // ?d8a_order=, so a Classic Cap bought from the home page panel ended in
+      // the widget's small green line and nothing else. Pure helpers plus a
+      // detached target: no fixture, no checkout, so the counts above are
+      // untouched. The catalogue stub is put back at once, because test 9
+      // (which runs later, at 900ms) installs its own.
+      (function runReceiptTest() {
+        var T = window.Threadline;
+        if (!T || typeof T.renderReceipt !== 'function' || typeof T.productForOrder !== 'function') {
+          note('receipt-renders-for-known-item', false, 'Threadline.renderReceipt/productForOrder missing');
+          return;
+        }
+
+        var savedProducts = T.products;
+        T.products = [
+          { id: 'r-tee', name: 'Receipt Tee', sizes: ['S', 'M', 'L'] },
+          { id: 'r-cap', name: 'Receipt Cap', sizes: ['One size'] }
+        ];
+
+        try {
+          // a) a known item: the catalogue name wins over the platform's own
+          // wording, and the quantity is shown when it is more than one.
+          var known = { id: 'ord-1', itemId: 'r-cap', itemName: 'Receipt Cap (shop row)', quantity: 2 };
+          var matched = T.productForOrder(known);
+          var box1 = document.createElement('p');
+          var el1 = T.renderReceipt(box1, known);
+          var text1 = box1.textContent || '';
+          note('receipt-renders-for-known-item',
+            !!matched && matched.id === 'r-cap' && !!el1 &&
+            text1.indexOf('ord-1') !== -1 && text1.indexOf('Receipt Cap') !== -1 &&
+            text1.indexOf('×2') !== -1 && text1.indexOf('confirmation email') !== -1 &&
+            box1.getAttribute('data-tone') === 'ok',
+            'matched=' + (matched ? matched.id : 'null') + ' text=' + JSON.stringify(text1));
+
+          // b) an item the catalogue does not know: degrade to the platform's
+          // own itemName, never to a guess, and still carry the size.
+          var unknown = { id: 'ord-2', itemId: 'x-99', itemName: 'Something We Do Not Sell', size: 'M', quantity: 1 };
+          var box2 = document.createElement('p');
+          T.renderReceipt(box2, unknown);
+          var text2 = box2.textContent || '';
+          note('receipt-degrades-for-unknown-item',
+            T.productForOrder(unknown) === null &&
+            text2.indexOf('Something We Do Not Sell') !== -1 &&
+            text2.indexOf('size M') !== -1 && text2.indexOf('×1') === -1,
+            'text=' + JSON.stringify(text2));
+
+          // c) the prefilled email: order id, piece and size, all encoded.
+          var mail = box2.querySelector('a[href^="mailto:"]');
+          var href = mail ? mail.getAttribute('href') : '';
+          var body = '';
+          try { body = decodeURIComponent((href.split('&body=')[1] || '')); } catch (e) { body = ''; }
+          note('receipt-mailto-carries-order-piece-size',
+            href.indexOf('mailto:hello@threadline.example?subject=') === 0 &&
+            href.indexOf('subject=Threadline%20order%20ord-2') !== -1 &&
+            body.indexOf('Order: ord-2') !== -1 &&
+            body.indexOf('Piece: Something We Do Not Sell') !== -1 &&
+            body.indexOf('Size: M') !== -1,
+            'href=' + JSON.stringify(href));
+
+          // d) one receipt per order id, however often the event fires, and an
+          // explicit size/product from the page beats what the order carried.
+          var again = T.renderReceipt(box2, unknown);
+          var third = T.renderReceipt(box2, unknown, { product: { name: 'Receipt Tee' }, size: 'L' });
+          var receipts = box2.querySelectorAll('[' + (T.RECEIPT_ATTR || 'data-receipt-order') + ']');
+          var found = T.receiptIn ? T.receiptIn(box2, 'ord-2') : null;
+          note('receipt-not-duplicated-for-same-order',
+            receipts.length === 1 && again === third && found === again &&
+            (box2.textContent || '').indexOf('Something We Do Not Sell') !== -1,
+            'receipts=' + receipts.length + ' sameElement=' + String(again === third));
+        } catch (err) {
+          note('receipt-renders-for-known-item', false, 'threw: ' + String(err));
+        } finally {
+          T.products = savedProducts;
+        }
+      })();
+
       // Final aggregator after a bit more time
       setTimeout(function(){
         note('final', true, 'Manual-run tests completed; review individual PASS/FAIL lines above.');

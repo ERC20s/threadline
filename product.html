@@ -431,7 +431,11 @@
             notListed = true;
             buy.disabled = true;
             buy.setAttribute("aria-disabled", "true");
-            if (!pending) sayNotListed();
+            /* Never over a receipt: this pass finishes when the panel renders,
+               which can be after a returning buyer's order was verified, and
+               "isn't listed" under a paid order reads as a failed purchase. */
+            var paidHere = status && T.receiptIn && T.receiptIn(status);
+            if (!pending && !paidHere) sayNotListed();
           })
           .catch(function () { /* panel failed or timed out: leave the page as written */ });
       }
@@ -506,32 +510,27 @@
           .catch(function () { release(); sayNotListed(true); });
       });
 
-      /* ---- receipt: the widget fires this once the platform confirms payment ---- */
+      /* ---- receipt: the widget fires this once the platform confirms payment ----
+         The sentence and the prefilled email used to be written out here, which
+         is why index.html and products.html — where a one-size piece can also
+         be bought — had no confirmation at all. Both the wording and the
+         mailto now live in Threadline.renderReceipt (scripts/checkout-intent
+         .js), so all three pages say the same thing. This page still passes the
+         piece and the size it has on screen: the catalogue entry is known here
+         for certain, and the size is the shopper's choice, not something the
+         order object can be trusted to carry back. */
       document.addEventListener("group-store:paid", function (e) {
         var order = e && e.detail ? e.detail : null;
-        var orderId = order && order.id ? order.id : "";
-        say("Thank you — order " + orderId + " is paid" +
-          (chosenSize ? " (size " + chosenSize + ")" : "") + ". A confirmation email is on its way.", "ok");
+        if (!order) return;
 
-        /* The size is sent with the checkout, but the platform only stores it if
-           it accepted the extra field. Offer a prefilled email carrying the
-           order id, the piece and the size, so the order can always be
-           fulfilled without the shopper writing it out. */
-        if (!status) return;
-        var lines = [
-          "Order: " + (orderId || "(no order id)"),
-          "Piece: " + product.name,
-          "Size: " + (chosenSize || "not chosen"),
-          "",
-          "Please confirm my order."
-        ].join("\n");
-        var mail = document.createElement("a");
-        mail.href = "mailto:hello@threadline.example" +
-          "?subject=" + encodeURIComponent("Threadline order " + (orderId || "")) +
-          "&body=" + encodeURIComponent(lines);
-        mail.textContent = "Email us the size for this order";
-        status.appendChild(document.createTextNode(" "));
-        status.appendChild(mail);
+        if (status && T.renderReceipt) {
+          T.renderReceipt(status, order, { product: product, size: chosenSize });
+          return;
+        }
+
+        /* Fallback if scripts/checkout-intent.js failed to load. */
+        say("Thank you — order " + (order.id || "") + " is paid" +
+          (chosenSize ? " (size " + chosenSize + ")" : "") + ". A confirmation email is on its way.", "ok");
       });
     })();
   </script>
