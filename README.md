@@ -234,6 +234,34 @@ link when it does.
   next point) also offers a prefilled `mailto:hello@threadline.example` carrying
   the order id, the piece and the size, so fulfilment is possible even if the
   platform stored no note.
+- A shopper can buy more than one. Every checkout the site started used to ask
+  for quantity 1, so two tees meant paying twice. `product.html` now renders a
+  **Quantity** group above Buy (`#quantities`, built by the same inline script
+  that builds the size buttons and reusing the `.sizes`/`.size` markup and the
+  `aria-pressed` painting, so there is no new CSS), offering `1` to
+  `Threadline.MAX_QUANTITY` (5). The choice is kept on the URL as `?qty=`
+  through the shared `putOnUrl` helper — `history.replaceState`, every other
+  parameter untouched, and `1` drops the key rather than writing `?qty=1` — so
+  it survives the trip to checkout and back in `payments-widget.js`'s
+  `returnUrl`. The parameter is shopper input, so it goes through
+  `Threadline.resolveQuantity(requested, max)` (in
+  `scripts/checkout-intent.js`), the same "never believe the URL" rule as
+  `resolveSize`: `"3"` is 3, `"0"`, `"-2"`, `"2.5"`, junk, `""` and `null` are
+  all 1, and `"99"` is clamped to the ceiling with "We sell up to 5 of a piece
+  at a time — email us for more." `stampSize` has become `stampRow`: immediately
+  before the widget's own row is clicked it sets `data-quantity="3"` and folds
+  `×3` into `data-d8a-note` (`"Everyday Tee - size M ×3"`), removing both again
+  when the shopper goes back to one — so a single purchase posts exactly the
+  body it always posted. `payments-widget.js` already read `data-quantity`
+  (`var qAttr = a.getAttribute('data-quantity')`) and already keys its
+  duplicate-click guard on `group::item::qty::variant`, so two different
+  quantities are two different purchases; nothing in the widget changed. The
+  panel guard stamps this piece's own row too, including the one-size branch,
+  and the status line says `Opening checkout for Everyday Tee, size M ×3…`. If
+  the platform ever refuses `quantity`, the widget's existing fallback follows
+  the row's pay URL and buys one — a single-item checkout the shopper can see,
+  never a silent overcharge. The rows on `index.html` and `products.html` still
+  buy one, unchanged.
 - A paid buyer gets a real confirmation wherever they come back. `payments-
   widget.js` verifies `?d8a_order=<id>` and fires `group-store:paid`, but its own
   line inside `#group-store` is only `Paid: <name> — order <id>` — on
@@ -271,7 +299,12 @@ link when it does.
   `data-size`/`data-d8a-note` and clicks it, then reads the recorded request
   bodies: the first POST must carry `size` and `note`, a url-less answer must
   produce exactly one plain retry, and the unstamped `checkout-group` body must
-  still have only `group,item,quantity,returnUrl`. Its `reconcile-grid`
+  still have only `group,item,quantity,returnUrl`. The same fixture is clicked
+  once more (assertion 19) with `data-quantity="3"`, a different size and a
+  different note — a different purchase to the widget's duplicate key — and the
+  recorded body must read `quantity: 3`; the `resolve-quantity` cases beside it
+  need no fixture and cover `"3"`, padding, `"0"`, `"-2"`, `"2.5"`, junk,
+  empty, `null`, `undefined` and `"99"` against `Threadline.MAX_QUANTITY`. Its `reconcile-grid`
   fixture builds catalogue-shaped cards and reconciles them against the
   `checkout-group` index: a stale price is repainted and noted, a card showing
   the same money in another shape is left alone, an unlisted card is flagged and

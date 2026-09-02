@@ -50,6 +50,17 @@
             <div class="sizes" id="sizes" role="group" aria-labelledby="size-label"></div>
           </div>
 
+          <div>
+            <span class="field-label" id="quantity-label">Quantity</span>
+            <!-- Filled by the script below, 1 to Threadline.MAX_QUANTITY, using
+                 the same .sizes/.size markup as the size buttons so there is no
+                 second style to keep. The choice is kept on the URL as ?qty= and
+                 stamped onto the shop row as data-quantity, which
+                 payments-widget.js posts with the checkout. -->
+            <div class="sizes" id="quantities" role="group" aria-labelledby="quantity-label"></div>
+            <p class="hint" id="quantity-note">Need more than five? Email <a href="mailto:hello@threadline.example">hello@threadline.example</a>.</p>
+          </div>
+
           <p class="actions">
             <button type="button" class="btn" id="buy" aria-describedby="buy-status">Buy</button>
             <a class="btn btn-ghost" href="products.html">Back to the shop</a>
@@ -266,14 +277,16 @@
          location.href, so the choice survives the trip to checkout and back.
          An empty size removes the parameter instead — a value we refused must
          not be carried into checkout, nor come back on the return URL. */
-      var putSizeOnUrl = function (size) {
+      var putOnUrl = function (name, value) {
         try {
           var url = new URL(location.href);
-          if (size) { url.searchParams.set("size", size); }
-          else { url.searchParams.delete("size"); }
+          if (value) { url.searchParams.set(name, value); }
+          else { url.searchParams.delete(name); }
           history.replaceState(null, "", url.toString());
         } catch (e) {}
       };
+
+      var putSizeOnUrl = function (size) { putOnUrl("size", size); };
 
       var paintSizes = function () {
         Array.prototype.forEach.call(sizeBox.querySelectorAll("button"), function (b) {
@@ -307,6 +320,77 @@
       if (requestedSize !== null && requestedSize !== chosenSize) {
         putSizeOnUrl(chosenSize);
         if (!chosenSize) say("We don't make that size — choose one below.", "error");
+      }
+
+      /* ---- quantity ----
+         The site could only ever sell one of anything: every checkout it
+         started asked for quantity 1, so a shopper who wanted two tees had to
+         pay twice. payments-widget.js already reads data-quantity off the row
+         it posts, so the only missing half was a choice on the page that owns
+         it. Same rule as ?size=: the URL is shopper input, so it goes through
+         Threadline.resolveQuantity — junk, 0, negatives and 99 all come back as
+         a quantity we really sell. The inline fallback matters only if
+         scripts/checkout-intent.js failed to load. */
+      var MAX_QUANTITY = T.MAX_QUANTITY || 5;
+      var resolveQuantity = T.resolveQuantity || function (requested, max) {
+        var ceiling = Math.floor(Number(max)) || 5;
+        if (requested === null || requested === undefined) return 1;
+        var text = String(requested).replace(/\s+/g, "");
+        if (!/^\+?[0-9]+$/.test(text)) return 1;
+        var n = parseInt(text, 10);
+        if (!n || n < 1) return 1;
+        return n > ceiling ? ceiling : n;
+      };
+
+      var requestedQuantity = params.get("qty");
+      var chosenQuantity = resolveQuantity(requestedQuantity, MAX_QUANTITY);
+
+      var qtyBox = document.getElementById("quantities");
+
+      /* One is the default, so it is not written onto the URL; anything else is
+         kept there, because payments-widget.js builds its returnUrl from
+         location.href and the shopper should come back to the page they left. */
+      var putQuantityOnUrl = function (n) {
+        putOnUrl("qty", n > 1 ? String(n) : "");
+      };
+
+      var paintQuantities = function () {
+        if (!qtyBox) return;
+        Array.prototype.forEach.call(qtyBox.querySelectorAll("button"), function (b) {
+          b.setAttribute("aria-pressed", Number(b.dataset.quantity) === chosenQuantity ? "true" : "false");
+        });
+      };
+
+      if (qtyBox) {
+        for (var q = 1; q <= MAX_QUANTITY; q++) {
+          (function (n) {
+            var b = document.createElement("button");
+            b.type = "button";
+            b.className = "size";
+            b.dataset.quantity = String(n);
+            b.textContent = String(n);
+            b.setAttribute("aria-label", n === 1 ? "Quantity 1" : "Quantity " + n);
+            b.setAttribute("aria-pressed", "false");
+            b.addEventListener("click", function () {
+              chosenQuantity = n;
+              paintQuantities();
+              say(n === 1 ? "Buying one." : "Buying " + n + ".");
+              putQuantityOnUrl(n);
+            });
+            qtyBox.appendChild(b);
+          })(q);
+        }
+        paintQuantities();
+      }
+
+      /* A ?qty= we did not accept as written is corrected on the URL now, before
+         the widget can copy location.href into a returnUrl and before a click
+         can stamp it onto a checkout row. */
+      if (requestedQuantity !== null && requestedQuantity !== String(chosenQuantity)) {
+        putQuantityOnUrl(chosenQuantity);
+        if (Number(requestedQuantity) > MAX_QUANTITY) {
+          say("We sell up to " + MAX_QUANTITY + " of a piece at a time — email us for more.");
+        }
       }
 
       /* ---- Buy: hand off to the widget's own Buy link for this item ---- */
@@ -346,27 +430,43 @@
       /* payments-widget.js listens on the #group-store container and owns the
          checkout POST (including its duplicate-click guard), so we click its own
          link rather than posting a second time from here. */
-      /* The panel sells a sizeless platform item, so the chosen size has to
-         travel on the row we are about to click: payments-widget.js reads
-         data-size and data-d8a-note off the anchor and adds them to the
-         checkout POST. Stamped immediately before every click, so the value
-         posted is always the size on screen, never an earlier one. */
-      var stampSize = function (anchor) {
+      /* The panel sells a sizeless platform item in ones, so the chosen size AND
+         the chosen quantity have to travel on the row we are about to click:
+         payments-widget.js reads data-size, data-d8a-note and data-quantity off
+         the anchor and adds them to the checkout POST. Stamped immediately
+         before every click, so what is posted is always what is on screen,
+         never an earlier choice — and an attribute the shopper has just
+         un-chosen (back to one, or no size) is removed rather than left behind.
+         A quantity of one is not stamped at all, so the ordinary single
+         purchase posts exactly the body it has always posted. */
+      var stampRow = function (anchor) {
         if (!anchor || !anchor.setAttribute) return;
         try {
+          if (chosenQuantity > 1) {
+            anchor.setAttribute("data-quantity", String(chosenQuantity));
+          } else {
+            anchor.removeAttribute("data-quantity");
+          }
+
+          var note = "";
           if (chosenSize) {
             anchor.setAttribute("data-size", chosenSize);
-            anchor.setAttribute("data-d8a-note", product.name + " - size " + chosenSize);
+            note = product.name + " - size " + chosenSize;
           } else {
             anchor.removeAttribute("data-size");
-            anchor.removeAttribute("data-d8a-note");
           }
+          if (chosenQuantity > 1) {
+            note = (note || product.name) + " ×" + chosenQuantity;
+          }
+          if (note) { anchor.setAttribute("data-d8a-note", note); }
+          else { anchor.removeAttribute("data-d8a-note"); }
         } catch (e) {}
       };
 
       var openCheckout = function (anchor) {
-        stampSize(anchor);
-        say("Opening checkout for " + product.name + ", size " + chosenSize + "…");
+        stampRow(anchor);
+        say("Opening checkout for " + product.name + ", size " + chosenSize +
+          (chosenQuantity > 1 ? " ×" + chosenQuantity : "") + "…");
         anchor.click();
       };
 
@@ -463,16 +563,29 @@
            - this piece with a size chosen -> let the click through, so the
              existing checkout path and its duplicate-click guard are unchanged;
            - another sized piece listed in the panel -> open its product page;
-           - one-size pieces and rows with no catalogue match -> untouched. */
+           - this piece when it is one size -> let through, but stamped, so the
+             quantity chosen above travels with it;
+           - other one-size pieces and rows with no catalogue match -> untouched. */
       if (panel && T.guardBuyClicks) {
         T.guardBuyClicks(panel, function (info) {
           var piece = info.product;
-          if (!piece || !info.needsSize) return false;
+          if (!piece) return false;
+
+          /* This piece's own row, bought straight from the panel: it is not the
+             guard's business when the piece is one size, but the quantity
+             chosen above still has to travel with it, so stamp and let it
+             through. */
+          if (piece.id === product.id && !info.needsSize) {
+            stampRow(info.anchor);
+            return false;
+          }
+          if (!info.needsSize) return false;
 
           if (piece.id === product.id) {
             /* A size is chosen: let the click through, but stamp the row first
-               so the checkout the widget posts carries that size. */
-            if (chosenSize) { stampSize(info.anchor); return false; }
+               so the checkout the widget posts carries that size and the
+               quantity chosen above. */
+            if (chosenSize) { stampRow(info.anchor); return false; }
             say("Choose a size first.", "error");
             var firstSize = sizeBox.querySelector("button");
             if (firstSize) firstSize.focus();
