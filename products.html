@@ -266,7 +266,14 @@
             shopIndex = index;
             show(current);
           })
-          .catch(function () { /* nothing to reconcile against */ });
+          .catch(function () {
+            /* Nothing to reconcile against — and every reason whenBuyAnchor
+               rejects for is the shop's, not ours. The grid keeps its
+               catalogue prices; the status line says why, and where Retry is.
+               Never over a paid receipt. */
+            if (!status || !T.renderShopDown) return;
+            T.renderShopDown(status, { brief: true, append: true });
+          });
       }
     })();
   </script>

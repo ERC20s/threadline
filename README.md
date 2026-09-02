@@ -286,6 +286,31 @@ link when it does.
   `focus: true`; `product.html` renders into `#buy-status` and passes the piece
   and the size it has on screen. An order for something not in the catalogue
   degrades to the platform's own `itemName`, never to a guess.
+- "The shop isn't answering" and "we don't sell this piece" are two different
+  sentences. `Threadline.whenBuyAnchor` rejects with `store-error` (the widget
+  drew its `[data-d8a-retry]` failure line), `timeout` or `no-container` — all
+  three about the shop — and `product.html` used to answer every one of them
+  with "This piece isn't listed in the shop panel yet", then scroll the shopper
+  to a panel already reading "The shop could not be reached", with no mention of
+  its Retry button. `scripts/checkout-intent.js` now owns both halves:
+  `Threadline.isShopDownReason(err)` is true for exactly those three reasons,
+  and `Threadline.renderShopDown(target, options)` writes the one true sentence
+  — "The shop isn't answering, so checkout can't open for <piece> right now. Use
+  Retry in the Checkout panel below, or email us and we'll reserve size <S>." —
+  plus a prefilled `mailto:` built like `receiptMailto`, and sets
+  `data-tone="error"`. Options are `{ product, name, size, brief, append, tone,
+  mail, mailText }`; `brief` is the grid pages' one-liner
+  (`Threadline.SHOP_DOWN_NOTE`, "these prices are ours, not the shop's") and
+  `append` adds it after whatever the status already said, once (the line is
+  stamped `data-shop-down`). It never writes over a paid receipt (`receiptIn`).
+  `product.html` keeps `sayNotListed` for the real unlisted case — rows on
+  screen, none for this piece — and calls `sayShopDown` from the Buy catch, the
+  load-time reconcile catch (which used to swallow the rejection silently) and
+  the no-panel case; Buy is **not** disabled for an outage, because Retry may
+  succeed a moment later. A `timeout` with rows already rendered still means
+  "not listed", so `sayShopDown` checks `storePanelFailed(panel)` and
+  `findBuyAnchor(panel)` before it chooses. `index.html` and `products.html`
+  append the brief line to `#featured-status` / `#catalogue-status`.
 - `tests/payments-widget.test.html` is the browser test for the widget; open it
   at http://localhost:5004/tests/payments-widget.test.html while the site is
   served. Its `intent-group` fixture answers late on purpose, to prove a queued
@@ -370,6 +395,16 @@ link when it does.
   carries a `<noscript>` block instead, pointing a script-less visitor at
   `products.html`, the size guide and `hello@threadline.example`; its
   `#product-image` has no `src` attribute until the script sets a real one.
+  Assertion 21 (`shop-down-wording` and the cases beside it) needs no fixture
+  and no network: it builds two detached panels by hand — one carrying the
+  widget's `[data-d8a-retry]` failure markup, one carrying a rendered row for
+  another piece — and checks that `storePanelFailed` tells them apart, that
+  `whenBuyAnchor` rejects the failed one with `store-error`, that
+  `isShopDownReason` accepts `store-error`/`timeout`/`no-container` and nothing
+  else, that `renderShopDown` names the shop and Retry, carries the piece and
+  size in its `mailto:` and never says "isn't listed", that the brief line
+  appends to an existing status only once, and that the rows-but-no-match panel
+  is still the "isn't listed" case.
 
 `.d8a` declares the group, the run entry and the payments block. Do not hand-edit
 its generated blocks.

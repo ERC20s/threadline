@@ -1476,6 +1476,114 @@
         });
       })();
 
+      // 21) "The shop isn't answering" must not be reported as "we don't sell
+      // this piece". whenBuyAnchor rejects with "store-error", "timeout" or
+      // "no-container" — all of them the shop's fault — and product.html used
+      // to answer every one of them with "This piece isn't listed in the shop
+      // panel yet", then scroll the shopper to a panel already saying "The shop
+      // could not be reached". Everything here runs over DETACHED elements
+      // built by hand, so it cannot disturb the fixtures or the POST counts
+      // above.
+      (function runShopDownWordingTest() {
+        var T = window.Threadline;
+        if (!T || typeof T.renderShopDown !== 'function' ||
+            typeof T.isShopDownReason !== 'function' ||
+            typeof T.storePanelFailed !== 'function') {
+          note('shop-down-wording', false, 'Threadline.renderShopDown/isShopDownReason/storePanelFailed missing');
+          return;
+        }
+
+        // payments-widget.js's renderMessageWithRetry: the message plus a
+        // [data-d8a-retry] button. That button is the only reliable signal that
+        // this load is not going to produce rows.
+        var failed = document.createElement('div');
+        failed.innerHTML = '<p>The shop could not be reached.</p>' +
+          '<button type="button" data-d8a-retry>Retry</button>';
+
+        // A panel that DID render, but has no row for the piece on screen.
+        var listed = document.createElement('div');
+        listed.innerHTML = '<div><div><b>Some Other Piece</b></div><span>$15</span>' +
+          '<a href="#" data-item="other-piece">Buy</a></div>';
+
+        note('shop-down-panel-detected',
+          T.storePanelFailed(failed) === true && T.storePanelFailed(listed) === false,
+          'failed panel=' + T.storePanelFailed(failed) + ', rendered panel=' + T.storePanelFailed(listed));
+
+        note('shop-down-reasons-named',
+          T.isShopDownReason(new Error('store-error')) &&
+          T.isShopDownReason('timeout') &&
+          T.isShopDownReason(new Error('no-container')) &&
+          !T.isShopDownReason(new Error('something-else')) &&
+          !T.isShopDownReason(null),
+          'store-error/timeout/no-container are shop failures; anything else is not');
+
+        // The genuine "isn't listed" case is unchanged: the panel has not
+        // failed and it has rows, just not ours.
+        var anyRow = T.findBuyAnchor(listed);
+        var mineRow = T.findBuyAnchor(listed, function (a) {
+          return a.getAttribute('data-item') === 'everyday-tee';
+        });
+        note('rows-but-no-match-still-not-listed',
+          !!anyRow && mineRow === null && T.storePanelFailed(listed) === false,
+          'anyRow=' + (anyRow ? anyRow.getAttribute('data-item') : 'none') +
+          ' matching=' + (mineRow ? mineRow.getAttribute('data-item') : 'null'));
+
+        // The wording itself: names the shop, points at Retry, offers the
+        // email — and never says "isn't listed".
+        var target = document.createElement('p');
+        var box = T.renderShopDown(target, {
+          product: { id: 'everyday-tee', name: 'Everyday Tee' },
+          size: 'M'
+        });
+        var text = String(target.textContent || '');
+        var mail = target.querySelector('a[href^="mailto:"]');
+        var href = mail ? String(mail.getAttribute('href') || '') : '';
+        var body = '';
+        try { body = decodeURIComponent(href); } catch (e) { body = href; }
+        var wordingOk = !!box &&
+          /shop isn't answering/i.test(text) &&
+          /retry/i.test(text) &&
+          text.toLowerCase().indexOf("isn't listed") === -1 &&
+          !!mail && href.indexOf(T.CONTACT_EMAIL) !== -1 &&
+          body.indexOf('Everyday Tee') !== -1 && body.indexOf('Size: M') !== -1 &&
+          target.getAttribute('data-tone') === 'error';
+        note('shop-down-wording', wordingOk, 'text=' + JSON.stringify(text.slice(0, 160)));
+
+        // The grid pages append their short line to whatever the status was
+        // already saying, and only once.
+        var grid = document.createElement('p');
+        grid.textContent = 'Showing 12 pieces.';
+        var firstLine = T.renderShopDown(grid, { brief: true, append: true });
+        var secondLine = T.renderShopDown(grid, { brief: true, append: true });
+        var stamped = grid.querySelectorAll('[' + T.SHOP_DOWN_ATTR + ']').length;
+        note('shop-down-brief-appends-once',
+          !!firstLine && secondLine === null && stamped === 1 &&
+          grid.textContent.indexOf('Showing 12 pieces.') === 0 &&
+          /shop isn't answering/i.test(grid.textContent),
+          'stamped lines=' + stamped + ' text=' + JSON.stringify(String(grid.textContent).slice(0, 160)));
+
+        // A paid receipt outranks an outage line.
+        if (typeof T.renderReceipt === 'function') {
+          var paid = document.createElement('p');
+          T.renderReceipt(paid, { id: 'ord-shop-down', itemName: 'Everyday Tee' });
+          var over = T.renderShopDown(paid, { product: { name: 'Everyday Tee' } });
+          note('shop-down-never-over-receipt',
+            over === null && /is paid/.test(String(paid.textContent || '')),
+            'returned=' + String(over) + ' text=' + JSON.stringify(String(paid.textContent || '').slice(0, 120)));
+        }
+
+        // And the rejection product.html now reads: a failed panel rejects
+        // immediately with "store-error", not with a twelve-second timeout.
+        T.whenBuyAnchor(failed, null, 800).then(function () {
+          note('shop-down-rejects-store-error', false, 'whenBuyAnchor resolved over a failed panel');
+        }).catch(function (err) {
+          var reason = String(err && err.message ? err.message : err);
+          note('shop-down-rejects-store-error',
+            reason === 'store-error' && T.isShopDownReason(err),
+            'rejection reason=' + reason);
+        });
+      })();
+
       // Final aggregator after a bit more time
       setTimeout(function(){
         note('final', true, 'Manual-run tests completed; review individual PASS/FAIL lines above.');
