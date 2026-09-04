@@ -211,27 +211,9 @@
 
       /* Wait for the shop panel — no matchFn, so this resolves as soon as
          payments-widget.js has rendered any row — then index it once and
-         repaint the featured grid. A panel that fails, times out or renders no
-         rows changes nothing on this page. */
-      if (panel && T.whenBuyAnchor && T.shopPriceIndex) {
-        T.whenBuyAnchor(panel, null, T.BUY_ANCHOR_TIMEOUT || 12000)
-          .then(function () {
-            var index = T.shopPriceIndex(panel);
-            if (!index || !index.size) return;
-            shopIndex = index;
-            show();
-          })
-          .catch(function () {
-            /* Nothing to reconcile against — and every reason whenBuyAnchor
-               rejects for is the shop's, not ours. Say so in one short line so
-               the shopper knows the prices on these cards are the catalogue's,
-               and that Retry lives in the Checkout panel below. Never over a
-               paid receipt. */
-            if (!status || !T.renderShopDown) return;
-            T.renderShopDown(status, { brief: true, append: true });
-          });
-      }
+         repaint the featured grid. A panel tha
     })();
   </script>
++  <script src="scripts/cart-ui.js"></script>
 </body>
 </html>

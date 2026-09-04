@@ -186,3 +186,24 @@ footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);color:v
   .hero h1{font-size:2rem}
   .product{grid-template-columns:1.1fr 1fr;align-items:start;gap:36px}
 }
+
+/* Scoped cart UI styles appended by scripts/cart-ui.js proposal */
+.tl-cart-btn{display:inline-flex;align-items:center;gap:8px;border:0;background:transparent;cursor:pointer;font:inherit;padding:6px 8px;border-radius:8px;margin-left:12px}
+.tl-cart-icon{font-size:1rem}
+.tl-cart-badge{display:none;background:var(--accent);color:#fff;border-radius:999px;padding:2px 8px;font-weight:700;font-size:0.85rem}
+.tl-cart-panel{position:fixed;right:18px;top:72px;max-width:360px;width:calc(100% - 48px);height:70vh;background:#fff;border:1px solid var(--line);box-shadow:0 10px 30px rgba(0,0,0,0.08);border-radius:10px;transform:translateY(-10px);opacity:0;pointer-events:none;transition:opacity 180ms ease,transform 180ms ease;z-index:9999}
+.tl-cart-panel.tl-open{opacity:1;transform:translateY(0);pointer-events:auto}
+.tl-cart-panel-inner{display:flex;flex-direction:column;height:100%}
+.tl-cart-panel-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line)}
+.tl-cart-list{padding:12px 16px;overflow:auto;flex:1}
+.tl-cart-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}
+.tl-cart-item-name{flex:1}
+.tl-cart-item-controls{display:inline-flex;gap:8px;align-items:center}
+.tl-cart-item-controls button{border:1px solid var(--line);background:#fff;padding:6px 10px;border-radius:6px;cursor:pointer}
+.tl-cart-item-price{white-space:nowrap;margin-left:8px;font-weight:700}
+.tl-cart-remove{background:transparent;border:0;color:var(--muted);cursor:pointer}
+.tl-cart-foot{padding:12px 16px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.tl-cart-actions{display:flex;gap:8px}
+.tl-cart-actions button{padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer}
+.tl-cart-checkout{background:var(--accent);color:#fff;border-color:var(--accent)}
+.tl-cart-empty{color:var(--muted)}
