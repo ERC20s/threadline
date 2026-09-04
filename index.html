@@ -21,6 +21,7 @@
         <a href="size-guide.html">Size guide</a>
         <a href="#contact">Contact</a>
       </nav>
+      <div id="cart-root" class="header-cart-root" aria-hidden="false"></div>
     </header>
 
     <main id="content">
@@ -139,6 +140,17 @@
        #group-store. -->
   <script src="scripts/checkout-intent.js"></script>
   <script src="payments-widget.js"></script>
+  <script src="scripts/cart.js"></script>
+  <script src="scripts/cart-ui.js"></script>
+  <script>
+    (function () {
+      try {
+        if (window.ThreadlineCartUI && typeof window.ThreadlineCartUI.renderInto === 'function') {
+          window.ThreadlineCartUI.renderInto('#cart-root');
+        }
+      } catch (e) {}
+    })();
+  </script>
   <script>
     (function () {
       var T = window.Threadline;

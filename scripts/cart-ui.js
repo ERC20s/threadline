@@ -43,6 +43,22 @@
     return state;
   }
 
+  function extractCountFromDetail(detail) {
+    var count = 0;
+    if (!detail) return 0;
+    // prefer an explicit count, then totalQuantity (sum of quantities), then totalItems (distinct)
+    if (detail.count != null) {
+      count = Number(detail.count) || 0;
+    } else if (detail.totalQuantity != null) {
+      count = Number(detail.totalQuantity) || 0;
+    } else if (detail.totalItems != null) {
+      count = Number(detail.totalItems) || 0;
+    } else if (Array.isArray(detail.items)) {
+      count = detail.items.length || 0;
+    }
+    return count;
+  }
+
   function ensureHandlers() {
     if (initialized) return;
     initialized = true;
@@ -50,7 +66,7 @@
     // Update all rendered roots when cart-updated is fired
     document.addEventListener('threadline:cart-updated', function (ev) {
       var detail = (ev && ev.detail) || {};
-      var count = Number(detail.count || 0) || 0;
+      var count = extractCountFromDetail(detail);
       for (var i = 0; i < storedStates.length; i++) {
         var st = storedStates[i];
         if (!st) continue;
@@ -121,6 +137,15 @@
       drawer.style.display = open ? 'none' : 'block';
       btn.setAttribute('aria-expanded', open ? 'false' : 'true');
     }, false);
+
+    // seed initial state from persisted cart if available
+    try {
+      if (window.ThreadlineCart && typeof window.ThreadlineCart.read === 'function') {
+        var summary = window.ThreadlineCart.read();
+        // dispatch a standard cart-updated event so all roots update the same way
+        document.dispatchEvent(new CustomEvent('threadline:cart-updated', { detail: summary, bubbles: true }));
+      }
+    } catch (e) { /* never throw */ }
 
     return { root: root, key: state.key };
   }
