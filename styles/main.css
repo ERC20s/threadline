@@ -135,41 +135,26 @@ a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid rgb
 .lookbook{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--gap);margin-top:18px}
 .look{margin:0;border-radius:var(--radius);overflow:hidden;background:var(--tint)}
 .look img{display:block;width:100%;height:100%;object-fit:cover;aspect-ratio:4/5}
-.look figcaption{padding:10px 12px;font-size:0.86rem;color:var(--muted);background:#fff}
-/* Every piece a look wears gets its own link and its catalogue price
-   (rendered by Threadline.renderLooks in scripts/products.js). */
-.look-note{display:block;margin-bottom:6px}
-.look-pieces{list-style:none;margin:0;padding:0;display:grid;gap:4px}
-.look-pieces li{font-size:0.86rem}
-.look-pieces a{font-weight:600;color:var(--ink)}
-.look-pieces a:hover{color:var(--accent-dark)}
-.look-price{color:var(--muted)}
-.look-piece-missing{color:var(--muted);font-style:italic}
+.look figcaption{padding:10px 12px;font-size:0.86rem;color:var(--muted);background:#fff'}
 
-/* ---------- size guide ---------- */
-.table-wrap{overflow-x:auto;margin-top:14px}
-table{border-collapse:collapse;width:100%;font-size:0.94rem;background:#fff}
-caption{text-align:left;font-weight:700;padding:10px 0;color:var(--ink)}
-th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left}
-thead th{background:var(--tint);font-size:0.8rem;letter-spacing:0.6px;text-transform:uppercase;color:var(--muted)}
-tbody tr:hover{background:var(--tint)}
-.measure-steps{color:var(--muted);padding-left:18px}
-.measure-steps li{margin:6px 0}
-/* Jump list at the top of size-guide.html — one link per section id. */
-.guide-jump{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px}
-.guide-jump a{
-  font-size:0.82rem;font-weight:600;text-decoration:none;color:var(--accent);
-  border:1px solid var(--line);border-radius:999px;padding:5px 12px;background:#fff
-}
-.guide-jump a:hover{border-color:var(--accent)}
-/* An anchored section should not sit flush against the top of the window. */
-.section[id]{scroll-margin-top:16px}
-
-/* ---------- footer ---------- */
-footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);color:var(--muted);font-size:0.86rem}
-.footer-cols{display:grid;gap:14px;margin-bottom:14px}
-.footer-cols h2{font-size:0.8rem;text-transform:uppercase;letter-spacing:1px;color:var(--ink);margin:0 0 6px}
-.footer-cols ul{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+/* cart UI styling (minimal) */
+.cart-btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+.cart-icon{font-size:1rem}
+.cart-badge{display:inline-block;min-width:20px;padding:2px 6px;border-radius:999px;background:var(--accent);color:#fff;font-weight:700;font-size:0.85rem}
+.cart-badge.has-items{box-shadow:0 0 0 3px rgba(124,92,255,0.08)}
+.cart-panel{position:fixed;right:18px;top:72px;width:320px;max-width:calc(100% - 36px);background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px;box-shadow:0 10px 30px rgba(15,23,42,0.12);z-index:1000}
+.cart-panel-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.cart-panel .cart-list{max-height:48vh;overflow:auto;margin-bottom:8px}
+.cart-item{display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid var(--line)}
+.cart-item-name{font-weight:700}
+.cart-item-meta{color:var(--muted)}
+.cart-item-controls{display:flex;gap:8px;align-items:center}
+.cart-qty{border:1px solid var(--line);background:#fff;padding:6px 8px;border-radius:6px;cursor:pointer}
+.cart-qty-value{min-width:18px;display:inline-block;text-align:center}
+.cart-remove{background:transparent;border:none;color:var(--muted);cursor:pointer}
+.cart-panel-footer{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.cart-total{font-weight:700}
+.cart-empty{color:var(--muted);padding:8px}
 
 /* ---------- wide screens ---------- */
 @media(min-width:760px){
