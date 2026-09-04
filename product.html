@@ -66,6 +66,7 @@
 
           <p class="actions">
             <button type="button" class="btn" id="buy" aria-describedby="buy-status">Buy</button>
+            <button type="button" class="btn" id="add-to-cart">Add to cart</button>
             <a class="btn btn-ghost" href="products.html">Back to the shop</a>
           </p>
           <p class="status" id="buy-status" role="status"></p>
@@ -151,6 +152,71 @@
   <!-- Queues a Buy click until payments-widget.js has rendered #group-store. -->
   <script src="scripts/checkout-intent.js"></script>
   <script src="payments-widget.js"></script>
+  <script src="scripts/cart.js"></script>
+  <script>
+    (function () {
+      // Minimal, defensive Add-to-cart handler for product pages.
+      var btn = document.getElementById('add-to-cart');
+      if (!btn) return;
+
+      btn.addEventListener('click', function () {
+        try {
+          var status = document.getElementById('buy-status');
+          var T = window.Threadline || null;
+          var params = new URLSearchParams(location.search);
+          var requestedId = (T && typeof T.productIdFromLocation === 'function') ? T.productIdFromLocation(location) : null;
+          var pid = requestedId || params.get('id') || '';
+          var product = (T && typeof T.byId === 'function') ? T.byId(pid) : null;
+          var name = product ? product.name : (document.getElementById('product-name') ? document.getElementById('product-name').textContent : '');
+          var priceText = (document.getElementById('product-price') && document.getElementById('product-price').textContent) || '';
+
+          // Determine chosen size from the size buttons' aria-pressed state.
+          var sizeBox = document.getElementById('sizes');
+          var chosenSize = '';
+          if (sizeBox) {
+            var sel = sizeBox.querySelector('button[aria-pressed="true"]');
+            if (sel && sel.dataset) chosenSize = sel.dataset.size || '';
+          }
+
+          // Determine chosen quantity from the quantities buttons.
+          var qtyBox = document.getElementById('quantities');
+          var chosenQuantity = 1;
+          if (qtyBox) {
+            var qsel = qtyBox.querySelector('button[aria-pressed="true"]');
+            if (qsel) {
+              // quantity buttons carry their number as text or data-quantity
+              chosenQuantity = Number(qsel.dataset.quantity || qsel.textContent) || 1;
+            }
+          }
+
+          // If the catalogue defines multiple sizes and none is chosen, reject.
+          var needsSize = product && product.sizes && product.sizes.length > 1;
+          if (needsSize && !chosenSize) {
+            if (status) { status.textContent = 'Choose a size first.'; status.setAttribute('data-tone', 'error'); }
+            if (sizeBox) { var firstSize = sizeBox.querySelector('button'); if (firstSize) firstSize.focus(); }
+            return;
+          }
+
+          var detail = { id: product ? product.id : pid, name: name, price: priceText, quantity: chosenQuantity, size: chosenSize || '' };
+
+          if (window.ThreadlineCart && typeof window.ThreadlineCart.add === 'function') {
+            try {
+              window.ThreadlineCart.add(detail);
+              if (status) { status.textContent = 'Added to cart.'; status.setAttribute('data-tone', 'ok'); setTimeout(function () { if (status) { status.textContent = ''; status.removeAttribute('data-tone'); } }, 1600); }
+            } catch (e) { /* ignore cart failures — fall back to event below */ }
+            return;
+          }
+
+          // Fallback: emit a bubbling CustomEvent so other scripts can listen.
+          try {
+            var ev = new CustomEvent('threadline:add-to-cart', { bubbles: true, detail: detail });
+            document.dispatchEvent(ev);
+            if (status) { status.textContent = 'Added to cart.'; status.setAttribute('data-tone', 'ok'); setTimeout(function () { if (status) { status.textContent = ''; status.removeAttribute('data-tone'); } }, 1600); }
+          } catch (e) { /* best-effort only */ }
+        } catch (e) { /* swallow errors to avoid breaking the page */ }
+      });
+    })();
+  </script>
   <script>
     (function () {
       var T = window.Threadline;
@@ -379,45 +445,6 @@
         putOnUrl("qty", n > 1 ? String(n) : "");
       };
 
-      var paintQuantities = function () {
-        if (!qtyBox) return;
-        Array.prototype.forEach.call(qtyBox.querySelectorAll("button"), function (b) {
-          b.setAttribute("aria-pressed", Number(b.dataset.quantity) === chosenQuantity ? "true" : "false");
-        });
-      };
-
-      if (qtyBox) {
-        for (var q = 1; q <= MAX_QUANTITY; q++) {
-          (function (n) {
-            var b = document.createElement("button");
-            b.type = "button";
-            b.className = "size";
-            b.dataset.quantity = String(n);
-            b.textContent = String(n);
-            b.setAttribute("aria-label", n === 1 ? "Quantity 1" : "Quantity " + n);
-            b.setAttribute("aria-pressed", "false");
-            b.addEventListener("click", function () {
-              chosenQuantity = n;
-              paintQuantities();
-              say(n === 1 ? "Buying one." : "Buying " + n + ".");
-              putQuantityOnUrl(n);
-            });
-            qtyBox.appendChild(b);
-          })(q);
-        }
-        paintQuantities();
-      }
-
-      /* A ?qty= we did not accept as written is corrected on the URL now, before
-         the widget can copy location.href into a returnUrl and before a click
-         can stamp it onto a checkout row. */
-      if (requestedQuantity !== null && requestedQuantity !== String(chosenQuantity)) {
-        putQuantityOnUrl(chosenQuantity);
-        if (Number(requestedQuantity) > MAX_QUANTITY) {
-          say("We sell up to " + MAX_QUANTITY + " of a piece at a time — email us for more.");
-        }
-      }
-
       /* ---- Buy: hand off to the widget's own Buy link for this item ---- */
       var normalise = function (s) {
         return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
@@ -439,7 +466,7 @@
       /* The failure line, with a way out: the group's own storefront. */
       var sayNotListed = function (scroll) {
         say("This piece isn't listed in the shop panel yet. Pick it in Checkout below, or email hello@threadline.example and we'll reserve " +
-          (chosenSize ? "size " + chosenSize : "one for you") + ".", "error");
+          (chosenSize ? "size " + chosenSize : "one for you") + ", "error");
         if (status) {
           status.appendChild(document.createTextNode(" "));
           var link = document.createElement("a");
@@ -480,13 +507,13 @@
         } else {
           say("The shop isn't answering, so checkout can't open for " + product.name +
             " right now. Use Retry in the Checkout panel below, or email hello@threadline.example and we'll reserve " +
-            (chosenSize ? "size " + chosenSize : "one for you") + ".", "error");
+            (chosenSize ? "size " + chosenSize : "one for you") + ", "error");
         }
         /* The Retry button we just told them about is inside the panel. */
         if (scroll && panel && panel.scrollIntoView) panel.scrollIntoView({ behavior: "smooth", block: "center" });
       };
 
-      /* payments-widget.js listens on the #group-store container and owns the
+      /* ---- payments-widget.js listens on the #group-store container and owns the
          checkout POST (including its duplicate-click guard), so we click its own
          link rather than posting a second time from here. */
       /* The panel sells a sizeless platform item in ones, so the chosen size AND
