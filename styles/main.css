@@ -146,6 +146,25 @@ a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid rgb
 .look-price{color:var(--muted)}
 .look-piece-missing{color:var(--muted);font-style:italic}
 
+/* minimal cart UI appendix */
+.cart-toggle{margin-left:12px;background:transparent;border:1px solid var(--line);padding:8px 10px;border-radius:999px;cursor:pointer;font-weight:700;color:var(--muted)}
+.cart-toggle .cart-badge{display:inline-block;min-width:20px;height:20px;line-height:20px;border-radius:999px;background:var(--accent);color:#fff;font-size:0.78rem;text-align:center;margin-left:8px;padding:0 6px}
+.cart-drawer{position:fixed;right:18px;top:72px;width:320px;max-width:calc(100% - 40px);background:#fff;border:1px solid var(--line);box-shadow:0 10px 30px rgba(15,23,42,0.18);border-radius:8px;padding:12px;z-index:9999;transform:translateY(-10px);opacity:0;pointer-events:none;transition:opacity 180ms ease,transform 180ms ease}
+.cart-drawer[aria-hidden="false"]{opacity:1;transform:translateY(0);pointer-events:auto}
+.cart-drawer .cart-drawer-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.cart-items{min-height:40px;max-height:360px;overflow:auto;padding:6px 0}
+.cart-row{display:flex;justify-content:space-between;gap:8px;padding:8px;border-top:1px solid var(--line)}
+.cart-row-left{display:flex;flex-direction:column}
+.cart-row-name{font-weight:700}
+.cart-total{font-weight:800;margin-top:8px}
+.cart-actions{display:flex;gap:8px;margin-top:10px}
+.cart-clear[disabled],.cart-checkout[disabled]{opacity:0.5;cursor:not-allowed}
+
+/* desktop draws the drawer below the header */
+@media(min-width:760px){
+  .cart-drawer{top:24px}
+}
+
 /* ---------- size guide ---------- */
 .table-wrap{overflow-x:auto;margin-top:14px}
 table{border-collapse:collapse;width:100%;font-size:0.94rem;background:#fff}
