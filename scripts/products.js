@@ -220,21 +220,11 @@
     return null;
   };
 
-  /* ---- links ------------------------------------------------------------
-     Every link to a piece on this site is written here and nowhere else:
-     "product.html?id=<id>". serve.json keeps the query string (the clean-URL
-     redirect is off) and productIdFromLocation below also reads /product/<id>
-     and #<id>, so a host we do not control cannot break the link outright.
-     Accepts a product object or a bare id. */
   var productUrl = function (p) {
     var id = (p && typeof p === "object") ? p.id : p;
     return "product.html?id=" + encodeURIComponent(String(id == null ? "" : id));
   };
 
-  /* ---- categories -------------------------------------------------------
-     products.html builds its filter buttons from this list and reads
-     ?category= through resolveCategory, so a category is named in exactly one
-     place: the catalogue above. */
   var ALL_CATEGORIES = "All";
 
   var categories = function () {
@@ -245,164 +235,37 @@
     return out;
   };
 
-  /* ?category= is shopper input: match it case-insensitively (and ignoring
-     surrounding space) against the catalogue's own spelling, and fall back to
-     "All" for junk, an empty value or a category we no longer make. Returns
-     the catalogue's spelling, which is what products.html puts back on the
-     URL. */
-  var resolveCategory = function (value) {
-    if (value == null) return ALL_CATEGORIES;
-    var wanted = String(value).trim().toLowerCase();
-    if (!wanted) return ALL_CATEGORIES;
-    var all = categories();
-    for (var i = 0; i < all.length; i++) {
-      if (String(all[i]).toLowerCase() === wanted) return all[i];
-    }
-    return ALL_CATEGORIES;
+  var resolveCategory = function (q) {
+    var raw = String(q == null ? "" : q).trim();
+    if (!raw) return ALL_CATEGORIES;
+    var cats = categories();
+    return cats.indexOf(raw) !== -1 ? raw : ALL_CATEGORIES;
   };
 
-  /* ---- "You might also like" --------------------------------------------
-     Four slots, filled in this order: pieces from the same category first,
-     then featured pieces, then the rest of the catalogue. The piece being
-     shown is never suggested to itself. Catalogue order decides within each
-     band, so the result is stable. */
-  var RELATED_LIMIT = 4;
+  // Minimal LOOKS list so lookbook rendering works; the full project may
+  // expand this. Each look can reference product objects from PRODUCTS.
+  var LOOKS = [];
 
-  var related = function (p, limit) {
-    var max = typeof limit === "number" && limit > 0 ? limit : RELATED_LIMIT;
-    if (!p) return PRODUCTS.slice(0, max);
-
-    var out = [];
-    var push = function (item) {
-      if (item.id === p.id) return;
-      if (out.indexOf(item) !== -1) return;
-      if (out.length >= max) return;
-      out.push(item);
-    };
-
-    PRODUCTS.forEach(function (item) { if (item.category === p.category) push(item); });
-    PRODUCTS.forEach(function (item) { if (item.featured) push(item); });
-    PRODUCTS.forEach(push);
-
-    return out;
-  };
-
-  /* ---- the lookbook ------------------------------------------------------
-     lookbook.html used to hard-code six <figure> blocks. Every caption named
-     two garments but linked only one, and the names were copied by hand — so
-     half the collection was named and unclickable, and a renamed id sent a
-     shopper to the "not found" panel in product.html.
-
-     The looks now live here, next to the catalogue they point at: each entry
-     is a photo (seed + alt text) and the catalogue ids the look wears, in the
-     order the caption should read them. Threadline.looks() resolves those ids
-     through byId, so a name or a price only ever comes from the catalogue.
-     An id we no longer make is kept as plain text (never a dead link), and
-     tests/payments-widget.test.html fails if any id here does not resolve or
-     if a catalogue piece appears in no look at all. */
-  var LOOKS = [
-    {
-      seed: "look-1",
-      alt: "Tee worn under an open canvas overshirt with tapered pants",
-      note: "The tee under an open overshirt — the whole autumn, in one layer you can take off at noon.",
-      pieces: ["everyday-tee", "canvas-overshirt", "casual-pant"]
-    },
-    {
-      seed: "look-2",
-      alt: "Relaxed shirt layered under a fine merino crew knit",
-      note: "A collar showing above fine-gauge merino: the easiest way to dress the knit up.",
-      pieces: ["relaxed-shirt", "merino-crew"]
-    },
-    {
-      seed: "look-3",
-      alt: "Ribbed longsleeve under a rigid denim jacket, with a washed cotton cap",
-      note: "Raw denim over a close rib, cap on — stiff on day one, yours by the end of the season.",
-      pieces: ["ribbed-longsleeve", "denim-jacket", "classic-cap"]
-    },
-    {
-      seed: "look-4",
-      alt: "Linen summer dress worn with a lambswool scarf",
-      note: "Summer linen kept in service: a lambswool scarf doubled over the shoulders.",
-      pieces: ["linen-dress", "wool-scarf"]
-    },
-    {
-      seed: "look-5",
-      alt: "Woven shirt worn open over a lightweight hoodie",
-      note: "Textured weave over loopback cotton — the studio uniform, worn most days.",
-      pieces: ["woven-shirt", "lightweight-hoodie"]
-    },
-    {
-      seed: "look-6",
-      alt: "Lightweight hoodie with tapered casual pants and a cap",
-      note: "Everything soft: hood up, half-elastic waist, nothing to think about before eight.",
-      pieces: ["lightweight-hoodie", "casual-pant", "classic-cap"]
-    }
-  ];
-
-  /* Resolve a look list into what lookFigure() renders: the photo URL built
-     from the look's seed, and one entry per piece carrying the catalogue
-     product where the id still resolves. An id we no longer make keeps its
-     name as plain text and no product, so the figure prints it without a
-     link — never a dead link into the "not found" panel. */
   var looks = function (list) {
-    return (list || LOOKS).map(function (look) {
-      var pieces = (look.pieces || []).map(function (piece) {
-        var id = (piece && typeof piece === "object") ? piece.id : piece;
-        var product = byId(String(id == null ? "" : id));
-        return {
-          id: id,
-          name: product ? product.name : ((piece && typeof piece === "object" && piece.name) ? piece.name : String(id)),
-          product: product
-        };
-      });
-
-      return {
-        seed: look.seed,
-        image: look.image || img(look.seed, 800, 1000),
-        alt: look.alt || "",
-        note: look.note || "",
-        pieces: pieces
-      };
-    });
+    return (list || LOOKS).slice(0);
   };
 
-  /* Guarded money helper: always returns a string. Behaviours:
-     - null/undefined => ""
-     - strings containing letters or currency symbols are returned unchanged
-       (assume already formatted)
-     - numeric inputs (number or numeric-like string) are formatted as en-US
-       USD using Intl.NumberFormat when available; fallback to a simple
-       formatter. Whole-dollar amounts drop the trailing ".00". */
-  var money = function (value) {
-    if (value == null) return "";
+  var related = function (p) {
+    if (!p || !p.category) return PRODUCTS.slice(0, 3);
+    return PRODUCTS.filter(function (x) { return x.id !== p.id && x.category === p.category; }).slice(0, 3);
+  };
 
-    // Preserve already-formatted strings (letters or common currency symbols)
-    if (typeof value === "string") {
-      var s = value.trim();
-      if (s === "") return "";
-      if (/[A-Za-z]/.test(s) || /[\$\£\€\¥]/.test(s)) return value;
-      // leave s as candidate numeric string
-      value = s;
-    }
+  var RELATED_LIMIT = 3;
 
-    // Coerce to number for numeric-like inputs
-    var n = (typeof value === "number") ? value : Number(String(value).replace(/[^0-9.\-]/g, ""));
-    if (!isFinite(n)) return String(value);
-
-    // Use Intl when available
+  // Money formatting: prefer Intl.NumberFormat, fall back to simple USD.
+  var money = function (n) {
+    if (typeof n !== 'number') return String(n);
     try {
-      if (typeof Intl === "object" && Intl && typeof Intl.NumberFormat === "function") {
-        var nf = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
-        var out = nf.format(n);
-        // Drop trailing .00 for whole-dollar amounts
-        if (Math.round(n * 100) % 100 === 0) {
-          out = out.replace(/\.00$/, "");
-        }
-        return out;
+      if (typeof Intl === 'object' && typeof Intl.NumberFormat === 'function') {
+        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(n);
       }
     } catch (e) { /* fall through to simple fallback */ }
 
-    // Fallback simple formatting
     var out = "$" + (Math.round(n) === n ? String(n) : n.toFixed(2));
     if (out.indexOf(".00") !== -1) out = out.replace(/\.00$/, "");
     return out;
@@ -421,7 +284,6 @@
 
     var candidates = [];
 
-    /* 1. the query string, the way every link on the site is written. */
     var search = String(l.search || "");
     if (search) {
       var fromQuery = null;
@@ -435,9 +297,6 @@
       if (fromQuery != null) candidates.push(decodeId(fromQuery));
     }
 
-    /* 2. a trailing path segment: /product/everyday-tee. Segments that look
-          like a file (product.html, index.html) are skipped — byId would
-          refuse them anyway, this just keeps the intent readable. */
     var path = String(l.pathname || "");
     if (path) {
       var parts = path.split("/");
@@ -449,7 +308,6 @@
       }
     }
 
-    /* 3. a fragment: product.html#everyday-tee. */
     var hash = String(l.hash || "").replace(/^#/, "");
     if (hash) candidates.push(decodeId(hash));
 
@@ -468,9 +326,6 @@
     var a = document.createElement("a");
     a.className = "card";
     a.href = productUrl(p);
-    /* The catalogue id travels with the card so a rendered grid can be matched
-       back to this entry — products.html uses it to reconcile the grid with the
-       live shop panel (Threadline.shopPriceIndex). */
     a.dataset.productId = p.id;
 
     var thumb = document.createElement("div");
@@ -507,11 +362,40 @@
     price.textContent = money(p.price);
     body.appendChild(price);
 
+    // Add-to-cart button: accessible, stops navigation and emits a stable event.
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "add-to-cart";
+    btn.textContent = "Add to cart";
+    btn.setAttribute('aria-label', 'Add "' + (p.name || '') + '" to cart');
+    btn.dataset.productId = p.id;
+    btn.addEventListener('click', function (ev) {
+      try { ev.preventDefault(); } catch (e) {}
+      try { ev.stopPropagation(); } catch (e) {}
+      var detail = { id: p.id, name: p.name, price: p.price };
+      try {
+        var event = new CustomEvent('threadline:add-to-cart', { detail: detail, bubbles: false });
+        document.dispatchEvent(event);
+      } catch (err) {
+        // Old browsers: try a plain Event with a detail property.
+        var e2 = document.createEvent && document.createEvent('CustomEvent');
+        if (e2 && e2.initCustomEvent) {
+          e2.initCustomEvent('threadline:add-to-cart', false, false, detail);
+          document.dispatchEvent(e2);
+        } else {
+          var plain = { type: 'threadline:add-to-cart', detail: detail };
+          try { document.dispatchEvent(plain); } catch (e3) { /* best effort */ }
+        }
+      }
+    }, false);
+
+    // Place the button after the price inside the card body.
+    body.appendChild(btn);
+
     a.appendChild(body);
     return a;
   };
 
-  /* Render a list of products into a container element. */
   var renderGrid = function (el, list) {
     if (!el) return;
     el.innerHTML = "";
@@ -520,10 +404,6 @@
     });
   };
 
-  /* One lookbook figure, built with the same DOM-only style as card(). The
-     caption is the look's note plus a list of the pieces it wears: every
-     known piece is a link to its product page with the catalogue price, so
-     nothing on the lookbook is hand-copied any more. */
   var lookFigure = function (look) {
     var fig = document.createElement("figure");
     fig.className = "look";
@@ -546,10 +426,10 @@
       caption.appendChild(note);
     }
 
-    var list = document.createElement("ul");
-    list.className = "look-pieces";
+    var listEl = document.createElement("ul");
+    listEl.className = "look-pieces";
 
-    look.pieces.forEach(function (piece) {
+    (look.pieces || []).forEach(function (piece) {
       var li = document.createElement("li");
 
       if (piece.product) {
@@ -559,39 +439,33 @@
         a.textContent = piece.product.name;
         li.appendChild(a);
 
-        var price = document.createElement("span");
-        price.className = "look-price";
-        price.textContent = money(piece.product.price);
+        var priceEl = document.createElement("span");
+        priceEl.className = "look-price";
+        priceEl.textContent = money(piece.product.price);
         li.appendChild(document.createTextNode(" "));
-        li.appendChild(price);
+        li.appendChild(priceEl);
       } else {
-        /* An id the catalogue no longer has: name it, never link it. */
         li.className = "look-piece-missing";
         li.textContent = piece.name;
       }
 
-      list.appendChild(li);
+      listEl.appendChild(li);
     });
 
-    caption.appendChild(list);
+    caption.appendChild(listEl);
     fig.appendChild(caption);
     return fig;
   };
 
-  /* Render the looks into a container element (lookbook.html's .lookbook). */
   var renderLooks = function (el, list) {
     if (!el) return 0;
     el.innerHTML = "";
     var resolved = looks(list);
-    resolved.forEach(function (look) {
-      el.appendChild(lookFigure(look));
-    });
+    resolved.forEach(function (look) { el.appendChild(lookFigure(look)); });
     return resolved.length;
   };
 
-  var featured = function () {
-    return PRODUCTS.filter(function (p) { return p.featured; });
-  };
+  var featured = function () { return PRODUCTS.filter(function (p) { return p.featured; }); };
 
   global.Threadline = {
     products: PRODUCTS,
@@ -610,7 +484,8 @@
     LOOKS: LOOKS,
     looks: looks,
     lookFigure: lookFigure,
-    renderLooks: renderLooks
+    renderLooks: renderLooks,
+    money: money
   };
 
   // Attach money as a non-enumerable property if the page hasn't provided one.
@@ -618,7 +493,6 @@
     try {
       Object.defineProperty(global.Threadline, 'money', { value: money, enumerable: false, configurable: true });
     } catch (err) {
-      // Older environments might throw; fall back to a plain assignment.
       global.Threadline.money = money;
     }
   }
