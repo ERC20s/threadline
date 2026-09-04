@@ -21,6 +21,7 @@
         <a href="size-guide.html">Size guide</a>
         <a href="index.html#contact">Contact</a>
       </nav>
+      <button type="button" id="cart-toggle" class="btn cart-toggle" aria-expanded="false" aria-controls="cart-drawer" aria-label="Open cart">Cart (0)</button>
     </header>
 
     <main id="content">
@@ -97,6 +98,8 @@
        payments-widget.js, which fills #group-store. -->
   <script src="scripts/checkout-intent.js"></script>
   <script src="payments-widget.js"></script>
+  <script src="scripts/cart.js"></script>
+  <script src="scripts/cart-ui.js"></script>
   <script>
     (function () {
       var T = window.Threadline;
@@ -222,42 +225,16 @@
          nothing else: no size travels with the order and none comes back in the
          receipt, so a tee bought here cannot be fulfilled. Guard the panel in
          the capture phase (before payments-widget.js's own click handler) and
-         send a sized piece to its product page, where the size buttons are.
-         One-size pieces (Classic Cap, Lambswool Scarf) and rows we cannot match
-         to the catalogue are left exactly as they are. */
+         send a sized piece to its product page, where the size buttons are. */
       if (panel && T.guardBuyClicks) {
         T.guardBuyClicks(panel, function (info) {
           if (!info.product || !info.needsSize) return false;
-          if (status) {
-            status.textContent = info.product.name + " is made in sizes — choose one on the product page.";
-          }
           location.href = T.productUrl(info.product);
           return true;
         });
       }
 
-      /* ---- a buyer who comes back paid is told so, here ----
-         One-size pieces (Classic Cap, Lambswool Scarf) pass the guard above, so
-         a checkout can start and finish on this page; until now the only sign
-         of payment was the widget's small green line inside the panel, far
-         below this grid. The shared helper in scripts/checkout-intent.js writes
-         the real confirmation — piece, quantity, size and a prefilled email —
-         into #catalogue-status and moves focus to it. */
-      document.addEventListener("group-store:paid", function (e) {
-        var order = e && e.detail ? e.detail : null;
-        if (!order || !status) return;
-        if (T.renderReceipt) {
-          T.renderReceipt(status, order, { focus: true });
-          return;
-        }
-        status.textContent = "Thank you — order " + (order.id || "") +
-          " is paid. A confirmation email is on its way.";
-      });
-
-      /* Wait for the shop panel — no matchFn, so this resolves as soon as
-         payments-widget.js has rendered any row — then index it once and
-         repaint the category on screen. A panel that fails, times out or
-         renders no rows leaves the grid exactly as written. */
+      /* ---- reconcile the grid with the live shop ---- */
       if (panel && T.whenBuyAnchor && T.shopPriceIndex) {
         T.whenBuyAnchor(panel, null, T.BUY_ANCHOR_TIMEOUT || 12000)
           .then(function () {
@@ -267,10 +244,6 @@
             show(current);
           })
           .catch(function () {
-            /* Nothing to reconcile against — and every reason whenBuyAnchor
-               rejects for is the shop's, not ours. The grid keeps its
-               catalogue prices; the status line says why, and where Retry is.
-               Never over a paid receipt. */
             if (!status || !T.renderShopDown) return;
             T.renderShopDown(status, { brief: true, append: true });
           });

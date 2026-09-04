@@ -118,120 +118,113 @@
             <li><a href="size-guide.html">Size guide</a></li>
             <li><a href="#contact">Contact &amp; returns</a></li>
             <li><a href="lookbook.html">Lookbook</a></li>
-          </ul>
+          </div>
         </div>
-        <div>
-          <h2>Threadline</h2>
-          <ul>
-            <li><a href="#about">About the brand</a></li>
-            <li><a href="mailto:hello@threadline.example">hello@threadline.example</a></li>
-          </ul>
-        </div>
-      </div>
-      <div>Threadline Clothing Co. — small-batch apparel. Product photography is placeholder imagery.</div>
-    </footer>
-  </div>
+      </footer>
+    </div>
 
-  <script src="scripts/products.js"></script>
-  <!-- Shared shop helpers (whenBuyAnchor, shopPriceIndex, reconcileGrid,
-       guardBuyClicks): loaded after products.js, which owns the
-       window.Threadline namespace, and before payments-widget.js, which fills
-       #group-store. -->
-  <script src="scripts/checkout-intent.js"></script>
-  <script src="payments-widget.js"></script>
-  <script>
-    (function () {
-      var T = window.Threadline;
-      var grid = document.getElementById("featured-grid");
-      var status = document.getElementById("featured-status");
-      var panel = document.getElementById("group-store");
-      if (!T || !grid) return;
+    <script src="scripts/products.js"></script>
+    <!-- Shared shop helpers (whenBuyAnchor, shopPriceIndex, reconcileGrid,
+         guardBuyClicks): loaded after products.js, which owns the
+         window.Threadline namespace, and before payments-widget.js, which fills
+         #group-store. -->
+    <script src="scripts/checkout-intent.js"></script>
+    <script src="payments-widget.js"></script>
+    <script src="scripts/cart.js"></script>
+    <script src="scripts/cart-ui.js"></script>
+    <script>
+      (function () {
+        var T = window.Threadline;
+        var grid = document.getElementById("featured-grid");
+        var status = document.getElementById("featured-status");
+        var panel = document.getElementById("group-store");
+        if (!T || !grid) return;
 
-      /* Built once the shop panel has rendered its rows; null means "the shop
-         has not spoken", which leaves the featured cards exactly as written. */
-      var shopIndex = null;
+        /* Built once the shop panel has rendered its rows; null means "the shop
+           has not spoken", which leaves the featured cards exactly as written. */
+        var shopIndex = null;
 
-      /* Render the featured cards, then make them agree with the live shop:
-         the shop's price where the two really differ, "Not in the shop yet."
-         where the shop sells no such row. The repaint is the shared helper in
-         scripts/checkout-intent.js, the same one products.html uses. */
-      var show = function () {
-        T.renderGrid(grid, T.featured());
-        var unlisted = (shopIndex && T.reconcileGrid) ? T.reconcileGrid(grid, shopIndex) : 0;
-        /* A receipt in the status line outranks the grid's own count: the shop
-           panel can render (and this pass run again) after a returning buyer's
-           order has been verified, and that must not wipe the confirmation. */
-        if (status && !(T.receiptIn && T.receiptIn(status))) {
-          status.textContent = unlisted
-            ? unlisted + (unlisted === 1 ? " featured piece is" : " featured pieces are") +
-              " not in the shop yet — the rest check out at the price shown."
-            : "";
-        }
-      };
-
-      show();
-
-      /* ---- no sized garment leaves the panel without a size ----
-         The panel's own Buy links post a checkout for the platform item and
-         nothing else, so a tee bought straight from this list would arrive with
-         no size. Guard the panel in the capture phase (before
-         payments-widget.js's own click handler) and send a sized piece to its
-         product page, where the size buttons are. One-size pieces (Classic Cap,
-         Lambswool Scarf) and rows we cannot match to the catalogue are left
-         exactly as they are. */
-      if (panel && T.guardBuyClicks) {
-        T.guardBuyClicks(panel, function (info) {
-          if (!info.product || !info.needsSize) return false;
-          if (status) {
-            status.textContent = info.product.name + " is made in sizes — choose one on the product page.";
+        /* Render the featured cards, then make them agree with the live shop:
+           the shop's price where the two really differ, "Not in the shop yet."
+           where the shop sells no such row. The repaint is the shared helper in
+           scripts/checkout-intent.js, the same one products.html uses. */
+        var show = function () {
+          T.renderGrid(grid, T.featured());
+          var unlisted = (shopIndex && T.reconcileGrid) ? T.reconcileGrid(grid, shopIndex) : 0;
+          /* A receipt in the status line outranks the grid's own count: the shop
+             panel can render (and this pass run again) after a returning buyer's
+             order has been verified, and that must not wipe the confirmation. */
+          if (status && !(T.receiptIn && T.receiptIn(status))) {
+            status.textContent = unlisted
+              ? unlisted + (unlisted === 1 ? " featured piece is" : " featured pieces are") +
+                " not in the shop yet — the rest check out at the price shown."
+              : "";
           }
-          location.href = T.productUrl(info.product);
-          return true;
-        });
-      }
+        };
 
-      /* ---- a buyer who comes back paid is told so, here ----
-         The one-size pieces (Classic Cap, Lambswool Scarf) pass the guard
-         above, so a checkout really does start and end on this page. The
-         widget's own line is a small green "Paid: … — order …" inside the
-         panel; the real confirmation — piece, quantity, size and a prefilled
-         email — is written into #featured-status by the shared helper in
-         scripts/checkout-intent.js, the same one product.html uses. */
-      document.addEventListener("group-store:paid", function (e) {
-        var order = e && e.detail ? e.detail : null;
-        if (!order || !status) return;
-        if (T.renderReceipt) {
-          T.renderReceipt(status, order, { focus: true });
-          return;
-        }
-        /* checkout-intent.js failed to load: still say something true. */
-        status.textContent = "Thank you — order " + (order.id || "") +
-          " is paid. A confirmation email is on its way.";
-      });
+        show();
 
-      /* Wait for the shop panel — no matchFn, so this resolves as soon as
-         payments-widget.js has rendered any row — then index it once and
-         repaint the featured grid. A panel that fails, times out or renders no
-         rows changes nothing on this page. */
-      if (panel && T.whenBuyAnchor && T.shopPriceIndex) {
-        T.whenBuyAnchor(panel, null, T.BUY_ANCHOR_TIMEOUT || 12000)
-          .then(function () {
-            var index = T.shopPriceIndex(panel);
-            if (!index || !index.size) return;
-            shopIndex = index;
-            show();
-          })
-          .catch(function () {
-            /* Nothing to reconcile against — and every reason whenBuyAnchor
-               rejects for is the shop's, not ours. Say so in one short line so
-               the shopper knows the prices on these cards are the catalogue's,
-               and that Retry lives in the Checkout panel below. Never over a
-               paid receipt. */
-            if (!status || !T.renderShopDown) return;
-            T.renderShopDown(status, { brief: true, append: true });
+        /* ---- no sized garment leaves the panel without a size ----
+           The panel's own Buy links post a checkout for the platform item and
+           nothing else, so a tee bought straight from this list would arrive with
+           no size. Guard the panel in the capture phase (before
+           payments-widget.js's own click handler) and send a sized piece to its
+           product page, where the size buttons are. One-size pieces (Classic Cap,
+           Lambswool Scarf) and rows we cannot match to the catalogue are left
+           exactly as they are. */
+        if (panel && T.guardBuyClicks) {
+          T.guardBuyClicks(panel, function (info) {
+            if (!info.product || !info.needsSize) return false;
+            if (status) {
+              status.textContent = info.product.name + " is made in sizes — choose one on the product page.";
+            }
+            location.href = T.productUrl(info.product);
+            return true;
           });
-      }
-    })();
-  </script>
+        }
+
+        /* ---- a buyer who comes back paid is told so, here ----
+           The one-size pieces (Classic Cap, Lambswool Scarf) pass the guard
+           above, so a checkout really does start and end on this page. The
+           widget's own line is a small green "Paid: … — order …" inside the
+           panel; the real confirmation — piece, quantity, size and a prefilled
+           email — is written into #featured-status by the shared helper in
+           scripts/checkout-intent.js, the same one product.html uses. */
+        document.addEventListener("group-store:paid", function (e) {
+          var order = e && e.detail ? e.detail : null;
+          if (!order || !status) return;
+          if (T.renderReceipt) {
+            T.renderReceipt(status, order, { focus: true });
+            return;
+          }
+          /* checkout-intent.js failed to load: still say something true. */
+          status.textContent = "Thank you — order " + (order.id || "") +
+            " is paid. A confirmation email is on its way.";
+        });
+
+        /* Wait for the shop panel — no matchFn, so this resolves as soon as
+           payments-widget.js has rendered any row — then index it once and
+           repaint the featured grid. A panel that fails, times out or renders no
+           rows changes nothing on this page. */
+        if (panel && T.whenBuyAnchor && T.shopPriceIndex) {
+          T.whenBuyAnchor(panel, null, T.BUY_ANCHOR_TIMEOUT || 12000)
+            .then(function () {
+              var index = T.shopPriceIndex(panel);
+              if (!index || !index.size) return;
+              shopIndex = index;
+              show();
+            })
+            .catch(function () {
+              /* Nothing to reconcile against — and every reason whenBuyAnchor
+                 rejects for is the shop's, not ours. Say so in one short line so
+                 the shopper knows the prices on these cards are the catalogue's,
+                 and that Retry lives in the Checkout panel below. Never over a
+                 paid receipt. */
+              if (!status || !T.renderShopDown) return;
+              T.renderShopDown(status, { brief: true, append: true });
+            });
+        }
+      })();
+    </script>
 </body>
 </html>
