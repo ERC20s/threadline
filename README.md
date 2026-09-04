@@ -89,8 +89,13 @@ link when it does.
   hand-copied. An id the catalogue no longer has is printed as plain text
   (`.look-piece-missing`) rather than as a dead link, and a `<noscript>` list of
   direct links mirrors the one in `products.html`. Adding a garment means adding
-  it to a look: assertion 14 in `tests/payments-widget.test.html` fails if a
-  look names an unknown id or if a catalogue piece appears in no look.
+  it to a look: the `lookbook-pieces-resolve` and `lookbook-covers-catalogue`
+  assertions in `tests/payments-widget.test.html` fail if a look names an
+  unknown id or if a catalogue piece appears in no look. The same block
+  (`catalogue-namespace-present`) fails if `window.Threadline` is missing or
+  advertises a helper that is not defined — the way the whole site went blank
+  when `productUrl`, `categories`, `related` and `looks` were lost from
+  `scripts/products.js`.
 - `styles/main.css` is the only stylesheet; every page links it. No frameworks.
   `styles/size-guide.css` is retired and simply imports `main.css`.
 - `payments-widget.js` is the group's shop widget. Pages that sell carry the

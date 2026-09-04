@@ -688,4 +688,91 @@
           var plain = (window.__testCheckoutBodies && window.__testCheckoutBodies['checkout-group']) || [];
           var parsed = null;
           try { parsed = JSON.parse(plain[0]); } catch (e) {}
-          var keys = parsed ? Obje
+          var keys = parsed ? Object.keys(parsed).sort() : [];
+          var unstampedOk = !!parsed &&
+            keys.indexOf('size') === -1 && keys.indexOf('note') === -1;
+          note('checkout-unstamped-body-unchanged', unstampedOk,
+            'first checkout-group body keys=' + JSON.stringify(keys));
+        }, 900);
+      }, 1200);
+
+      // 11) The catalogue namespace itself. scripts/products.js builds
+      // window.Threadline from one object literal at the end of the file: if
+      // any helper it advertises is missing, evaluating that literal throws a
+      // ReferenceError, the IIFE aborts and window.Threadline is never
+      // assigned — every page then hits its own "if (!T) return" guard and
+      // renders an empty grid. Assert the namespace exists and that every key
+      // it advertises is actually defined, so that failure can never be silent
+      // again. Runs first, before test 9 replaces Threadline.products.
+      (function runCatalogueNamespaceTest() {
+        var T = window.Threadline;
+        if (!T) {
+          note('catalogue-namespace-present', false, 'window.Threadline is undefined — scripts/products.js threw');
+          return;
+        }
+
+        var ADVERTISED = ['products', 'byId', 'categories', 'resolveCategory', 'ALL_CATEGORIES',
+          'featured', 'related', 'RELATED_LIMIT', 'productUrl', 'productIdFromLocation',
+          'productFromLocation', 'card', 'renderGrid', 'LOOKS', 'looks', 'lookFigure',
+          'renderLooks', 'money'];
+        var missing = ADVERTISED.filter(function (k) { return typeof T[k] === 'undefined'; });
+        note('catalogue-namespace-present', missing.length === 0,
+          'missing keys=' + (missing.length ? JSON.stringify(missing) : 'none'));
+
+        // The helpers the pages actually call, with the real catalogue.
+        var url = typeof T.productUrl === 'function' ? T.productUrl({ id: 'everyday-tee' }) : '';
+        note('catalogue-product-url', url === 'product.html?id=everyday-tee', 'productUrl=' + JSON.stringify(url));
+
+        var cats = typeof T.categories === 'function' ? T.categories() : [];
+        var catsOk = cats.length > 1 && cats[0] === T.ALL_CATEGORIES && cats.indexOf('Outerwear') !== -1;
+        note('catalogue-categories', catsOk, 'categories=' + JSON.stringify(cats));
+
+        var resolved = typeof T.resolveCategory === 'function'
+          ? [T.resolveCategory('outerwear'), T.resolveCategory('no-such-category'), T.resolveCategory(null)]
+          : [];
+        note('catalogue-resolve-category',
+          resolved[0] === 'Outerwear' && resolved[1] === T.ALL_CATEGORIES && resolved[2] === T.ALL_CATEGORIES,
+          'resolved=' + JSON.stringify(resolved));
+
+        var jacket = typeof T.byId === 'function' ? T.byId('denim-jacket') : null;
+        var rel = (jacket && typeof T.related === 'function') ? T.related(jacket) : [];
+        var relOk = rel.length === T.RELATED_LIMIT &&
+          rel.every(function (p) { return p.id !== 'denim-jacket'; }) &&
+          rel[0] && rel[0].category === 'Outerwear';
+        note('catalogue-related-own-category-first', relOk,
+          'related=' + JSON.stringify(rel.map(function (p) { return p.id; })));
+
+        // 12) Every piece a look wears has to resolve through the catalogue —
+        // an unresolved id is printed as plain text and silently drops out of
+        // the lookbook — and no catalogue piece may be left out of the looks.
+        var resolvedLooks = typeof T.looks === 'function' ? T.looks() : [];
+        var unresolved = [];
+        var worn = {};
+        resolvedLooks.forEach(function (look) {
+          (look.pieces || []).forEach(function (piece) {
+            if (!piece.product) unresolved.push(String(piece.id));
+            else worn[piece.product.id] = true;
+          });
+        });
+        var imagesOk = resolvedLooks.length > 0 && resolvedLooks.every(function (look) {
+          return typeof look.image === 'string' && look.image.indexOf('http') === 0 &&
+            (look.pieces || []).length > 0 && typeof look.note === 'string' && look.note.length > 0;
+        });
+        note('lookbook-pieces-resolve', resolvedLooks.length > 0 && unresolved.length === 0 && imagesOk,
+          'looks=' + resolvedLooks.length + ' unresolved=' + JSON.stringify(unresolved) + ' imagesOk=' + imagesOk);
+
+        var uncovered = CATALOGUE_SNAPSHOT.filter(function (p) { return !worn[p.id]; })
+          .map(function (p) { return p.id; });
+        note('lookbook-covers-catalogue', uncovered.length === 0,
+          'pieces in no look=' + (uncovered.length ? JSON.stringify(uncovered) : 'none'));
+      })();
+    } catch (err) {
+      note('runChecks', false, 'threw: ' + String(err && err.message ? err.message : err));
+    }
+  }
+
+  // Give payments-widget.js time to fetch and render before anything is read.
+  setTimeout(runChecks, 700);
+  </script>
+</body>
+</html>
