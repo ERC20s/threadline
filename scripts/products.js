@@ -220,6 +220,73 @@
     return null;
   };
 
+  /* ---- links ------------------------------------------------------------
+     Every link to a piece on this site is written here and nowhere else:
+     "product.html?id=<id>". serve.json keeps the query string (the clean-URL
+     redirect is off) and productIdFromLocation below also reads /product/<id>
+     and #<id>, so a host we do not control cannot break the link outright.
+     Accepts a product object or a bare id. */
+  var productUrl = function (p) {
+    var id = (p && typeof p === "object") ? p.id : p;
+    return "product.html?id=" + encodeURIComponent(String(id == null ? "" : id));
+  };
+
+  /* ---- categories -------------------------------------------------------
+     products.html builds its filter buttons from this list and reads
+     ?category= through resolveCategory, so a category is named in exactly one
+     place: the catalogue above. */
+  var ALL_CATEGORIES = "All";
+
+  var categories = function () {
+    var out = [ALL_CATEGORIES];
+    PRODUCTS.forEach(function (p) {
+      if (p.category && out.indexOf(p.category) === -1) out.push(p.category);
+    });
+    return out;
+  };
+
+  /* ?category= is shopper input: match it case-insensitively (and ignoring
+     surrounding space) against the catalogue's own spelling, and fall back to
+     "All" for junk, an empty value or a category we no longer make. Returns
+     the catalogue's spelling, which is what products.html puts back on the
+     URL. */
+  var resolveCategory = function (value) {
+    if (value == null) return ALL_CATEGORIES;
+    var wanted = String(value).trim().toLowerCase();
+    if (!wanted) return ALL_CATEGORIES;
+    var all = categories();
+    for (var i = 0; i < all.length; i++) {
+      if (String(all[i]).toLowerCase() === wanted) return all[i];
+    }
+    return ALL_CATEGORIES;
+  };
+
+  /* ---- "You might also like" --------------------------------------------
+     Four slots, filled in this order: pieces from the same category first,
+     then featured pieces, then the rest of the catalogue. The piece being
+     shown is never suggested to itself. Catalogue order decides within each
+     band, so the result is stable. */
+  var RELATED_LIMIT = 4;
+
+  var related = function (p, limit) {
+    var max = typeof limit === "number" && limit > 0 ? limit : RELATED_LIMIT;
+    if (!p) return PRODUCTS.slice(0, max);
+
+    var out = [];
+    var push = function (item) {
+      if (item.id === p.id) return;
+      if (out.indexOf(item) !== -1) return;
+      if (out.length >= max) return;
+      out.push(item);
+    };
+
+    PRODUCTS.forEach(function (item) { if (item.category === p.category) push(item); });
+    PRODUCTS.forEach(function (item) { if (item.featured) push(item); });
+    PRODUCTS.forEach(push);
+
+    return out;
+  };
+
   /* ---- the lookbook ------------------------------------------------------
      lookbook.html used to hard-code six <figure> blocks. Every caption named
      two garments but linked only one, and the names were copied by hand — so
@@ -236,10 +303,68 @@
   var LOOKS = [
     {
       seed: "look-1",
-      alt: "Tee worn under an open canvas overshirt",
-      note: "The tee under an open overshirt — the whole autumn, "
+      alt: "Tee worn under an open canvas overshirt with tapered pants",
+      note: "The tee under an open overshirt — the whole autumn, in one layer you can take off at noon.",
+      pieces: ["everyday-tee", "canvas-overshirt", "casual-pant"]
+    },
+    {
+      seed: "look-2",
+      alt: "Relaxed shirt layered under a fine merino crew knit",
+      note: "A collar showing above fine-gauge merino: the easiest way to dress the knit up.",
+      pieces: ["relaxed-shirt", "merino-crew"]
+    },
+    {
+      seed: "look-3",
+      alt: "Ribbed longsleeve under a rigid denim jacket, with a washed cotton cap",
+      note: "Raw denim over a close rib, cap on — stiff on day one, yours by the end of the season.",
+      pieces: ["ribbed-longsleeve", "denim-jacket", "classic-cap"]
+    },
+    {
+      seed: "look-4",
+      alt: "Linen summer dress worn with a lambswool scarf",
+      note: "Summer linen kept in service: a lambswool scarf doubled over the shoulders.",
+      pieces: ["linen-dress", "wool-scarf"]
+    },
+    {
+      seed: "look-5",
+      alt: "Woven shirt worn open over a lightweight hoodie",
+      note: "Textured weave over loopback cotton — the studio uniform, worn most days.",
+      pieces: ["woven-shirt", "lightweight-hoodie"]
+    },
+    {
+      seed: "look-6",
+      alt: "Lightweight hoodie with tapered casual pants and a cap",
+      note: "Everything soft: hood up, half-elastic waist, nothing to think about before eight.",
+      pieces: ["lightweight-hoodie", "casual-pant", "classic-cap"]
     }
   ];
+
+  /* Resolve a look list into what lookFigure() renders: the photo URL built
+     from the look's seed, and one entry per piece carrying the catalogue
+     product where the id still resolves. An id we no longer make keeps its
+     name as plain text and no product, so the figure prints it without a
+     link — never a dead link into the "not found" panel. */
+  var looks = function (list) {
+    return (list || LOOKS).map(function (look) {
+      var pieces = (look.pieces || []).map(function (piece) {
+        var id = (piece && typeof piece === "object") ? piece.id : piece;
+        var product = byId(String(id == null ? "" : id));
+        return {
+          id: id,
+          name: product ? product.name : ((piece && typeof piece === "object" && piece.name) ? piece.name : String(id)),
+          product: product
+        };
+      });
+
+      return {
+        seed: look.seed,
+        image: look.image || img(look.seed, 800, 1000),
+        alt: look.alt || "",
+        note: look.note || "",
+        pieces: pieces
+      };
+    });
+  };
 
   /* Guarded money helper: always returns a string. Behaviours:
      - null/undefined => ""
