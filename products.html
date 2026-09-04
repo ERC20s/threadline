@@ -97,6 +97,7 @@
        payments-widget.js, which fills #group-store. -->
   <script src="scripts/checkout-intent.js"></script>
   <script src="payments-widget.js"></script>
+  <script src="scripts/cart.js"></script>
   <script>
     (function () {
       var T = window.Threadline;
@@ -223,20 +224,6 @@
          receipt, so a tee bought here cannot be fulfilled. Guard the panel in
          the capture phase (before payments-widget.js's own click handler) and
          send a sized piece to its product page, where the size buttons are.
-         One-size pieces (Classic Cap, Lambswool Scarf) and rows we cannot match
-         to the catalogue are left exactly as they are. */
-      if (panel && T.guardBuyClicks) {
-        T.guardBuyClicks(panel, function (info) {
-          if (!info.product || !info.needsSize) return false;
-          if (status) {
-            status.textContent = info.product.name + " is made in sizes — choose one on the product page.";
-          }
-          location.href = T.productUrl(info.product);
-          return true;
-        });
-      }
-
-      /* ---- a buyer who comes back paid is told so, here ----
          One-size pieces (Classic Cap, Lambswool Scarf) pass the guard above, so
          a checkout can start and finish on this page; until now the only sign
          of payment was the widget's small green line inside the panel, far
