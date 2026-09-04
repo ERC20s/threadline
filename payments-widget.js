@@ -336,7 +336,20 @@
 
       var info = document.createElement('p');
       info.style.cssText = "font:13px system-ui,sans-serif;color:#9ca3af";
-      info.textContent = 'Read-only catalogue — prices may be out of date.\u00a0 Links go to the product page.';
+      info.textContent = 'The shop is not answering, so nothing can be bought here just now.  Read-only catalogue — prices may be out of date.\u00a0 Links go to the product page.';
+      // A real Retry control, with the same [data-d8a-retry] hook
+      // renderMessageWithRetry uses, so the listener the caller attaches has
+      // something to click and Threadline.storePanelFailed()
+      // (scripts/checkout-intent.js) can tell straight away that this load
+      // produced no buyable rows instead of waiting out the whole
+      // whenBuyAnchor timeout.
+      var retryBtn = document.createElement('button');
+      retryBtn.setAttribute('type', 'button');
+      retryBtn.setAttribute('data-d8a-retry', '');
+      retryBtn.style.cssText = 'margin-left:10px;background:transparent;border:1px solid #e5e7eb;padding:6px 10px;border-radius:6px;color:#111;cursor:pointer';
+      retryBtn.textContent = 'Retry';
+      info.appendChild(retryBtn);
+
       el.appendChild(info);
 
       products.forEach(function (p) {
@@ -346,7 +359,10 @@
           var left = document.createElement('div'); left.style.flex = '1';
           var b = document.createElement('b'); b.textContent = p.name || '';
           left.appendChild(b);
-          if (p.description) { var d = document.createElement('div'); d.style.fontSize = '12px'; d.style.color = '#6b7280'; d.textContent = p.description; left.appendChild(d); }
+          // The catalogue's description is a full paragraph; its blurb is the
+          // one-line version the grid cards use, so prefer that in a row.
+          var rowText = (p && p.blurb) ? p.blurb : (p && p.description ? p.description : '');
+          if (rowText) { var d = document.createElement('div'); d.style.fontSize = '12px'; d.style.color = '#6b7280'; d.textContent = rowText; left.appendChild(d); }
           row.appendChild(left);
 
           var priceText = '';
@@ -619,7 +635,8 @@
           var localProducts = Array.isArray(T.products) ? T.products : null;
           if (opted && localProducts && localProducts.length) {
             renderReadOnlyCatalogue(el);
-            // Still attach a Retry so authors can force a network re-check.
+            // renderReadOnlyCatalogue draws the [data-d8a-retry] button; this
+            // wires the click to a cache-clearing re-fetch of this container.
             ensureRetryListener(el);
             return;
           }

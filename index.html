@@ -59,8 +59,13 @@
              payments-widget.js fills every #group-store on the page, so the same
              container works here and on products.html. Loading it here also means a
              buyer who returns to the home page with ?d8a_order=… has the receipt
-             verified and shown. -->
-        <div id="group-store" aria-live="polite" data-d8a-group="d8aaaa-batch_threadline" data-default-quantity="1"><p>Loading store…</p></div>
+             verified and shown.
+             data-d8a-fallback="readonly" opts this panel in to the read-only
+             catalogue: when the platform does not answer, the widget lists the
+             collection from scripts/products.js with View links and a Retry
+             button instead of a bare error line. Nothing here is buyable while
+             that fallback is showing — the rows carry no data-item. -->
+        <div id="group-store" aria-live="polite" data-d8a-group="d8aaaa-batch_threadline" data-default-quantity="1" data-d8a-fallback="readonly"><p>Loading store…</p></div>
         <noscript><p>Shop: <a href="https://d8a.com/g/d8aaaa-batch_threadline">https://d8a.com/g/d8aaaa-batch_threadline</a></p></noscript>
       </section>
 

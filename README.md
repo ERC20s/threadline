@@ -179,5 +179,32 @@ How to test
   containers resolving to the order's group and that the receipt is inserted
   only into matching containers.
 
+---
+
+Read-only shop fallback (opt-in, on for the home and product pages)
+
+- When the items request fails, a `#group-store` container that carries
+  `data-d8a-fallback="readonly"` is filled by
+  `renderReadOnlyCatalogue()` in `payments-widget.js` instead of the bare error
+  line: one paragraph saying the shop is not answering and that this is a
+  read-only catalogue whose prices may be out of date, then one row per piece
+  from `window.Threadline.products` (name, one-line `blurb`, catalogue price,
+  a "View" link to `product.html?id=…`), then a footer link to the group's page.
+  Fallback rows deliberately carry no `data-item`, so nothing can be bought from
+  them and the widget's buy listener ignores them.
+- That paragraph also holds a real `[data-d8a-retry]` Retry button, the same
+  control `renderMessageWithRetry()` draws. Clicking it clears this container's
+  `group::base` cache entry and re-fetches, so a shopper can get back to the
+  live shop without reloading. It is also the signal
+  `Threadline.storePanelFailed()` (`scripts/checkout-intent.js`) reads, so
+  `whenBuyAnchor` rejects at once instead of sitting out the 12s timeout.
+- `index.html` and `product.html` opt in. `products.html` does not: its grid
+  already lists every piece, so a second copy inside the panel would be noise.
+- Covered in `tests/payments-widget.test.html` by the `fallback-test` fixture,
+  whose items request fails once and then succeeds: the assertions check the
+  outage wording, that no fallback row carries `data-item`, that a
+  `[data-d8a-retry]` button is present, that `storePanelFailed()` sees it, and
+  that clicking it re-fetches and renders the live row.
+
 .d8a declares the group, the run entry and the payments block. Do not hand-edit
 its generated blocks.
