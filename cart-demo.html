@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Cart UI Demo</title>
+  <link rel="stylesheet" href="styles/main.css">
+  <link rel="stylesheet" href="styles/cart-ui.css">
+</head>
+<body>
+  <main style="padding:24px">
+    <h1>Cart UI Demo</h1>
+    <p>This page demonstrates the non-invasive, idempotent ThreadlineCartUI module. It renders into a known container so repeated calls do not rewire the document.</p>
+
+    <div id="cart-demo-root" style="margin:18px 0"></div>
+
+    <p>
+      <button id="render-once">Render cart into #cart-demo-root</button>
+      <button id="render-again">Call renderInto repeatedly</button>
+      <button id="dispatch-add">Dispatch add-to-cart (quantity 1)</button>
+    </p>
+
+    <p>Open the console to see events. Repeated calls should not create duplicate badges or handlers.</p>
+  </main>
+
+  <script src="scripts/cart-ui.js"></script>
+  <script>
+    document.getElementById('render-once').addEventListener('click', function () {
+      window.ThreadlineCartUI.renderInto('cart-demo-root');
+    });
+    document.getElementById('render-again').addEventListener('click', function () {
+      // call multiple times to ensure idempotency
+      window.ThreadlineCartUI.renderInto('cart-demo-root');
+      window.ThreadlineCartUI.renderInto('cart-demo-root');
+      window.ThreadlineCartUI.renderInto('cart-demo-root');
+    });
+    document.getElementById('dispatch-add').addEventListener('click', function () {
+      document.dispatchEvent(new CustomEvent('threadline:add-to-cart', { detail: { quantity: 1 } }));
+    });
+
+    // log cart-updated events
+    document.addEventListener('threadline:cart-updated', function (ev) {
+      console.log('cart-updated', ev.detail);
+    });
+  </script>
+</body>
+</html>
