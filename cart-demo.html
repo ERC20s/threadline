@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Cart UI demo — Threadline</title>
+  <link rel="stylesheet" href="styles/main.css">
+  <link rel="stylesheet" href="styles/cart-ui.css">
+</head>
+<body>
+  <main style="padding:24px;max-width:720px;margin:0 auto">
+    <h1>Cart UI demo</h1>
+    <p>This page demonstrates the defensive, idempotent cart UI that listens to the ThreadlineCart module.</p>
+
+    <div id="cart-demo" style="border:1px dashed #e5e7eb;padding:12px;border-radius:8px">
+      <p>Click the buttons below to add items to the cart. The demo UI is rendered into this container.</p>
+      <div class="demo-buttons" style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" data-demo-add data-id="everyday-tee" data-name="Everyday Tee" data-price="38">Add Everyday Tee</button>
+        <button type="button" data-demo-add data-id="canvas-overshirt" data-name="Canvas Overshirt" data-price="94">Add Canvas Overshirt</button>
+        <button type="button" data-demo-add data-id="classic-cap" data-name="Classic Cap" data-price="22">Add Classic Cap</button>
+      </div>
+      <p style="margin-top:12px">You can call ThreadlineCartUI.renderInto('cart-demo') from the console multiple times; it is idempotent and will not append duplicate UI nodes.</p>
+    </div>
+  </main>
+
+  <script src="scripts/products.js"></script>
+  <script src="scripts/cart.js"></script>
+  <script src="payments-widget.js"></script>
+  <script src="scripts/cart-ui.js"></script>
+  <script>
+    (function(){
+      // Call the render exactly once as the approved proposal required
+      try { window.ThreadlineCartUI && window.ThreadlineCartUI.renderInto && window.ThreadlineCartUI.renderInto('cart-demo'); } catch (e) { /* ignore */ }
+
+      // Wire demo buttons to use the UI helper which falls back to dispatching
+      var buttons = document.querySelectorAll('[data-demo-add]');
+      buttons.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var id = btn.getAttribute('data-id');
+          var name = btn.getAttribute('data-name');
+          var price = parseFloat(btn.getAttribute('data-price')) || 0;
+          if (window.ThreadlineCartUI && typeof window.ThreadlineCartUI.addForDemo === 'function') {
+            window.ThreadlineCartUI.addForDemo({ id: id, name: name, price: price, quantity: 1 });
+          } else {
+            var ev = new CustomEvent('threadline:add-to-cart', { detail: { id: id, name: name, price: price, quantity: 1 }, bubbles: true });
+            document.dispatchEvent(ev);
+          }
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
