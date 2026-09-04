@@ -361,6 +361,18 @@
             var price = container && container.querySelector('span');
             var priceOk = !!price && price.textContent.indexOf('$') !== -1;
             note('fallback-readonly-renders', infoOk && anchorTextOk && noDataItem && priceOk, 'info='+(info?info.textContent:'null')+' anchor='+ (anchor?anchor.outerHTML:'null') + ' price='+ (price?price.textContent:'null'));
+
+            // The read-only fallback's footer link must be usable: a real href
+            // pointing at the container's group page and readable link text.
+            var anchors = container ? Array.prototype.slice.call(container.querySelectorAll('a')) : [];
+            var footer = anchors.length ? anchors[anchors.length - 1] : null;
+            var footerHref = footer ? (footer.getAttribute('href') || '') : '';
+            var footerText = footer ? (footer.textContent || '') : '';
+            var footerOk = !!footer
+              && footerHref === 'https://d8a.com/g/fallback-test'
+              && footerText.length > 0
+              && footerText !== 'View';
+            note('fallback-readonly-footer-link', footerOk, 'href=' + footerHref + ' text=' + footerText);
           }, 400);
         } catch (e) { note('fallback-readonly-renders', false, String(e)); }
       }, 400);
