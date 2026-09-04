@@ -161,7 +161,7 @@
           b.setAttribute("aria-pressed", b.dataset.category === category ? "true" : "false");
         });
         /* The filter buttons are the current category's; remember it so the
-           reconcile pass below can repaint the grid it is actually showing. */
+           reconcile pass below can repaint the right list. */
         current = category;
       };
 
@@ -277,5 +277,6 @@
       }
     })();
   </script>
+  <script src="scripts/cart.js"></script>
 </body>
 </html>

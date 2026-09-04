@@ -186,3 +186,32 @@ footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);color:v
   .hero h1{font-size:2rem}
   .product{grid-template-columns:1.1fr 1fr;align-items:start;gap:36px}
 }
+
+/* ---------- CART UI (added by cart proposal) ---------- */
+.cart-button{
+  position:fixed;right:18px;bottom:18px;z-index:1500;display:inline-flex;align-items:center;justify-content:center;
+  width:56px;height:56px;border-radius:999px;background:var(--accent);color:#fff;border:0;cursor:pointer;
+  box-shadow:0 6px 18px rgba(15,23,42,0.18);font-weight:700;font-size:16px
+}
+.cart-count{font-weight:700;font-size:14px;padding:0 6px}
+.cart-overlay{position:fixed;inset:0;display:none;align-items:flex-end;justify-content:flex-end;z-index:1400}
+.cart-overlay.open{display:flex;background:rgba(11,13,20,0.35)}
+.cart-drawer{width:360px;max-width:100%;background:#fff;border-radius:12px 12px 0 0;padding:12px;box-shadow:0 -4px 20px rgba(11,13,20,0.12);transform:translateY(0);outline:0}
+.cart-drawer[role="dialog"]{max-height:90vh;overflow:auto}
+.cart-drawer-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.cart-close{background:none;border:0;color:var(--muted);cursor:pointer;padding:8px}
+.cart-list{display:flex;flex-direction:column;gap:10px}
+.cart-item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--tint)}
+.cart-item-left{flex:1}
+.cart-item-name{font-weight:700}
+.cart-item-price{color:var(--muted);font-size:0.95rem;margin-top:6px}
+.cart-item-controls{display:flex;align-items:center;gap:8px}
+.cart-q{border:1px solid var(--line);background:#fff;padding:6px 10px;border-radius:6px;cursor:pointer}
+.cart-q:disabled{opacity:0.5}
+.cart-q-val{min-width:18px;display:inline-block;text-align:center}
+.cart-remove{background:none;border:0;color:#b91c1c;cursor:pointer;padding:6px}
+.cart-drawer-foot{display:flex;align-items:center;justify-content:space-between;margin-top:12px}
+.cart-total{font-weight:700}
+@media(min-width:900px){
+  .cart-drawer{border-radius:12px;width:420px}
+}
