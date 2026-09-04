@@ -63,8 +63,7 @@ link when it does.
   link working if a host outside this repository strips the query.
 - Sizing help is part of the catalogue. Every entry in `scripts/products.js` may
   carry two optional fields: `sizeGuide`, the id of a section in
-  `size-guide.html` (`body`, `tops`, `bottoms`, `dresses`, `outerwear`,
-  `one-size`, `how`), and `fitNote`, one short sentence about how that piece
+  `size-guide.html` (`body`, `tops`, `bottoms`, `dresses`, `outerwear`, `one-size`, `how`), and `fitNote`, one short sentence about how that piece
   fits. `product.html` rewrites the hint above the size buttons from them —
   the note, then a link to `size-guide.html#<sizeGuide>` — and falls back to
   "Fits run relaxed." plus a plain `size-guide.html` link when a piece names
@@ -96,6 +95,17 @@ link when it does.
   advertises a helper that is not defined — the way the whole site went blank
   when `productUrl`, `categories`, `related` and `looks` were lost from
   `scripts/products.js`.
+
+  Note: there are two automated guards in tests/payments-widget.test.html that
+  read the repository's root .d8a `items:` block and the hand-copied `<noscript>`
+  lists on products.html and lookbook.html and compare them to the catalogue
+  snapshot embedded in the test file. When you change `scripts/products.js` to
+  add, remove or reprice a garment, update the root .d8a `items:` lines and the
+  CATALOGUE_SNAPSHOT array at the top of tests/payments-widget.test.html in the
+  same commit so the shop, the pages and the tests stay reconciled. These
+  assertions fail loudly if names or prices diverge so catalogue drift is caught
+  before a shopper can be charged a price not shown on the site.
+
 - `styles/main.css` is the only stylesheet; every page links it. No frameworks.
   `styles/size-guide.css` is retired and simply imports `main.css`.
 - `payments-widget.js` is the group's shop widget. Pages that sell carry the
@@ -178,38 +188,4 @@ How to test
 - Serve the site locally, add `data-d8a-base="https://staging.example"` to
   a `#group-store` container and confirm the GET `/api/v1/store/items` and any
   relative checkout POST use that base. Confirm storeFetch cache keys are
-  `group::base` and that Retry clears only that entry.
-- Return to the site with `?d8a_order=<id>` from a payment made at a
-  per-container base: verify the widget checks only the declared bases for
-  containers resolving to the order's group and that the receipt is inserted
-  only into matching containers.
-
----
-
-Read-only shop fallback (opt-in, on for the home and product pages)
-
-- When the items request fails, a `#group-store` container that carries
-  `data-d8a-fallback="readonly"` is filled by
-  `renderReadOnlyCatalogue()` in `payments-widget.js` instead of the bare error
-  line: one paragraph saying the shop is not answering and that this is a
-  read-only catalogue whose prices may be out of date, then one row per piece
-  from `window.Threadline.products` (name, one-line `blurb`, catalogue price,
-  a "View" link to `product.html?id=…`), then a footer link to the group's page.
-  Fallback rows deliberately carry no `data-item`, so nothing can be bought from
-  them and the widget's buy listener ignores them.
-- That paragraph also holds a real `[data-d8a-retry]` Retry button, the same
-  control `renderMessageWithRetry()` draws. Clicking it clears this container's
-  `group::base` cache entry and re-fetches, so a shopper can get back to the
-  live shop without reloading. It is also the signal
-  `Threadline.storePanelFailed()` (`scripts/checkout-intent.js`) reads, so
-  `whenBuyAnchor` rejects at once instead of sitting out the 12s timeout.
-- `index.html` and `product.html` opt in. `products.html` does not: its grid
-  already lists every piece, so a second copy inside the panel would be noise.
-- Covered in `tests/payments-widget.test.html` by the `fallback-test` fixture,
-  whose items request fails once and then succeeds: the assertions check the
-  outage wording, that no fallback row carries `data-item`, that a
-  `[data-d8a-retry]` button is present, that `storePanelFailed()` sees it, and
-  that clicking it re-fetches and renders the live row.
-
-.d8a declares the group, the run entry and the payments block. Do not hand-edit
-its generated blocks.
+  namespaced by the base.
