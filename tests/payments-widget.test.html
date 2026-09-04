@@ -121,7 +121,7 @@
     window.__testCheckoutSeen = new Promise(function (resolve) { window.__resolveTestCheckoutSeen = resolve; });
 
     // Stateful behavior: retry-group first call fails, second call succeeds.
-    var callState = { 'retry-group': 0 };
+    var callState = { 'retry-group': 0, 'fallback-test': 0 };
 
     function jsonResponse(obj, ok) {
       return Promise.resolve({ ok: !!ok, status: ok?200:500, json: function(){ return Promise.resolve(obj); } });
@@ -154,9 +154,14 @@
           return jsonResponse({ items: [ { id: 'r1', name: 'Retry Tee', price: '$10', payUrl: 'https://d8a.com/pay/r1' } ], group: { name: 'Retry', url: 'https://d8a.com/g/retry-group' }, checkout: { enabled: false } }, true);
         }
 
-        // fallback-test: simulate a network failure so the widget's failure path runs
+        // fallback-test: the first call fails, so the widget's opt-in
+        // read-only fallback renders. A later call — the one the fallback's
+        // own Retry button forces — succeeds, which is how the assertions
+        // below can watch live rows replace the read-only list.
         if (g === 'fallback-test') {
-          return Promise.reject(new Error('network'));
+          callState['fallback-test']++;
+          if (callState['fallback-test'] === 1) return Promise.reject(new Error('network'));
+          return jsonResponse({ items: [ { id: 'f1', name: 'Fallback Tee', price: '$18', payUrl: 'https://d8a.com/pay/f1' } ], group: { name: 'Fallback', url: 'https://d8a.com/g/fallback-test' }, checkout: { enabled: false } }, true);
         }
 
         // d8aaaa-batch_threadline (the real group slug): return a payload with one unsafe payUrl
@@ -373,6 +378,36 @@
               && footerText.length > 0
               && footerText !== 'View';
             note('fallback-readonly-footer-link', footerOk, 'href=' + footerHref + ' text=' + footerText);
+
+            // The read-only render must say the shop is not answering, in
+            // plain words, so a shopper does not read the list as buyable.
+            var outageOk = !!info && /not answering/i.test(info.textContent || '');
+            note('fallback-readonly-says-shop-is-down', outageOk, 'info=' + (info ? info.textContent : 'null'));
+
+            // Nothing in the read-only render may be buyable: no row may carry
+            // data-item, which is what payments-widget.js's buy listener needs.
+            var buyables = container ? container.querySelectorAll('a[data-item]').length : -1;
+            note('fallback-readonly-has-no-buy-rows', buyables === 0, 'a[data-item] count=' + buyables);
+
+            // A real Retry control has to exist in the read-only render: it is
+            // the only way back to the live shop, and it is also the signal
+            // Threadline.storePanelFailed() reads to stop waiting.
+            var fbBtn = container && container.querySelector('[data-d8a-retry]');
+            note('fallback-readonly-retry-present', !!fbBtn, fbBtn ? 'found retry button' : 'no retry button');
+            var panelFailedOk = !!(window.Threadline && typeof window.Threadline.storePanelFailed === 'function'
+              && window.Threadline.storePanelFailed(container) === true);
+            note('fallback-readonly-reports-panel-failed', panelFailedOk, 'storePanelFailed=' + String(panelFailedOk));
+            if (!fbBtn) return;
+
+            // Clicking it must clear the cache, re-fetch and render live rows.
+            var fbBefore = (window.__testFetchCounts && window.__testFetchCounts['fallback-test']) || 0;
+            fbBtn.click();
+            setTimeout(function () {
+              var fbAfter = (window.__testFetchCounts && window.__testFetchCounts['fallback-test']) || 0;
+              var live = !!container.querySelector('a[data-item="f1"]');
+              note('fallback-readonly-retry-refetches', (fbAfter > fbBefore) && live,
+                'requests before=' + fbBefore + ' after=' + fbAfter + ' liveRow=' + live);
+            }, 600);
           }, 400);
         } catch (e) { note('fallback-readonly-renders', false, String(e)); }
       }, 400);

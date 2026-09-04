@@ -98,8 +98,15 @@
         <h2 id="store-heading">Checkout</h2>
         <p>Buy sends you to the group's checkout for this piece; you come back here with your receipt. Prices in the panel are set on the group's Admin tab.</p>
         <!-- d8a payments widget container from the repository .d8a payments: block.
-             payments-widget.js renders the group's items here and owns the checkout POST. -->
-        <div id="group-store" aria-live="polite" data-d8a-group="d8aaaa-batch_threadline" data-default-quantity="1"><p>Loading store…</p></div>
+             payments-widget.js renders the group's items here and owns the checkout POST.
+             data-d8a-fallback="readonly" opts this panel in to the read-only
+             catalogue: if the platform does not answer, the widget lists the
+             collection from scripts/products.js with View links and a Retry
+             button instead of a bare error line. The fallback rows carry no
+             data-item, so nothing can be bought from them; the Retry button is
+             also what Threadline.storePanelFailed() looks for, so Buy reports
+             the outage at once instead of waiting out the timeout. -->
+        <div id="group-store" aria-live="polite" data-d8a-group="d8aaaa-batch_threadline" data-default-quantity="1" data-d8a-fallback="readonly"><p>Loading store…</p></div>
         <noscript><p>Shop: <a href="https://d8a.com/g/d8aaaa-batch_threadline">https://d8a.com/g/d8aaaa-batch_threadline</a></p></noscript>
       </section>
 
