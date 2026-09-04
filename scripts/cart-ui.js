@@ -50,7 +50,8 @@
     // Update all rendered roots when cart-updated is fired
     document.addEventListener('threadline:cart-updated', function (ev) {
       var detail = (ev && ev.detail) || {};
-      var count = Number(detail.count || 0) || 0;
+      // accept several possible summary shapes produced by scripts/cart.js or the demo
+      var count = Number(detail.count || detail.totalQuantity || detail.totalItems || 0) || 0;
       for (var i = 0; i < storedStates.length; i++) {
         var st = storedStates[i];
         if (!st) continue;
@@ -74,7 +75,8 @@
       } else {
         total = qty;
       }
-      document.dispatchEvent(new CustomEvent('threadline:cart-updated', { detail: { count: total } }));
+      // emit the fuller summary shape some code expects
+      document.dispatchEvent(new CustomEvent('threadline:cart-updated', { detail: { count: total, totalQuantity: total } }));
     }, false);
   }
 
@@ -115,6 +117,19 @@
 
     state.badgeEl = badge;
     state.drawerEl = drawer;
+
+    // initialize badge from persisted cart if available
+    try {
+      if (window.ThreadlineCart && typeof window.ThreadlineCart.read === 'function') {
+        var summary = window.ThreadlineCart.read();
+        var initialCount = Number((summary && (summary.totalQuantity || summary.totalItems || summary.count)) || 0) || 0;
+        state.count = initialCount;
+        if (state.badgeEl) {
+          state.badgeEl.textContent = initialCount > 0 ? String(initialCount) : '';
+          state.badgeEl.style.display = initialCount > 0 ? 'inline-block' : 'none';
+        }
+      }
+    } catch (e) { /* ignore */ }
 
     btn.addEventListener('click', function () {
       var open = drawer.style.display !== 'none';

@@ -21,6 +21,7 @@
         <a href="size-guide.html">Size guide</a>
         <a href="index.html#contact">Contact</a>
       </nav>
+      <div id="cart-root" aria-live="polite" aria-label="Shopping cart"></div>
     </header>
 
     <main id="content">
@@ -90,6 +91,18 @@
       <div>Threadline Clothing Co. — small-batch apparel. Product photography is placeholder imagery.</div>
     </footer>
   </div>
+
+  <script src="scripts/cart.js"></script>
+  <script src="scripts/cart-ui.js"></script>
+  <script>
+    (function () {
+      try {
+        if (window.ThreadlineCartUI && document.getElementById('cart-root')) {
+          window.ThreadlineCartUI.renderInto('#cart-root');
+        }
+      } catch (e) {}
+    })();
+  </script>
 
   <script src="scripts/products.js"></script>
   <!-- Shared shop helpers (whenBuyAnchor, shopPriceIndex, reconcileGrid): loaded
