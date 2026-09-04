@@ -370,12 +370,23 @@
         } catch (e) {}
       });
 
+      // Footer: a real link to the group's page on the platform. The fallback
+      // has no store payload to read group.url from, so build it from the
+      // container's own group slug and base (data-d8a-group / data-d8a-base),
+      // falling back to the widget's GROUP and BASE constants.
       var p = document.createElement('p');
       p.style.cssText = "font:11px system-ui,sans-serif;color:#9ca3af";
       var link = document.createElement('a');
-      link.setAttribute('href', '');
+      var groupSlug = GROUP;
+      try { groupSlug = getGroupForElement(el) || GROUP; } catch (e) { groupSlug = GROUP; }
+      var host = BASE;
+      try { host = getBaseForElement(el) || BASE; } catch (e) { host = BASE; }
+      var groupUrl = '';
+      try { groupUrl = String(host) + '/g/' + encodeURIComponent(String(groupSlug)); } catch (e) { groupUrl = ''; }
+      link.setAttribute('href', sanitizeUrl(groupUrl) || '#');
+      link.setAttribute('rel', 'noopener noreferrer');
       link.style.color = '#7c5cff';
-      link.textContent = '';
+      link.textContent = groupSlug ? ('View group shop — ' + String(groupSlug)) : 'View group shop';
       p.appendChild(link);
       el.appendChild(p);
     } catch (e) {
