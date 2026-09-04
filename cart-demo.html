@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Cart demo — Threadline Clothing Co.</title>
+  <link rel="stylesheet" href="styles/main.css">
+  <link rel="stylesheet" href="styles/cart-ui.css">
+</head>
+<body>
+  <div class="main">
+    <header class="header">
+      <div class="brand"><a href="index.html">Threadline<small>Clothing Co.</small></a></div>
+      <nav class="nav" aria-label="Site navigation">
+        <a href="index.html">Home</a>
+        <a href="products.html">Shop</a>
+        <a href="lookbook.html">Lookbook</a>
+      </nav>
+    </header>
+
+    <main id="content">
+      <h1>Cart demo</h1>
+      <p>This page demonstrates a non-invasive cart UI that listens to the ThreadlineCart module and the group-store payment events.</p>
+
+      <section>
+        <h2>Demo controls</h2>
+        <div id="demo-controls">
+          <div id="cart-demo"></div>
+          <div style="margin-top:12px">
+            <button id="add-everyday" class="btn">Add Everyday Tee</button>
+            <button id="add-hoodie" class="btn btn-ghost">Add Lightweight Hoodie</button>
+            <button id="open-drawer" class="btn">Open drawer</button>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Payments widget (exercise fallback)</h2>
+        <div id="group-store" data-d8a-group="d8aaaa-batch_threadline"></div>
+      </section>
+
+    </main>
+
+    <footer>
+      <div>Threadline Clothing Co. — cart demo</div>
+    </footer>
+  </div>
+
+  <script src="scripts/products.js"></script>
+  <script src="scripts/cart.js"></script>
+  <script src="payments-widget.js"></script>
+  <script src="scripts/cart-ui.js"></script>
+  <script>
+    (function () {
+      // attach demo button handlers
+      document.getElementById('add-everyday').addEventListener('click', function () {
+        var p = window.Threadline && window.Threadline.byId ? window.Threadline.byId('everyday-tee') : null;
+        var item = { id: 'everyday-tee', name: p ? p.name : 'Everyday Tee', price: p ? p.price : 38, quantity: 1 };
+        if (window.ThreadlineCartUI) window.ThreadlineCartUI.addForDemo(item);
+      });
+      document.getElementById('add-hoodie').addEventListener('click', function () {
+        var p = window.Threadline && window.Threadline.byId ? window.Threadline.byId('lightweight-hoodie') : null;
+        var item = { id: 'lightweight-hoodie', name: p ? p.name : 'Lightweight Hoodie', price: p ? p.price : 68, quantity: 1 };
+        if (window.ThreadlineCartUI) window.ThreadlineCartUI.addForDemo(item);
+      });
+      document.getElementById('open-drawer').addEventListener('click', function () { if (window.ThreadlineCartUI) window.ThreadlineCartUI.open(); });
+      // render UI into the demo container if present
+      if (window.ThreadlineCartUI) window.ThreadlineCartUI.renderInto('cart-demo');
+    })();
+  </script>
+</body>
+</html>

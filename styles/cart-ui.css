@@ -1,0 +1,13 @@
+.cart-demo-container { position: relative; font-family: system-ui, sans-serif; }
+.cart-demo-badge { position: relative; background:#111827;color:#fff;border:0;padding:8px 12px;border-radius:999px;cursor:pointer;font-weight:600 }
+.cart-demo-badge .cart-demo-badge-count { background:#ef4444;color:#fff;border-radius:999px;padding:2px 8px;margin-right:8px;font-weight:700 }
+.cart-demo-drawer { position: absolute; right:0; top:40px; width:320px; max-width:90vw; background:#fff;border:1px solid #e5e7eb;border-radius:8px;box-shadow:0 8px 24px rgba(17,24,39,0.12); padding:12px; display:none }
+.cart-demo-drawer.open { display:block }
+.cart-demo-drawer .cart-demo-drawer-head { font-weight:700;margin-bottom:8px }
+.cart-demo-list { max-height:40vh; overflow:auto; margin-bottom:8px }
+.cart-demo-row { display:flex; gap:8px; align-items:center; border-top:1px solid #f3f4f6; padding:8px 0 }
+.cart-demo-row-name { flex:1 }
+.cart-demo-row-qty { color:#374151 }
+.cart-demo-row-price { color:#111827; font-weight:600 }
+.cart-demo-total { border-top:1px solid #e5e7eb; padding-top:8px; font-weight:700; margin-bottom:8px }
+.cart-demo-paid { background:#ecfdf5;color:#065f46;padding:8px;border-radius:6px;margin-bottom:8px }
