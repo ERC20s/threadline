@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>product.html sanity check</title>
+  <style>
+    body{font-family:system-ui,Arial,sans-serif;padding:18px}
+    .ok{color:#059669}
+    .fail{color:#b91c1c}
+    .case{margin:8px 0}
+    pre{background:#f9fafb;border:1px solid #e5e7eb;padding:10px;overflow:auto}
+  </style>
+</head>
+<body>
+  <h1>product.html — quick sanity check</h1>
+  <p>Open this file served from the repository root (so relative fetches resolve). It fetches product.html and scripts/cart.js as text and checks for the critical markers reviewers expect before a merge.</p>
+  <div id="results"></div>
+  <h2>Notes</h2>
+  <p>This is a manual, human-run guardrail: it inspects source text for a handful of strings that were accidentally removed in a past PR. If a check fails, the page explains why the missing marker matters.</p>
+
+  <script>
+  function addResult(name, ok, msg){
+    var r = document.getElementById('results');
+    var d = document.createElement('div'); d.className = 'case';
+    var s = document.createElement('span'); s.textContent = (ok? 'PASS' : 'FAIL') + ' — ' + name + ': '; s.className = ok? 'ok' : 'fail';
+    d.appendChild(s);
+    var m = document.createElement('span'); m.textContent = ' ' + (msg || ''); d.appendChild(m);
+    r.appendChild(d);
+    if(!ok){ var p = document.createElement('pre'); p.textContent = msg || ''; r.appendChild(p); }
+  }
+
+  function safeFetchText(path){
+    return fetch(path).then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.text(); });
+  }
+
+  Promise.all([ safeFetchText('../product.html'), safeFetchText('../scripts/cart.js') ])
+    .then(function(results){
+      var productSrc = results[0];
+      var cartSrc = results[1];
+
+      // 1 buy button id
+      addResult('buy-button-present', /id=["']buy["']/.test(productSrc), 'product.html must contain a Buy control with id="buy"; product page queues a Buy intent and reports state there.');
+
+      // 2 group-store container and data-d8a-group
+      var hasGroupStore = /id=["']group-store["']/.test(productSrc);
+      var hasDataGroup = /data-d8a-group\s*=\s*["'][^"']+["']/.test(productSrc);
+      addResult('group-store-container', hasGroupStore && hasDataGroup, 'product.html must include <div id="group-store" ... data-d8a-group="<slug>"> so payments-widget.js can render the shop panel and reconcile prices.');
+
+      // 3 stampRow function and uses
+      addResult('stampRow-present', /\bstampRow\b/.test(productSrc), 'stampRow stamps the selected size/quantity onto the shop row before checkout; its absence breaks size/quantity transfer.');
+
+      // 4 openCheckout
+      addResult('openCheckout-present', /\bopenCheckout\b/.test(productSrc), 'openCheckout opens the checkout flow via the widget; missing it means the page cannot hand off to the widget safely.');
+
+      // 5 whenBuyAnchor and reconcileGrid mentions
+      var whenOk = /whenBuyAnchor/.test(productSrc) || /Threadline\.whenBuyAnchor/.test(productSrc);
+      var reconcileOk = /reconcileGrid/.test(productSrc) || /Threadline\.reconcileGrid/.test(productSrc);
+      addResult('whenBuyAnchor-present', whenOk, 'whenBuyAnchor lets the page wait for the widget rows; without it the page may conclude the piece is not listed erroneously.');
+      addResult('reconcileGrid-present', reconcileOk, 'reconcileGrid is used to repaint catalogue grids to match live shop prices; its absence allows price drift between catalogue and panel.');
+
+      // 6 cart module export
+      addResult('ThreadlineCart-export', /window\.ThreadlineCart/.test(cartSrc), 'scripts/cart.js must expose window.ThreadlineCart so a client-side cart UI can use it.');
+
+      // final summary
+      var fails = document.querySelectorAll('.fail').length;
+      addResult('final', fails===0, fails===0? 'All sanity checks passed.' : (fails + ' checks failed — do not merge changes that remove these markers.'));
+
+    }).catch(function(err){
+      addResult('fetch-error', false, 'Failed to load product.html or scripts/cart.js: ' + String(err) + '. Serve this file from the repo root (e.g. using the site run entry) so relative paths resolve.');
+    });
+  </script>
+</body>
+</html>
