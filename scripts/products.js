@@ -372,7 +372,7 @@
        (assume already formatted)
      - numeric inputs (number or numeric-like string) are formatted as en-US
        USD using Intl.NumberFormat when available; fallback to a simple
-       formatter. Whole-dollar amounts drop the trailing ".00". */
+     formatter. Whole-dollar amounts drop the trailing ".00". */
   var money = function (value) {
     if (value == null) return "";
 
@@ -506,6 +506,44 @@
     price.className = "price";
     price.textContent = money(p.price);
     body.appendChild(price);
+
+    // Add-to-cart control (minimal, non-invasive)
+    try {
+      var controls = document.createElement('div');
+      controls.className = 'card-controls';
+
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'add-to-cart';
+      btn.setAttribute('aria-label', 'Add ' + (p.name || 'item') + ' to cart');
+      btn.textContent = 'Add';
+      btn.dataset.productId = p.id;
+
+      btn.addEventListener('click', function (ev) {
+        // Prevent the anchor navigation when the button is clicked.
+        try { ev.preventDefault(); } catch (e) {}
+        try { ev.stopPropagation(); } catch (e) {}
+
+        var detail = { id: p.id, name: p.name, price: p.price, quantity: 1, product: p };
+
+        // If the defensive cart module is present, call it directly.
+        if (typeof window.ThreadlineCart === 'object' && typeof window.ThreadlineCart.add === 'function') {
+          try { window.ThreadlineCart.add(detail); } catch (err) { /* swallow */ }
+          return;
+        }
+
+        // Otherwise dispatch a bubbling CustomEvent so any listener can pick it up.
+        try {
+          var evnt = new CustomEvent('threadline:add-to-cart', { bubbles: true, detail: detail });
+          (document.dispatchEvent ? document.dispatchEvent(evnt) : (window.dispatchEvent ? window.dispatchEvent(evnt) : null));
+        } catch (e) { /* ignore */ }
+      }, false);
+
+      controls.appendChild(btn);
+      body.appendChild(controls);
+    } catch (e) {
+      // Nothing fatal if the page environment doesn't support buttons.
+    }
 
     a.appendChild(body);
     return a;
