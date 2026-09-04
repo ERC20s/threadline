@@ -189,6 +189,11 @@
         } catch (e) {}
       };
 
+      var paintGrid = function () {
+        if (!shopIndex || !T.reconcileGrid) return 0;
+        return T.reconcileGrid(grid, shopIndex);
+      };
+
       categories.forEach(function (c) {
         var b = document.createElement("button");
         b.type = "button";
@@ -277,5 +282,6 @@
       }
     })();
   </script>
+  <script src="scripts/cart-ui.js"></script>
 </body>
 </html>

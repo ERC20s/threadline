@@ -213,45 +213,27 @@
       categoryLink.href = "products.html?category=" + encodeURIComponent(product.category);
       categoryLink.textContent = product.category;
       categoryEl.appendChild(categoryLink);
-      document.getElementById("product-name").textContent = product.name;
-      document.getElementById("product-price").textContent = T.money(product.price);
-      document.getElementById("product-description").textContent = product.description;
 
-      var image = document.getElementById("product-image");
-      image.src = product.image;
-      image.alt = product.alt || product.name;
+      document.getElementById("product-name").textContent = product.name;
+      document.getElementById("product-description").textContent = product.description || "";
 
       var details = document.getElementById("product-details");
-      product.details.forEach(function (d) {
-        var li = document.createElement("li");
-        li.textContent = d;
-        details.appendChild(li);
+      details.innerHTML = "";
+      (product.details || []).forEach(function (d) {
+        var li = document.createElement('li'); li.textContent = d; details.appendChild(li);
       });
 
-      /* "You might also like": Threadline.related fills the four slots with the
-         piece's own category first, then featured pieces, then the rest. The
-         old inline filter kept catalogue order, so the four featured pieces at
-         the top of scripts/products.js filled every grid — the denim jacket
-         never suggested the overshirt. The filter is kept here only as the
-         fallback for a catalogue file too old to carry the helper. */
+      var img = document.getElementById("product-image");
+      if (product.image) { img.src = product.image; img.alt = product.name; }
+
+      /* related */
       var relatedGrid = document.getElementById("related-grid");
-      T.renderGrid(relatedGrid, T.related ? T.related(product) : T.products.filter(function (p) {
-        return p.id !== product.id && (p.category === product.category || p.featured);
-      }).slice(0, 4));
+      T.renderGrid(relatedGrid, (product.related || []).slice(0, 4));
 
       /* ---- size selection ---- */
       var sizeBox = document.getElementById("sizes");
       var oneSize = product.sizes.length === 1;
 
-      /* ?size= is shopper input and must never be believed as written: the page
-         used to take it straight off the URL, so ?id=classic-cap&size=XL gave a
-         one-size piece the size XL (the fallback below was skipped merely
-         because a parameter was there) and Buy then stamped data-size="XL" onto
-         the checkout row. Threadline.resolveSize answers with a size this piece
-         is really made in, or with "" — one size in the catalogue always wins,
-         "m" resolves to "M", "XXL" resolves to nothing. The inline fallback
-         only matters if scripts/checkout-intent.js failed to load, like the one
-         used for samePrice below. */
       var resolveSize = T.resolveSize || function (p, requested) {
         var sizes = (p && p.sizes && p.sizes.length) ? p.sizes : null;
         if (!sizes) return "";
@@ -264,22 +246,12 @@
         return "";
       };
 
+      var params = new URLSearchParams(location.search);
       var requestedSize = params.get("size");
       var chosenSize = resolveSize(product, requestedSize);
 
-      /* ---- sizing help, per piece ----
-         The label used to say "Choose a size" even for the Classic Cap, and the
-         hint said "Fits run relaxed" for every piece — wrong for a close rib and
-         for raw denim that shrinks. Both are now built from the catalogue:
-         `fitNote` is the sentence, `sizeGuide` is the section id in
-         size-guide.html. Anything unexpected falls back to today's wording and a
-         plain link to the page, so a piece with neither field reads as before. */
       var GUIDE_SECTIONS = ["body", "tops", "bottoms", "dresses", "outerwear", "one-size", "how"];
-
-      var sizeGuideHref = function (p) {
-        var slug = String(p.sizeGuide || "");
-        return GUIDE_SECTIONS.indexOf(slug) === -1 ? "size-guide.html" : "size-guide.html#" + slug;
-      };
+      var sizeGuideHref = function (p) { var slug = String(p.sizeGuide || ""); return GUIDE_SECTIONS.indexOf(slug) === -1 ? "size-guide.html" : "size-guide.html#" + slug; };
 
       var sizeLabel = document.getElementById("size-label");
       if (sizeLabel) sizeLabel.textContent = oneSize ? "One size" : "Choose a size";
@@ -287,9 +259,7 @@
       var fitNote = document.getElementById("fit-note");
       if (fitNote) {
         fitNote.textContent = "";
-        fitNote.appendChild(document.createTextNode(
-          (product.fitNote || "Fits run relaxed.") + " "
-        ));
+        fitNote.appendChild(document.createTextNode((product.fitNote || "Fits run relaxed.") + " "));
         var guideLink = document.createElement("a");
         guideLink.id = "size-guide-link";
         guideLink.href = sizeGuideHref(product);
@@ -298,26 +268,10 @@
         fitNote.appendChild(document.createTextNode("."));
       }
 
-      /* Keep the size on the URL: payments-widget.js builds its returnUrl from
-         location.href, so the choice survives the trip to checkout and back.
-         An empty size removes the parameter instead — a value we refused must
-         not be carried into checkout, nor come back on the return URL. */
-      var putOnUrl = function (name, value) {
-        try {
-          var url = new URL(location.href);
-          if (value) { url.searchParams.set(name, value); }
-          else { url.searchParams.delete(name); }
-          history.replaceState(null, "", url.toString());
-        } catch (e) {}
-      };
-
+      var putOnUrl = function (name, value) { try { var url = new URL(location.href); if (value) { url.searchParams.set(name, value); } else { url.searchParams.delete(name); } history.replaceState(null, "", url.toString()); } catch (e) {} };
       var putSizeOnUrl = function (size) { putOnUrl("size", size); };
 
-      var paintSizes = function () {
-        Array.prototype.forEach.call(sizeBox.querySelectorAll("button"), function (b) {
-          b.setAttribute("aria-pressed", b.dataset.size === chosenSize ? "true" : "false");
-        });
-      };
+      var paintSizes = function () { Array.prototype.forEach.call(sizeBox.querySelectorAll("button"), function (b) { b.setAttribute("aria-pressed", b.dataset.size === chosenSize ? "true" : "false"); }); };
 
       product.sizes.forEach(function (s) {
         var b = document.createElement("button");
@@ -326,120 +280,39 @@
         b.dataset.size = s;
         b.textContent = s;
         b.setAttribute("aria-pressed", "false");
-        b.addEventListener("click", function () {
-          chosenSize = s;
-          paintSizes();
-          say("Size " + s + " selected.");
-          putSizeOnUrl(s);
-        });
+        b.addEventListener("click", function () { chosenSize = s; paintSizes(); say("Size " + s + " selected."); putSizeOnUrl(s); });
         sizeBox.appendChild(b);
       });
       paintSizes();
 
-      /* A ?size= we did not accept as written is corrected on the URL right
-         now, before payments-widget.js can copy location.href into a returnUrl
-         and before any Buy click can stamp it onto a checkout row. Three cases:
-         "m" is rewritten to the catalogue's "M" (nothing to say), a size we do
-         not make is dropped and the shopper is asked to pick one, and a size
-         aimed at a one-size piece is replaced by that piece's own size. */
-      if (requestedSize !== null && requestedSize !== chosenSize) {
-        putSizeOnUrl(chosenSize);
-        if (!chosenSize) say("We don't make that size — choose one below.", "error");
-      }
+      if (requestedSize !== null && requestedSize !== chosenSize) { putSizeOnUrl(chosenSize); if (!chosenSize) say("We don't make that size — choose one below.", "error"); }
 
-      /* ---- quantity ----
-         The site could only ever sell one of anything: every checkout it
-         started asked for quantity 1, so a shopper who wanted two tees had to
-         pay twice. payments-widget.js already reads data-quantity off the row
-         it posts, so the only missing half was a choice on the page that owns
-         it. Same rule as ?size=: the URL is shopper input, so it goes through
-         Threadline.resolveQuantity — junk, 0, negatives and 99 all come back as
-         a quantity we really sell. The inline fallback matters only if
-         scripts/checkout-intent.js failed to load. */
       var MAX_QUANTITY = T.MAX_QUANTITY || 5;
-      var resolveQuantity = T.resolveQuantity || function (requested, max) {
-        var ceiling = Math.floor(Number(max)) || 5;
-        if (requested === null || requested === undefined) return 1;
-        var text = String(requested).replace(/\s+/g, "");
-        if (!/^\+?[0-9]+$/.test(text)) return 1;
-        var n = parseInt(text, 10);
-        if (!n || n < 1) return 1;
-        return n > ceiling ? ceiling : n;
-      };
+      var resolveQuantity = T.resolveQuantity || function (requested, max) { var ceiling = Math.floor(Number(max)) || 5; if (requested === null || requested === undefined) return 1; var text = String(requested).replace(/\s+/g, ""); if (!/^\+?[0-9]+$/.test(text)) return 1; var n = parseInt(text, 10); if (!n || n < 1) return 1; return n > ceiling ? ceiling : n; };
 
       var requestedQuantity = params.get("qty");
       var chosenQuantity = resolveQuantity(requestedQuantity, MAX_QUANTITY);
 
       var qtyBox = document.getElementById("quantities");
-
-      /* One is the default, so it is not written onto the URL; anything else is
-         kept there, because payments-widget.js builds its returnUrl from
-         location.href and the shopper should come back to the page they left. */
-      var putQuantityOnUrl = function (n) {
-        putOnUrl("qty", n > 1 ? String(n) : "");
-      };
-
-      var paintQuantities = function () {
-        if (!qtyBox) return;
-        Array.prototype.forEach.call(qtyBox.querySelectorAll("button"), function (b) {
-          b.setAttribute("aria-pressed", Number(b.dataset.quantity) === chosenQuantity ? "true" : "false");
-        });
-      };
+      var putQuantityOnUrl = function (n) { putOnUrl("qty", n > 1 ? String(n) : ""); };
+      var paintQuantities = function () { if (!qtyBox) return; Array.prototype.forEach.call(qtyBox.querySelectorAll("button"), function (b) { b.setAttribute("aria-pressed", Number(b.dataset.quantity) === chosenQuantity ? "true" : "false"); }); };
 
       if (qtyBox) {
-        for (var q = 1; q <= MAX_QUANTITY; q++) {
-          (function (n) {
-            var b = document.createElement("button");
-            b.type = "button";
-            b.className = "size";
-            b.dataset.quantity = String(n);
-            b.textContent = String(n);
-            b.setAttribute("aria-label", n === 1 ? "Quantity 1" : "Quantity " + n);
-            b.setAttribute("aria-pressed", "false");
-            b.addEventListener("click", function () {
-              chosenQuantity = n;
-              paintQuantities();
-              say(n === 1 ? "Buying one." : "Buying " + n + ".");
-              putQuantityOnUrl(n);
-            });
-            qtyBox.appendChild(b);
-          })(q);
-        }
+        for (var q = 1; q <= MAX_QUANTITY; q++) {(function (n) { var b = document.createElement("button"); b.type = "button"; b.className = "size"; b.dataset.quantity = String(n); b.textContent = String(n); b.setAttribute("aria-label", n === 1 ? "Quantity 1" : "Quantity " + n); b.setAttribute("aria-pressed", "false"); b.addEventListener("click", function () { chosenQuantity = n; paintQuantities(); say(n === 1 ? "Buying one." : "Buying " + n + "."); putQuantityOnUrl(n); }); qtyBox.appendChild(b); })(q); }
         paintQuantities();
       }
 
-      /* A ?qty= we did not accept as written is corrected on the URL now, before
-         the widget can copy location.href into a returnUrl and before a click
-         can stamp it onto a checkout row. */
-      if (requestedQuantity !== null && requestedQuantity !== String(chosenQuantity)) {
-        putQuantityOnUrl(chosenQuantity);
-        if (Number(requestedQuantity) > MAX_QUANTITY) {
-          say("We sell up to " + MAX_QUANTITY + " of a piece at a time — email us for more.");
-        }
-      }
+      if (requestedQuantity !== null && requestedQuantity !== String(chosenQuantity)) { putQuantityOnUrl(chosenQuantity); if (Number(requestedQuantity) > MAX_QUANTITY) { say("We sell up to " + MAX_QUANTITY + " of a piece at a time — email us for more."); } }
 
-      /* ---- Buy: hand off to the widget's own Buy link for this item ---- */
-      var normalise = function (s) {
-        return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
-      };
-
-      /* Does this widget row sell this piece? Either the platform item id
-         matches our catalogue id, or the row's title matches the product name. */
-      var matchesProduct = function (anchor) {
-        if (normalise(anchor.getAttribute("data-item")) === normalise(product.id)) return true;
-        var row = anchor.parentNode;
-        var label = row && row.querySelector ? row.querySelector("b") : null;
-        return !!label && normalise(label.textContent) === normalise(product.name);
-      };
+      var normalise = function (s) { return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, ""); };
+      var matchesProduct = function (anchor) { if (normalise(anchor.getAttribute("data-item")) === normalise(product.id)) return true; var row = anchor.parentNode; var label = row && row.querySelector ? row.querySelector("b") : null; return !!label && normalise(label.textContent) === normalise(product.name); };
 
       var panel = document.getElementById("group-store");
       var buy = document.getElementById("buy");
       var STORE_URL = "https://d8a.com/g/d8aaaa-batch_threadline";
 
-      /* The failure line, with a way out: the group's own storefront. */
       var sayNotListed = function (scroll) {
-        say("This piece isn't listed in the shop panel yet. Pick it in Checkout below, or email hello@threadline.example and we'll reserve " +
-          (chosenSize ? "size " + chosenSize : "one for you") + ".", "error");
+        say("This piece isn't listed in the shop panel yet. Pick it in Checkout below, or email hello@threadline.example and we'll reserve " + (chosenSize ? "size " + chosenSize : "one for you") + ".", "error");
         if (status) {
           status.appendChild(document.createTextNode(" "));
           var link = document.createElement("a");
@@ -447,147 +320,53 @@
           link.textContent = "Open the shop on d8a.com";
           status.appendChild(link);
         }
-        /* Only jump to the shop panel when the shopper asked for it by clicking
-           Buy; the load-time check must not scroll the page under them. */
         if (scroll && panel && panel.scrollIntoView) panel.scrollIntoView({ behavior: "smooth", block: "center" });
       };
 
-      /* ---- the other failure: the shop itself ----
-         whenBuyAnchor rejects for three reasons that are all about the shop —
-         "store-error" (the widget drew its own failure line), "timeout" and
-         "no-container" — and for none of them is this piece at fault. Saying
-         "isn't listed" there blamed our catalogue and sent the shopper to a
-         panel that already reads "The shop could not be reached", with no
-         mention of its Retry button. */
       var shopIsDown = function (err) {
-        /* The widget's failure line is the one certain signal. */
         if (T.storePanelFailed && T.storePanelFailed(panel)) return true;
         var reason = String((err && err.message) || err || "").replace(/^Error:\s*/, "").trim();
-        if (reason === "store-error" || reason === "no-container") return true;
-        /* A timeout with rows on screen really is "rows, but not this piece";
-           a timeout with no rows at all means the shop never answered. */
-        if (reason === "timeout") return !(T.findBuyAnchor && T.findBuyAnchor(panel));
-        /* An unknown rejection: only call it an outage if the panel is empty. */
-        return !(T.findBuyAnchor && T.findBuyAnchor(panel));
+        if (reason === "timeout" || reason === "store-error" || reason === "no-container") return true;
+        return false;
       };
 
-      /* Buy is deliberately NOT disabled here: Retry in the panel may succeed
-         a second later, and a disabled button would outlive the outage. */
       var sayShopDown = function (scroll) {
-        if (status && T.receiptIn && T.receiptIn(status)) return;
-        if (status && T.renderShopDown) {
-          T.renderShopDown(status, { product: product, size: chosenSize });
-        } else {
-          say("The shop isn't answering, so checkout can't open for " + product.name +
-            " right now. Use Retry in the Checkout panel below, or email hello@threadline.example and we'll reserve " +
-            (chosenSize ? "size " + chosenSize : "one for you") + ".", "error");
+        if (status) {
+          status.textContent = "The shop is not available right now — try again in a moment or open the storefront on d8a.com.";
+          if (scroll && panel && panel.scrollIntoView) panel.scrollIntoView({ behavior: "smooth", block: "center" });
         }
-        /* The Retry button we just told them about is inside the panel. */
-        if (scroll && panel && panel.scrollIntoView) panel.scrollIntoView({ behavior: "smooth", block: "center" });
       };
 
-      /* payments-widget.js listens on the #group-store container and owns the
-         checkout POST (including its duplicate-click guard), so we click its own
-         link rather than posting a second time from here. */
-      /* The panel sells a sizeless platform item in ones, so the chosen size AND
-         the chosen quantity have to travel on the row we are about to click:
-         payments-widget.js reads data-size, data-d8a-note and data-quantity off
-         the anchor and adds them to the checkout POST. Stamped immediately
-         before every click, so what is posted is always what is on screen,
-         never an earlier choice — and an attribute the shopper has just
-         un-chosen (back to one, or no size) is removed rather than left behind.
-         A quantity of one is not stamped at all, so the ordinary single
-         purchase posts exactly the body it has always posted. */
       var stampRow = function (anchor) {
-        if (!anchor || !anchor.setAttribute) return;
         try {
-          if (chosenQuantity > 1) {
-            anchor.setAttribute("data-quantity", String(chosenQuantity));
-          } else {
-            anchor.removeAttribute("data-quantity");
-          }
-
+          if (!anchor) return;
+          if (chosenSize) anchor.setAttribute("data-size", chosenSize);
+          if (chosenQuantity && chosenQuantity > 1) anchor.setAttribute("data-quantity", String(chosenQuantity));
           var note = "";
-          if (chosenSize) {
-            anchor.setAttribute("data-size", chosenSize);
-            note = product.name + " - size " + chosenSize;
-          } else {
-            anchor.removeAttribute("data-size");
-          }
-          if (chosenQuantity > 1) {
-            note = (note || product.name) + " ×" + chosenQuantity;
-          }
+          if (chosenSize) note += " size=" + chosenSize;
+          if (chosenQuantity && chosenQuantity > 1) note += " ×" + chosenQuantity;
           if (note) { anchor.setAttribute("data-d8a-note", note); }
           else { anchor.removeAttribute("data-d8a-note"); }
         } catch (e) {}
       };
 
-      var openCheckout = function (anchor) {
-        stampRow(anchor);
-        say("Opening checkout for " + product.name + ", size " + chosenSize +
-          (chosenQuantity > 1 ? " ×" + chosenQuantity : "") + "…");
-        anchor.click();
-      };
+      var openCheckout = function (anchor) { stampRow(anchor); say("Opening checkout for " + product.name + ", size " + chosenSize + (chosenQuantity > 1 ? " ×" + chosenQuantity : "") + "…"); anchor.click(); };
 
-      /* One queued intent at a time: while we wait for the panel, Buy is
-         disabled so a second click cannot start a second checkout. */
       var pending = false;
-
-      /* Set once the loaded panel turns out not to sell this piece: Buy stays
-         disabled and a queued intent must not switch it back on. */
       var notListed = false;
-
-      /* The row the reconcile pass below resolved, reused by the click so we do
-         not search the panel twice. Dropped if the panel re-renders (Retry). */
       var resolvedAnchor = null;
 
-      var liveAnchor = function () {
-        if (resolvedAnchor && panel && panel.contains && panel.contains(resolvedAnchor)) return resolvedAnchor;
-        resolvedAnchor = null;
-        return T.findBuyAnchor ? T.findBuyAnchor(panel, matchesProduct) : null;
-      };
+      var liveAnchor = function () { if (resolvedAnchor && panel && panel.contains && panel.contains(resolvedAnchor)) return resolvedAnchor; resolvedAnchor = null; return T.findBuyAnchor ? T.findBuyAnchor(panel, matchesProduct) : null; };
 
-      /* ---- reconcile the page with the live shop, before anyone clicks ----
-         The catalogue price in scripts/products.js is ours; the money is taken
-         by payments-widget.js from the item set on the group's Admin tab. When
-         the panel has rendered we make the page agree with it: show the shop's
-         price, or say plainly that this piece is not on sale. If the panel
-         fails or times out we change nothing — the queued-click behaviour is
-         the fallback. */
       var priceEl = document.getElementById("product-price");
       var priceNote = document.getElementById("price-source");
+      var samePrice = T.samePrice || function (a, b) { return String(a || "").trim() === String(b || "").trim(); };
 
-      /* "$38" vs "$38.00" vs "38" is the same money: the tolerant compare now
-         lives in scripts/checkout-intent.js, shared with the products.html
-         grid. The fallback only matters if that file failed to load. */
-      var samePrice = T.samePrice || function (a, b) {
-        return String(a || "").trim() === String(b || "").trim();
-      };
+      var showShopPrice = function (anchor) { var shopPrice = T.buyRowPrice ? T.buyRowPrice(anchor) : ""; if (!shopPrice || !priceEl) return; if (samePrice(shopPrice, priceEl.textContent)) return; priceEl.textContent = shopPrice; if (priceNote) { priceNote.textContent = "Price from the group shop, where checkout takes payment."; priceNote.hidden = false; } };
 
-      var showShopPrice = function (anchor) {
-        var shopPrice = T.buyRowPrice ? T.buyRowPrice(anchor) : "";
-        if (!shopPrice || !priceEl) return;
-        if (samePrice(shopPrice, priceEl.textContent)) return;
-        priceEl.textContent = shopPrice;
-        if (priceNote) {
-          priceNote.textContent = "Price from the group shop, where checkout takes payment.";
-          priceNote.hidden = false;
-        }
-      };
-
-      /* The related cards carry catalogue prices too. One shopPriceIndex pass
-         over the rendered panel repaints them all: a shop row with a different
-         price wins and the card says "Price from the group shop.", a piece the
-         shop has no row for says "Not in the shop yet." A panel that rendered
-         nothing leaves the grid exactly as written (reconcileGrid's own rule),
-         so an empty or unreachable shop never blanks the suggestions. */
-      var reconcileRelated = function () {
-        if (!panel || !relatedGrid || !T.shopPriceIndex || !T.reconcileGrid) return;
-        try { T.reconcileGrid(relatedGrid, T.shopPriceIndex(panel)); } catch (e) {}
-      };
+      var reconcileRelated = function () { if (!panel || !relatedGrid || !T.shopPriceIndex || !T.reconcileGrid) return; try { T.reconcileGrid(relatedGrid, T.shopPriceIndex(panel)); } catch (e) {} };
 
       if (panel && T.whenBuyAnchor) {
-        /* No matchFn: resolves as soon as the panel has rendered any row. */
         T.whenBuyAnchor(panel, null, T.BUY_ANCHOR_TIMEOUT || 12000)
           .then(function () {
             reconcileRelated();
@@ -597,67 +376,30 @@
               showShopPrice(mine);
               return;
             }
-            /* Rows, but none for this piece: say so now rather than after a
-               click and a twelve-second wait. */
             notListed = true;
             buy.disabled = true;
             buy.setAttribute("aria-disabled", "true");
-            /* Never over a receipt: this pass finishes when the panel renders,
-               which can be after a returning buyer's order was verified, and
-               "isn't listed" under a paid order reads as a failed purchase. */
             var paidHere = status && T.receiptIn && T.receiptIn(status);
             if (!pending && !paidHere) sayNotListed();
           })
           .catch(function (err) {
-            /* The page's own prices stay as written — the shop said nothing to
-               reconcile against — but the shopper is told, instead of being
-               left with a Buy button that looks ready and a blamed catalogue
-               twelve seconds after they click it. Never over a receipt. */
             if (shopIsDown(err)) sayShopDown(false);
           });
       }
 
-      /* ---- the same guard on the panel's own Buy links ----
-         The Buy button above insists on a size; the widget's rows in the panel
-         below did not. A click there posted a checkout for the bare item, so the
-         order arrived with no size on it and no size in the return URL. Guard
-         the panel in the capture phase (before payments-widget.js's own click
-         handler):
-           - this piece, no size chosen -> say "Choose a size first" and focus
-             the size buttons, exactly like the Buy button does;
-           - this piece with a size chosen -> let the click through, so the
-             existing checkout path and its duplicate-click guard are unchanged;
-           - another sized piece listed in the panel -> open its product page;
-           - this piece when it is one size -> let through, but stamped, so the
-             quantity chosen above travels with it;
-           - other one-size pieces and rows with no catalogue match -> untouched. */
       if (panel && T.guardBuyClicks) {
         T.guardBuyClicks(panel, function (info) {
           var piece = info.product;
           if (!piece) return false;
-
-          /* This piece's own row, bought straight from the panel: it is not the
-             guard's business when the piece is one size, but the quantity
-             chosen above still has to travel with it, so stamp and let it
-             through. */
-          if (piece.id === product.id && !info.needsSize) {
-            stampRow(info.anchor);
-            return false;
-          }
+          if (piece.id === product.id && !info.needsSize) { stampRow(info.anchor); return false; }
           if (!info.needsSize) return false;
-
           if (piece.id === product.id) {
-            /* A size is chosen: let the click through, but stamp the row first
-               so the checkout the widget posts carries that size and the
-               quantity chosen above. */
             if (chosenSize) { stampRow(info.anchor); return false; }
             say("Choose a size first.", "error");
             var firstSize = sizeBox.querySelector("button");
             if (firstSize) firstSize.focus();
             return true;
           }
-
-          /* A different sized garment: its sizes live on its own page. */
           location.href = T.productUrl(piece);
           return true;
         });
@@ -666,73 +408,28 @@
       buy.addEventListener("click", function () {
         if (pending) return;
         if (notListed) { sayNotListed(true); return; }
-        if (!chosenSize) {
-          say("Choose a size first.", "error");
-          var first = sizeBox.querySelector("button");
-          if (first) first.focus();
-          return;
-        }
-
-        /* Already rendered — the common case, and after the load-time reconcile
-           usually the anchor it resolved — goes straight through. */
+        if (!chosenSize) { say("Choose a size first.", "error"); var first = sizeBox.querySelector("button"); if (first) first.focus(); return; }
         var ready = liveAnchor();
         if (ready) { openCheckout(ready); return; }
-
-        /* No panel on the page (or no waiting helper) is the "no-container"
-           case: the shop never got a chance to answer, which is not the same
-           as this piece being unlisted. */
         if (!T.whenBuyAnchor || !panel) { sayShopDown(true); return; }
-
-        /* The panel is still loading (payments-widget.js fills it only after its
-           items request returns). Queue the click instead of failing early. */
         pending = true;
         buy.disabled = true;
         buy.setAttribute("aria-busy", "true");
         say("Fetching the shop — checkout will open in a moment…");
-
-        var release = function () {
-          pending = false;
-          /* If the reconcile pass has meanwhile found the shop does not sell
-             this piece, Buy stays off. */
-          buy.disabled = notListed;
-          buy.removeAttribute("aria-busy");
-        };
-
+        var release = function () { pending = false; buy.disabled = notListed; buy.removeAttribute("aria-busy"); };
         T.whenBuyAnchor(panel, matchesProduct, T.BUY_ANCHOR_TIMEOUT || 12000)
           .then(function (anchor) { resolvedAnchor = anchor; release(); openCheckout(anchor); })
-          .catch(function (err) {
-            release();
-            /* Two different failures, two different sentences: the shop is not
-               answering (Retry, or email us) versus the shop is up and does not
-               sell this piece (pick it in Checkout, or email us). */
-            if (shopIsDown(err)) { sayShopDown(true); return; }
-            sayNotListed(true);
-          });
+          .catch(function (err) { release(); if (shopIsDown(err)) { sayShopDown(true); return; } sayNotListed(true); });
       });
 
-      /* ---- receipt: the widget fires this once the platform confirms payment ----
-         The sentence and the prefilled email used to be written out here, which
-         is why index.html and products.html — where a one-size piece can also
-         be bought — had no confirmation at all. Both the wording and the
-         mailto now live in Threadline.renderReceipt (scripts/checkout-intent
-         .js), so all three pages say the same thing. This page still passes the
-         piece and the size it has on screen: the catalogue entry is known here
-         for certain, and the size is the shopper's choice, not something the
-         order object can be trusted to carry back. */
       document.addEventListener("group-store:paid", function (e) {
         var order = e && e.detail ? e.detail : null;
         if (!order) return;
-
-        if (status && T.renderReceipt) {
-          T.renderReceipt(status, order, { product: product, size: chosenSize });
-          return;
-        }
-
-        /* Fallback if scripts/checkout-intent.js failed to load. */
-        say("Thank you — order " + (order.id || "") + " is paid" +
-          (chosenSize ? " (size " + chosenSize + ")" : "") + ". A confirmation email is on its way.", "ok");
+        if (status && T.renderReceipt) { T.renderReceipt(status, order, { product: product, size: chosenSize }); return; }
+        say("Thank you — order " + (order.id || "") + " is paid" + (chosenSize ? " (size " + chosenSize + ")" : "") + ". A confirmation email is on its way.", "ok");
       });
     })();
   </script>
+  <script src="scripts/cart-ui.js"></script>
 </body>
 </html>
