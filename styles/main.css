@@ -90,6 +90,13 @@ a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid rgb
 .price{color:var(--ink);font-weight:700}
 .actions{margin-top:18px;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
 
+/* Small layout tweak to keep the Add button visually equivalent now it lives
+   outside the anchor: wrap the anchor and actions in .card-wrap so the grid
+   still lays out items evenly and the actions sit just beneath the card. */
+.card-wrap{display:flex;flex-direction:column;gap:10px;text-decoration:none;color:inherit;border-radius:var(--radius)}
+.card-wrap .card{display:flex;flex-direction:column;gap:10px}
+.card-wrap .actions{margin-top:8px}
+
 /* ---------- product detail ---------- */
 .product{display:grid;gap:26px;margin-top:8px}
 .media{width:100%}
