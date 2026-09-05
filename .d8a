@@ -1,7 +1,9 @@
 # .d8a — who governs this repository, how to run it, and how it earns.
 # Code lands on this branch only by the named group's passed vote; delete the
 # file to withdraw consent. The three lines below, tools: and payments: are
-# generated, never hand-edited. Everything else: https://d8a.com/docs?group=d8aaaa-batch_threadline#d8a-file
+# generated, never hand-edited. items: is generated too, and is the ONE a
+# passed Code proposal MAY edit — it is where the shop is set.
+# Everything else: https://d8a.com/docs?group=d8aaaa-batch_threadline#d8a-file
 version: 1
 group: d8a:d8aaaa-batch_threadline
 proof: t6VQui_CKO50BiBlqgGs-jOTdyVji8HYguvYJ7vbFZBFZjXm1HN_mMwslf93StOGyLEiLmtmRqmAojB89Hl3cXOuBx8ck9finBYLTA3aD69xuiCdAeGI5sI2wPFfZwQ8YO2qgFx8-9lWWgJjm9FyVIpdERD7r-cpHLzWyQF0zBAChnZLg8tD6fvZ0Cfuey09PngHTncf_gRpZDh7RLnllKgqvc-NgDd6I-ELj9zw4qscBgqe4eEjGSF0gQrLM04UGRCpxHHI0eoqPgtjTt9e9f--LicDnxzLz-PD0m4Xen7YJ7fJgUlJgXNq6ye_d95Qiea5wVq-VBX6WqDuV05n3w
@@ -16,13 +18,19 @@ tools:
 
 # payments: — the group's shop. Paste this block where it should appear on the
 # site; card payments land in the group's shared credit balance. Items and
-# prices are set on the group's Admin tab, never here. A paid buyer comes back
-# with ?d8a_order=<id>; the block verifies it (tools: verify) and fires the
-# "group-store:paid" event — release the product there.
+# prices are SET in the items: block below (`Name = $12.00 — one line`, one
+# per line, up to 50) — the platform reads it after every merge. A paid
+# buyer comes back with ?d8a_order=<id>; the block verifies it (tools: verify)
+# and fires the "group-store:paid" event — release the product there.
 payments:
   <!-- Sell on your site: your items, a Buy button each. After a payment the buyer
        returns here with ?d8a_order=<id>; the widget verifies it with the platform and
-       fires "group-store:paid" (window.groupStorePaid) — release the product there. -->
+       fires "group-store:paid" (window.groupStorePaid) — release the product there.
+       The order id alone is a link anyone could forward, so an order also proves
+       WHO paid: set window.groupStoreBuyerEmail (ask the returning buyer, or read
+       your own session) before this block, or call
+       window.groupStoreVerify(id, email) yourself. The email is hashed here and
+       never sent. -->
   <div id="group-store"></div>
   <script>
   (function () {
@@ -32,16 +40,38 @@ payments:
       return String(s).replace(/[&<>"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; });
     };
     var el = document.getElementById("group-store");
-    // The handshake: an order id is only proof once the platform says so.
-    var verify = function (id) {
-      return fetch(BASE + "/api/v1/store/orders/" + encodeURIComponent(id) + "?group=" + encodeURIComponent(GROUP))
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (d) { return d && d.paid ? d.order : null; })
-        .catch(function () { return null; });
+    // The BUYER BINDING (2026-09-05): sha256 of the lowercased email, computed
+    // here so the address itself never leaves the page. Returns "" where
+    // crypto.subtle is unavailable (an insecure origin), which simply means the
+    // check falls back to id-only for orders that predate the rule and fails for
+    // ones that do not — the honest outcome on http://.
+    var sha256Hex = function (s) {
+      try {
+        var c = window.crypto && window.crypto.subtle;
+        if (!c) return Promise.resolve("");
+        return c.digest("SHA-256", new TextEncoder().encode(String(s).trim().toLowerCase())).then(function (b) {
+          return Array.prototype.map.call(new Uint8Array(b), function (x) { return ("0" + x.toString(16)).slice(-2); }).join("");
+        });
+      } catch (e) { return Promise.resolve(""); }
+    };
+    // The handshake: an order id is only proof once the platform says so — and
+    // since 2026-09-05 the id alone is not enough. Pass the email the buyer paid
+    // with as the second argument and the widget proves it without sending it.
+    var verify = function (id, email) {
+      return (email ? sha256Hex(email) : Promise.resolve("")).then(function (h) {
+        return fetch(BASE + "/api/v1/store/orders/" + encodeURIComponent(id) + "?group=" + encodeURIComponent(GROUP) + (h ? "&buyer=" + h : ""))
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (d) { return d && d.paid ? d.order : null; })
+          .catch(function () { return null; });
+      });
     };
     window.groupStoreVerify = verify;
+    // The email the buyer typed at checkout, if your page knows it (ask them, or
+    // read your own session). Set it BEFORE this block runs and the return check
+    // below proves the receipt automatically; leave it unset and call
+    // window.groupStoreVerify(id, email) yourself once you have it.
     var back = (location.search.match(/[?&]d8a_order=([A-Za-z0-9_-]+)/) || [])[1];
-    if (back) verify(back).then(function (o) {
+    if (back) verify(back, window.groupStoreBuyerEmail).then(function (o) {
       if (!o) return;
       window.groupStorePaid = o;
       if (el && el.parentNode) {
@@ -90,11 +120,28 @@ payments:
           store = s;
           if (!s.items.length) { el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now.</p>'; return; }
           el.innerHTML = s.items.map(function (it) {
-            return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif">' +
+            // 2026-09-05. Three item shapes now, and each has to READ correctly
+            // on the seller's own page:
+            //   · SOLD OUT (stock 0) — no Buy button at all, so nobody starts a
+            //     checkout that the platform will refuse after they have chosen;
+            //   · a per-item CAP — "3 left", which is the only reason to hurry;
+            //   · PAY WHAT YOU WANT — the listed figure is a MINIMUM, so it is
+            //     drawn as "$5.00+" with a box to name an amount. Printing it
+            //     as a plain price would misstate what the buyer pays.
+            var sold = it.soldOut === true;
+            var left = (typeof it.stock === "number" && it.stock > 0) ? '<span style="font-size:12px;color:#6b7280">' + it.stock + ' left</span>' : '';
+            var priceText = it.payWhatYouWant ? esc(it.price) + '+' : esc(it.price);
+            var amountBox = it.payWhatYouWant && !sold
+              ? '<input type="number" data-amount-for="' + esc(it.id) + '" min="' + (it.priceCents / 100) + '" step="0.01" placeholder="' + (it.priceCents / 100) + '" aria-label="Amount for ' + esc(it.name) + '" style="width:72px;font:inherit;padding:5px 8px;border:1px solid #d1d5db;border-radius:8px">'
+              : '';
+            var action = sold
+              ? '<span style="color:#9ca3af">Sold out</span>'
+              : '<a href="' + esc(it.payUrl) + '" data-item="' + esc(it.id) + '" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a>';
+            return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif' + (sold ? ';opacity:.6' : '') + '">' +
               '<div style="flex:1"><b>' + esc(it.name) + '</b>' +
               (it.description ? '<div style="font-size:12px;color:#6b7280">' + esc(it.description) + '</div>' : '') + '</div>' +
-              '<span>' + esc(it.price) + '</span>' +
-              '<a href="' + esc(it.payUrl) + '" data-item="' + esc(it.id) + '" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a></div>';
+              left + amountBox +
+              '<span>' + priceText + '</span>' + action + '</div>';
           }).join("") + '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group.url) + '" style="color:#7c5cff">' + esc(s.group.name) + '</a></p>';
         })
         .catch(function () {
@@ -110,8 +157,21 @@ payments:
       a.textContent = "Opening\u2026";
       // Come back to this page — minus any earlier receipt on the URL.
       var here = location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1");
+      // WHICH ONE the buyer chose (2026-09-04): put data-variant on the buy link
+      // and set it from your own size/colour control before the click. The
+      // platform stores it against the order and shows it on the group's Admin
+      // tab, so the seller can fulfil it. One short line; a variant that costs
+      // more is a separate item.
+      var variant = a.getAttribute("data-variant") || "";
+      // PAY WHAT YOU WANT (2026-09-05): the amount the buyer typed, in cents.
+      // Sent only when there is a box — a fixed-price item ignores it server-side
+      // anyway, and the route charges the listed price whatever arrives here.
+      var itemId = a.getAttribute("data-item");
+      var box = el.querySelector('[data-amount-for="' + itemId + '"]');
+      var amountCents = box && box.value ? Math.round(parseFloat(box.value) * 100) : null;
       fetch(s.checkout.url, { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ group: GROUP, item: a.getAttribute("data-item"), quantity: 1, returnUrl: here }) })
+        body: JSON.stringify({ group: GROUP, item: itemId, quantity: 1, variant: variant, returnUrl: here,
+          amountCents: (amountCents && amountCents > 0) ? amountCents : undefined }) })
         .then(function (r) { return r.json(); })
         .then(function (d) { if (d.url) { location.href = d.url; } else { a.textContent = "Buy"; location.href = a.href; } })
         .catch(function () { location.href = a.href; });
@@ -120,25 +180,24 @@ payments:
   })();
   </script>
 
-# items: — what the group sells. One line per piece, read after every merge.
-# Names and prices are kept identical to the catalogue in scripts/products.js,
-# so the shop panel matches a row to a card by name and the reconcile passes in
-# index.html, products.html and product.html find no difference to repaint.
-# Dropping a line here PAUSES that piece (it is never deleted); putting the line
-# back restores it.
+# items: — what the group sells, and the ONE generated section a passed Code
+# proposal MAY edit: THIS is where they are set. The platform reads the block
+# after every merge (tools: items is the live copy) and the Admin tab shows
+# them read-only. Name = $price — one line, one per line, up to 50.
+# An empty block means nothing is for sale.
 items:
-  Everyday Tee = $38.00 — Soft combed cotton, cut for a modern relaxed fit.
-  Relaxed Shirt = $48.00 — An easy overshirt-weight button-down for every season.
-  Lightweight Hoodie = $68.00 — Loopback cotton that works indoors and out.
-  Casual Pant = $58.00 — A tapered everyday trouser with a comfortable waist.
-  Woven Shirt = $52.00 — Textured yarn-dyed cotton with a soft, lived-in hand.
-  Classic Cap = $22.00 — Washed cotton six-panel with a soft, unstructured crown.
-  Merino Crew Knit = $88.00 — Fine-gauge merino that layers under anything.
   Canvas Overshirt = $94.00 — The layer between a shirt and a coat.
-  Linen Summer Dress = $76.00 — Washed European linen, cut long and loose.
-  Ribbed Longsleeve = $44.00 — A close-fitting rib that holds its shape.
+  Casual Pant = $58.00 — A tapered everyday trouser with a comfortable waist.
+  Classic Cap = $22.00 — Washed cotton six-panel with a soft, unstructured crown.
+  Everyday Tee = $38.00 — Soft combed cotton, cut for a modern relaxed fit.
   Lambswool Scarf = $46.00 — Woven in a small mill, finished with a hand-tied fringe.
+  Lightweight Hoodie = $68.00 — Loopback cotton that works indoors and out.
+  Linen Summer Dress = $76.00 — Washed European linen, cut long and loose.
+  Merino Crew Knit = $88.00 — Fine-gauge merino that layers under anything.
+  Relaxed Shirt = $48.00 — An easy overshirt-weight button-down for every season.
+  Ribbed Longsleeve = $44.00 — A close-fitting rib that holds its shape.
   Rigid Denim Jacket = $118.00 — Raw 12oz denim that fades to your own pattern.
+  Woven Shirt = $52.00 — Textured yarn-dyed cotton with a soft, lived-in hand.
 
 url: https://verkl.com
 # run: — how to run it. Yours to edit; VS Code's ▶ (the VSD8A extension) launches each entry.
