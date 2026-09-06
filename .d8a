@@ -57,9 +57,18 @@ payments:
     // The handshake: an order id is only proof once the platform says so — and
     // since 2026-09-05 the id alone is not enough. Pass the email the buyer paid
     // with as the second argument and the widget proves it without sending it.
+    // SIGNED IN WITH D8A (2026-09-06): when the group's site loads the login
+    // script (https://d8a.com/d8a-login.js) and the visitor has signed in,
+    // window.d8aLogin.bearer holds their access credential. Sent on the checkout
+    // so the order is bound to their account (it then shows under "your
+    // purchases" on this site), and on the return check so a signed-in buyer's
+    // receipt proves itself with no email prompt. Absent = a guest, as before.
+    var bearer = function () {
+      try { var l = window.d8aLogin; return l && l.bearer ? { Authorization: "Bearer " + String(l.bearer) } : {}; } catch (e) { return {}; }
+    };
     var verify = function (id, email) {
       return (email ? sha256Hex(email) : Promise.resolve("")).then(function (h) {
-        return fetch(BASE + "/api/v1/store/orders/" + encodeURIComponent(id) + "?group=" + encodeURIComponent(GROUP) + (h ? "&buyer=" + h : ""))
+        return fetch(BASE + "/api/v1/store/orders/" + encodeURIComponent(id) + "?group=" + encodeURIComponent(GROUP) + (h ? "&buyer=" + h : ""), { headers: bearer() })
           .then(function (r) { return r.ok ? r.json() : null; })
           .then(function (d) { return d && d.paid ? d.order : null; })
           .catch(function () { return null; });
@@ -169,7 +178,8 @@ payments:
       var itemId = a.getAttribute("data-item");
       var box = el.querySelector('[data-amount-for="' + itemId + '"]');
       var amountCents = box && box.value ? Math.round(parseFloat(box.value) * 100) : null;
-      fetch(s.checkout.url, { method: "POST", headers: { "Content-Type": "application/json" },
+      var headers = bearer(); headers["Content-Type"] = "application/json";
+      fetch(s.checkout.url, { method: "POST", headers: headers,
         body: JSON.stringify({ group: GROUP, item: itemId, quantity: 1, variant: variant, returnUrl: here,
           amountCents: (amountCents && amountCents > 0) ? amountCents : undefined }) })
         .then(function (r) { return r.json(); })
@@ -198,6 +208,16 @@ items:
   Ribbed Longsleeve = $44.00 — A close-fitting rib that holds its shape.
   Rigid Denim Jacket = $118.00 — Raw 12oz denim that fades to your own pattern.
   Woven Shirt = $52.00 — Textured yarn-dyed cotton with a soft, lived-in hand.
+
+# login: — "Login with D8A" for this group's site. The client id is not a secret;
+# sign-in returns ONLY to a registered redirect (exact match) and needs PKCE (S256).
+# Load the script, call d8aLogin.signIn(); orders paid while signed in are listed
+# by d8aLogin.purchases(). Redirects are set on the group's Admin tab.
+login:
+  client   = d8a_app_b3a35968bf907e64
+  issuer   = https://d8a.com
+  script   = https://d8a.com/d8a-login.js
+  redirect = https://verkl.com/
 
 url: https://verkl.com
 # run: — how to run it. Yours to edit; VS Code's ▶ (the VSD8A extension) launches each entry.
