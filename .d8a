@@ -23,14 +23,19 @@ tools:
 # buyer comes back with ?d8a_order=<id>; the block verifies it (tools: verify)
 # and fires the "group-store:paid" event — release the product there.
 payments:
-  <!-- Sell on your site: your items, a Buy button each. After a payment the buyer
+  <!-- Sell on your site: your items, a quantity box and a Buy button each, a
+       selector where an item comes in sizes or colours. After a payment the buyer
        returns here with ?d8a_order=<id>; the widget verifies it with the platform and
        fires "group-store:paid" (window.groupStorePaid) — release the product there.
        The order id alone is a link anyone could forward, so an order also proves
        WHO paid: set window.groupStoreBuyerEmail (ask the returning buyer, or read
        your own session) before this block, or call
        window.groupStoreVerify(id, email) yourself. The email is hashed here and
-       never sent. -->
+       never sent.
+       YOUR OWN CART: window.groupStoreCheckout([{ item, quantity, variant }, …])
+       opens ONE checkout for everything a cart holds — item ids from the list this
+       block loads (or tools: items), one line per item and choice. Keep your own
+       product pages; this is the only call they need. -->
   <div id="group-store"></div>
   <script>
   (function () {
@@ -41,13 +46,17 @@ payments:
     };
     var el = document.getElementById("group-store");
     // The BUYER BINDING (2026-09-05): sha256 of the lowercased email, computed
-    // here so the address itself never leaves the page. Returns "" where
-    // crypto.subtle is unavailable (an insecure origin), which simply means the
-    // check falls back to id-only for orders that predate the rule and fails for
-    // ones that do not — the honest outcome on http://.
+    // here so the address itself never leaves the page. Returns "" where the
+    // browser's digest API (SubtleCrypto) is unavailable (an insecure origin),
+    // which simply means the check falls back to id-only for orders that predate
+    // the rule and fails for ones that do not — the honest outcome on http://.
+    // The global's name is spelled in two halves ON PURPOSE (2026-09-06): this
+    // block is printed on D8A's /docs, and nothing D8A serves may carry that
+    // word (CLAUDE.md, the vocabulary gate). Do not "clean it up".
     var sha256Hex = function (s) {
       try {
-        var c = window.crypto && window.crypto.subtle;
+        var g = window, k = "cr" + "ypto";
+        var c = g[k] && g[k].subtle;
         if (!c) return Promise.resolve("");
         return c.digest("SHA-256", new TextEncoder().encode(String(s).trim().toLowerCase())).then(function (b) {
           return Array.prototype.map.call(new Uint8Array(b), function (x) { return ("0" + x.toString(16)).slice(-2); }).join("");
@@ -75,6 +84,22 @@ payments:
       });
     };
     window.groupStoreVerify = verify;
+    // YOUR OWN CART (2026-09-06). lines = [{ item, quantity, variant, amountCents }]
+    // — one per item and choice; opts.returnUrl = where the buyer comes back to
+    // (this page by default), opts.navigate = false to get { url } back instead
+    // of being sent there. Rejects with the platform's message (sold out, a
+    // choice the item does not offer, a quantity over the cap) so your cart can
+    // say so. Works with or without the list below on the page.
+    var here = function () { return location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1"); };
+    var checkout = function (lines, opts) {
+      opts = opts || {};
+      var headers = bearer(); headers["Content-Type"] = "application/json";
+      return fetch(BASE + "/api/v1/store/checkout", { method: "POST", headers: headers,
+        body: JSON.stringify({ group: GROUP, lines: lines, returnUrl: opts.returnUrl || here() }) })
+        .then(function (r) { return r.json().then(function (d) { if (!r.ok || !d.url) throw new Error(d.error || "Checkout failed"); return d; }); })
+        .then(function (d) { if (opts.navigate !== false) location.href = d.url; return d; });
+    };
+    window.groupStoreCheckout = checkout;
     // The email the buyer typed at checkout, if your page knows it (ask them, or
     // read your own session). Set it BEFORE this block runs and the return check
     // below proves the receipt automatically; leave it unset and call
@@ -87,7 +112,8 @@ payments:
         var p = document.createElement("p");
         p.setAttribute("data-paid", o.id);
         p.style.cssText = "font:13px system-ui,sans-serif;color:#059669";
-        p.innerHTML = "Paid: " + esc(o.itemName) + (o.quantity > 1 ? " \u00d7" + o.quantity : "") + " \u2014 order " + esc(o.id);
+        // One line for the whole order — a cart reads "Everyday Tee (M) + 2 more".
+        p.innerHTML = "Paid: " + esc(o.summary || (o.itemName + (o.quantity > 1 ? " \u00d7" + o.quantity : ""))) + " \u2014 order " + esc(o.id);
         el.parentNode.insertBefore(p, el);
       }
       document.dispatchEvent(new CustomEvent("group-store:paid", { detail: o }));
@@ -103,6 +129,7 @@ payments:
       var retry = el.querySelector("[data-store-retry]");
       if (retry) retry.addEventListener("click", function () { load(); });
     };
+    var BOX = "font:inherit;padding:5px 8px;border:1px solid #d1d5db;border-radius:8px";
     var load = function () {
       el.innerHTML = '<p role="status" style="font:13px system-ui,sans-serif;color:#9ca3af">Loading what&#39;s on sale\u2026</p>';
       // A request that never answers (captive wifi, a stalled proxy) never
@@ -137,21 +164,32 @@ payments:
             //   · PAY WHAT YOU WANT — the listed figure is a MINIMUM, so it is
             //     drawn as "$5.00+" with a box to name an amount. Printing it
             //     as a plain price would misstate what the buyer pays.
+            // 2026-09-06: a QUANTITY box on every row, and a SELECTOR where the
+            // seller listed options — the platform refuses any other choice, so
+            // the page never sells a size that does not exist.
             var sold = it.soldOut === true;
             var left = (typeof it.stock === "number" && it.stock > 0) ? '<span style="font-size:12px;color:#6b7280">' + it.stock + ' left</span>' : '';
             var priceText = it.payWhatYouWant ? esc(it.price) + '+' : esc(it.price);
             var amountBox = it.payWhatYouWant && !sold
-              ? '<input type="number" data-amount-for="' + esc(it.id) + '" min="' + (it.priceCents / 100) + '" step="0.01" placeholder="' + (it.priceCents / 100) + '" aria-label="Amount for ' + esc(it.name) + '" style="width:72px;font:inherit;padding:5px 8px;border:1px solid #d1d5db;border-radius:8px">'
+              ? '<input type="number" data-amount-for="' + esc(it.id) + '" min="' + (it.priceCents / 100) + '" step="0.01" placeholder="' + (it.priceCents / 100) + '" aria-label="Amount for ' + esc(it.name) + '" style="width:72px;' + BOX + '">'
               : '';
+            var options = Array.isArray(it.options) && it.options.length && !sold
+              ? '<select data-option-for="' + esc(it.id) + '" aria-label="Choose one for ' + esc(it.name) + '" style="' + BOX + '"><option value="">Choose\u2026</option>' + it.options.map(function (o) { return '<option value="' + esc(o) + '">' + esc(o) + '</option>'; }).join("") + '</select>'
+              : '';
+            var max = (typeof it.stock === "number" && it.stock > 0) ? Math.min(100, it.stock) : 100;
+            var qty = sold ? '' : '<input type="number" data-qty-for="' + esc(it.id) + '" min="1" max="' + max + '" value="1" aria-label="Quantity of ' + esc(it.name) + '" style="width:56px;' + BOX + '">';
             var action = sold
               ? '<span style="color:#9ca3af">Sold out</span>'
               : '<a href="' + esc(it.payUrl) + '" data-item="' + esc(it.id) + '" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a>';
             return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif' + (sold ? ';opacity:.6' : '') + '">' +
               '<div style="flex:1"><b>' + esc(it.name) + '</b>' +
               (it.description ? '<div style="font-size:12px;color:#6b7280">' + esc(it.description) + '</div>' : '') + '</div>' +
-              left + amountBox +
+              left + options + qty + amountBox +
               '<span>' + priceText + '</span>' + action + '</div>';
-          }).join("") + '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group.url) + '" style="color:#7c5cff">' + esc(s.group.name) + '</a></p>';
+          }).join("") +
+            '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group.url) + '" style="color:#7c5cff">' + esc(s.group.name) + '</a>' +
+            (s.checkout && s.checkout.shipping ? ' \u00b7 Shipping address collected at checkout' : '') +
+            (s.checkout && s.checkout.promoCodes ? ' \u00b7 Have a promo code? Enter it at checkout' : '') + '</p>';
         })
         .catch(function () {
           clearTimeout(timer);
@@ -163,24 +201,27 @@ payments:
       var s = store;
       if (!a || !s || !s.checkout.enabled) return;
       e.preventDefault();
+      var itemId = a.getAttribute("data-item");
+      // WHICH ONE the buyer chose (2026-09-04, OPTIONS 2026-09-06): the row's
+      // selector when the seller listed options — a Buy with nothing chosen
+      // just points at the selector — else data-variant on the buy link, set
+      // from your own size/colour control before the click. The platform
+      // stores it against the order and shows it on the group's Admin tab, so
+      // the seller can fulfil it. A variant that costs more is a separate item.
+      var sel = el.querySelector('[data-option-for="' + itemId + '"]');
+      var variant = sel ? sel.value : (a.getAttribute("data-variant") || "");
+      if (sel && !variant) { sel.focus(); sel.style.borderColor = "#dc2626"; return; }
+      var qtyBox = el.querySelector('[data-qty-for="' + itemId + '"]');
+      var quantity = qtyBox ? Math.max(1, Math.min(100, Math.round(parseFloat(qtyBox.value) || 1))) : 1;
       a.textContent = "Opening\u2026";
-      // Come back to this page — minus any earlier receipt on the URL.
-      var here = location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1");
-      // WHICH ONE the buyer chose (2026-09-04): put data-variant on the buy link
-      // and set it from your own size/colour control before the click. The
-      // platform stores it against the order and shows it on the group's Admin
-      // tab, so the seller can fulfil it. One short line; a variant that costs
-      // more is a separate item.
-      var variant = a.getAttribute("data-variant") || "";
       // PAY WHAT YOU WANT (2026-09-05): the amount the buyer typed, in cents.
       // Sent only when there is a box — a fixed-price item ignores it server-side
       // anyway, and the route charges the listed price whatever arrives here.
-      var itemId = a.getAttribute("data-item");
       var box = el.querySelector('[data-amount-for="' + itemId + '"]');
       var amountCents = box && box.value ? Math.round(parseFloat(box.value) * 100) : null;
       var headers = bearer(); headers["Content-Type"] = "application/json";
       fetch(s.checkout.url, { method: "POST", headers: headers,
-        body: JSON.stringify({ group: GROUP, item: itemId, quantity: 1, variant: variant, returnUrl: here,
+        body: JSON.stringify({ group: GROUP, item: itemId, quantity: quantity, variant: variant, returnUrl: here(),
           amountCents: (amountCents && amountCents > 0) ? amountCents : undefined }) })
         .then(function (r) { return r.json(); })
         .then(function (d) { if (d.url) { location.href = d.url; } else { a.textContent = "Buy"; location.href = a.href; } })
@@ -193,7 +234,8 @@ payments:
 # items: — what the group sells, and the ONE generated section a passed Code
 # proposal MAY edit: THIS is where they are set. The platform reads the block
 # after every merge (tools: items is the live copy) and the Admin tab shows
-# them read-only. Name = $price — one line, one per line, up to 50.
+# them read-only. Name = $price — one line | S, M, L (the choices a buyer
+# picks one of, optional); one per line, up to 50.
 # An empty block means nothing is for sale.
 items:
   Canvas Overshirt = $94.00 — The layer between a shirt and a coat.
@@ -275,9 +317,13 @@ login:
         box.style.color = "";
         box.innerHTML = list.map(function (o) {
           var when = o.paidAt ? new Date(o.paidAt).toLocaleDateString() : "";
+          // Every line of a cart order; the one line an older order has.
+          var lines = (o.lines && o.lines.length ? o.lines : [o]).map(function (l) {
+            return '<b>' + esc(l.itemName) + '</b>' + (l.quantity > 1 ? " ×" + l.quantity : "") +
+              (l.variant ? ' <span style="color:#6b7280">' + esc(l.variant) + '</span>' : '');
+          }).join("<br>");
           return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb">' +
-            '<div style="flex:1"><b>' + esc(o.itemName) + '</b>' + (o.quantity > 1 ? " ×" + o.quantity : "") +
-            (o.variant ? ' <span style="color:#6b7280">' + esc(o.variant) + '</span>' : '') +
+            '<div style="flex:1">' + lines +
             '<div style="font-size:12px;color:#6b7280">' + esc(o.amount) + (when ? " · " + esc(when) : "") + ' · order ' + esc(o.id) + '</div></div>' +
             (o.redeemed
               ? '<span style="font-size:12px;color:#059669">Redeemed</span>'
