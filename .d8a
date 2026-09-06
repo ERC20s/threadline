@@ -23,8 +23,14 @@ tools:
 # buyer comes back with ?d8a_order=<id>; the block verifies it (tools: verify)
 # and fires the "group-store:paid" event — release the product there.
 payments:
-  <!-- Sell on your site: your items, a quantity box and a Buy button each, a
-       selector where an item comes in sizes or colours. After a payment the buyer
+  <!-- Sell on your site: your items with a quantity box, a selector where one
+       comes in sizes or colours, and a CART — Add on every row, then one Checkout for
+       the lot. A shop with a single item keeps its single Buy button instead.
+       STYLING: every colour, radius and font is a CSS custom property with the old
+       literal as its fallback, and every node carries a gs-* class. Restyle it from
+       your own stylesheet — #group-store { --gs-accent:#111; --gs-radius:0 } or
+       .gs-row { … } — rather than forking this block.
+       After a payment the buyer
        returns here with ?d8a_order=<id>; the widget verifies it with the platform and
        fires "group-store:paid" (window.groupStorePaid) — release the product there.
        The order id alone is a link anyone could forward, so an order also proves
@@ -35,7 +41,9 @@ payments:
        YOUR OWN CART: window.groupStoreCheckout([{ item, quantity, variant }, …])
        opens ONE checkout for everything a cart holds — item ids from the list this
        block loads (or tools: items), one line per item and choice. Keep your own
-       product pages; this is the only call they need. -->
+       product pages; this is the only call they need. To draw your own basket
+       count off THIS cart instead, read window.groupStoreCart.lines() and listen
+       for "group-store:cart" on document. -->
   <div id="group-store"></div>
   <script>
   (function () {
@@ -100,6 +108,51 @@ payments:
         .then(function (d) { if (opts.navigate !== false) location.href = d.url; return d; });
     };
     window.groupStoreCheckout = checkout;
+    // THE CART (2026-09-06). Held here AND in localStorage under this group's own
+    // key, so a reload — or the trip out to the card checkout and back — does not
+    // empty it. Storage can throw outright (private mode, a browser set to block
+    // site data), so every touch is guarded and the cart simply stays in memory.
+    var CART_KEY = "d8a-cart:" + GROUP;
+    var cart = [];
+    try {
+      var saved = JSON.parse(window.localStorage.getItem(CART_KEY) || "[]");
+      if (Object.prototype.toString.call(saved) === "[object Array]") {
+        cart = saved.filter(function (l) { return l && typeof l.item === "string" && l.quantity > 0; });
+      }
+    } catch (e) { cart = []; }
+    var cartChanged = function () {
+      try { window.localStorage.setItem(CART_KEY, JSON.stringify(cart)); } catch (e) { /* memory only */ }
+      // Your own basket count, without owning the cart.
+      try { document.dispatchEvent(new CustomEvent("group-store:cart", { detail: { lines: cart.slice(0) } })); } catch (e) {}
+      if (window.groupStoreRenderCart) window.groupStoreRenderCart();
+    };
+    var clearCart = function () {
+      cart = [];
+      try { window.localStorage.removeItem(CART_KEY); } catch (e) {}
+      cartChanged();
+    };
+    // One line per item AND choice — a second Add of the same pair adds quantity
+    // rather than a duplicate row, which is what the checkout does with them too.
+    var addToCart = function (line) {
+      for (var i = 0; i < cart.length; i++) {
+        if (cart[i].item === line.item && (cart[i].variant || "") === (line.variant || "")) {
+          cart[i].quantity = Math.min(100, cart[i].quantity + line.quantity);
+          if (line.amountCents) cart[i].amountCents = line.amountCents;
+          cartChanged();
+          return true;
+        }
+      }
+      if (cart.length >= 20) return false;   // STORE_MAX_LINES: the checkout refuses more
+      cart.push(line);
+      cartChanged();
+      return true;
+    };
+    window.groupStoreCart = {
+      lines: function () { return cart.slice(0); },
+      add: function (line) { return addToCart({ item: String(line.item), quantity: Math.max(1, Math.min(100, Math.round(line.quantity || 1))), variant: line.variant || "", amountCents: line.amountCents || undefined }); },
+      clear: clearCart,
+      checkout: function (opts) { return checkout(cart.slice(0), opts); }
+    };
     // The email the buyer typed at checkout, if your page knows it (ask them, or
     // read your own session). Set it BEFORE this block runs and the return check
     // below proves the receipt automatically; leave it unset and call
@@ -108,10 +161,13 @@ payments:
     if (back) verify(back, window.groupStoreBuyerEmail).then(function (o) {
       if (!o) return;
       window.groupStorePaid = o;
+      clearCart();   // it is bought: the basket that opened this checkout is spent
       if (el && el.parentNode) {
         var p = document.createElement("p");
         p.setAttribute("data-paid", o.id);
-        p.style.cssText = "font:13px system-ui,sans-serif;color:#059669";
+        // Written out rather than taken from V below: this runs whether or not
+        // the page has the list block, and V is only built when it does.
+        p.style.cssText = "font:var(--gs-font-small,13px system-ui,sans-serif);color:var(--gs-good,#059669)";
         // One line for the whole order — a cart reads "Everyday Tee (M) + 2 more".
         p.innerHTML = "Paid: " + esc(o.summary || (o.itemName + (o.quantity > 1 ? " \u00d7" + o.quantity : ""))) + " \u2014 order " + esc(o.id);
         el.parentNode.insertBefore(p, el);
@@ -124,14 +180,73 @@ payments:
     var store = null;
     // One place that draws the failure line, so the timeout and the .catch at
     // the end show exactly the same thing. Try again re-runs the load in place.
+    // STYLING (2026-09-06): the literals this block used to hardcode, each now a
+    // CSS custom property with itself as the fallback. Set any of them on
+    // #group-store (or an ancestor) and the widget takes the host page's look —
+    // which is the whole point: a site should not have to fork this file to make
+    // it match. Every node below also carries a gs-* class for the same reason.
+    var V = {
+      accent: "var(--gs-accent,#7c5cff)",
+      on: "var(--gs-on-accent,#fff)",
+      muted: "var(--gs-muted,#6b7280)",
+      faint: "var(--gs-faint,#9ca3af)",
+      line: "var(--gs-line,#e5e7eb)",
+      field: "var(--gs-field,#d1d5db)",
+      bad: "var(--gs-bad,#dc2626)",
+      radius: "var(--gs-radius,8px)",
+      font: "var(--gs-font,14px system-ui,sans-serif)",
+      small: "var(--gs-font-small,13px system-ui,sans-serif)",
+      tiny: "var(--gs-font-tiny,11px system-ui,sans-serif)"
+    };
+    var NOTE = "font:" + V.small + ";color:" + V.faint;
+    var money = function (c) { return "$" + (Math.max(0, Math.round(c)) / 100).toFixed(2); };
     var loadFailed = function () {
-      el.innerHTML = '<p role="status" style="font:13px system-ui,sans-serif;color:#9ca3af">The shop could not be reached. <button type="button" data-store-retry style="font:inherit;color:#7c5cff;background:none;border:0;padding:0;cursor:pointer;text-decoration:underline">Try again</button></p>';
+      el.innerHTML = '<p role="status" class="gs-error" style="' + NOTE + '">The shop could not be reached. <button type="button" data-store-retry class="gs-retry" style="font:inherit;color:' + V.accent + ';background:none;border:0;padding:0;cursor:pointer;text-decoration:underline">Try again</button></p>';
       var retry = el.querySelector("[data-store-retry]");
       if (retry) retry.addEventListener("click", function () { load(); });
     };
-    var BOX = "font:inherit;padding:5px 8px;border:1px solid #d1d5db;border-radius:8px";
+    var BOX = "font:inherit;padding:5px 8px;border:1px solid " + V.field + ";border-radius:" + V.radius;
+    var itemById = function (id) {
+      var xs = (store && store.items) || [];
+      for (var i = 0; i < xs.length; i++) { if (xs[i].id === id) return xs[i]; }
+      return null;
+    };
+    var cartError = function (msg) {
+      var p = el.querySelector("[data-cart-error]");
+      if (p) p.textContent = msg || "";
+    };
+    // THE BASKET, drawn under the list and re-drawn whole on every change — so
+    // the row indices carried on the buttons are always the ones on screen.
+    var renderCart = function () {
+      var box = el.querySelector("[data-cart]");
+      if (!box) return;
+      if (!cart.length) { box.innerHTML = ""; return; }
+      var step = "font:inherit;line-height:1;cursor:pointer;background:none;border:1px solid " + V.field + ";border-radius:" + V.radius + ";padding:2px 7px;color:inherit";
+      var total = 0;
+      var rows = cart.map(function (l, i) {
+        var it = itemById(l.item);
+        // A line the seller has since withdrawn is pruned on load; this only has
+        // to survive drawing one before that fetch has answered.
+        var unit = l.amountCents || (it ? it.priceCents : 0);
+        total += unit * l.quantity;
+        return '<div class="gs-cart-row" style="display:flex;align-items:center;gap:8px;padding:6px 0;font:' + V.small + '">' +
+          '<span style="flex:1">' + esc(it ? it.name : l.item) + (l.variant ? ' <span style="color:' + V.muted + '">(' + esc(l.variant) + ')</span>' : '') + '</span>' +
+          '<button type="button" class="gs-step" data-dec="' + i + '" aria-label="One fewer" style="' + step + '">\u2212</button>' +
+          '<span class="gs-qty">' + l.quantity + '</span>' +
+          '<button type="button" class="gs-step" data-inc="' + i + '" aria-label="One more" style="' + step + '">+</button>' +
+          '<span class="gs-line-total" style="min-width:64px;text-align:right">' + money(unit * l.quantity) + '</span>' +
+          '<button type="button" class="gs-remove" data-del="' + i + '" aria-label="Remove" style="' + step + ';border-color:transparent;color:' + V.muted + '">\u00d7</button>' +
+          '</div>';
+      }).join("");
+      box.innerHTML = '<div class="gs-cart-inner" style="border-top:2px solid ' + V.line + ';margin-top:8px;padding-top:8px">' + rows +
+        '<div class="gs-cart-foot" style="display:flex;align-items:center;gap:12px;padding-top:8px;font:' + V.font + '">' +
+        '<b class="gs-total" style="flex:1">Total ' + money(total) + '</b>' +
+        '<button type="button" class="gs-checkout" data-checkout style="background:' + V.accent + ';color:' + V.on + ';border:0;border-radius:var(--gs-button-radius,999px);padding:8px 18px;font:inherit;cursor:pointer">Checkout</button>' +
+        '</div><p class="gs-cart-error" data-cart-error role="status" style="' + NOTE + ';color:' + V.bad + ';margin:6px 0 0"></p></div>';
+    };
+    window.groupStoreRenderCart = renderCart;
     var load = function () {
-      el.innerHTML = '<p role="status" style="font:13px system-ui,sans-serif;color:#9ca3af">Loading what&#39;s on sale\u2026</p>';
+      el.innerHTML = '<p role="status" class="gs-loading" style="' + NOTE + '">Loading what&#39;s on sale\u2026</p>';
       // A request that never answers (captive wifi, a stalled proxy) never
       // rejects, so without this the box would sit on the loading line for ever.
       var done = false, timedOut = false;
@@ -154,7 +269,9 @@ payments:
           if (!s) return;
           if (!s.items) throw new Error("bad payload");
           store = s;
-          if (!s.items.length) { el.innerHTML = '<p style="font:13px system-ui,sans-serif;color:#9ca3af">Nothing for sale right now.</p>'; return; }
+          if (!s.items.length) { el.innerHTML = '<p class="gs-empty" style="' + NOTE + '">Nothing for sale right now.</p>'; return; }
+          // More than one thing to buy = a basket is worth it; one thing is not.
+          var multi = s.items.length > 1;
           el.innerHTML = s.items.map(function (it) {
             // 2026-09-05. Three item shapes now, and each has to READ correctly
             // on the seller's own page:
@@ -168,7 +285,7 @@ payments:
             // seller listed options — the platform refuses any other choice, so
             // the page never sells a size that does not exist.
             var sold = it.soldOut === true;
-            var left = (typeof it.stock === "number" && it.stock > 0) ? '<span style="font-size:12px;color:#6b7280">' + it.stock + ' left</span>' : '';
+            var left = (typeof it.stock === "number" && it.stock > 0) ? '<span class="gs-left" style="font-size:12px;color:' + V.muted + '">' + it.stock + ' left</span>' : '';
             var priceText = it.payWhatYouWant ? esc(it.price) + '+' : esc(it.price);
             var amountBox = it.payWhatYouWant && !sold
               ? '<input type="number" data-amount-for="' + esc(it.id) + '" min="' + (it.priceCents / 100) + '" step="0.01" placeholder="' + (it.priceCents / 100) + '" aria-label="Amount for ' + esc(it.name) + '" style="width:72px;' + BOX + '">'
@@ -178,18 +295,34 @@ payments:
               : '';
             var max = (typeof it.stock === "number" && it.stock > 0) ? Math.min(100, it.stock) : 100;
             var qty = sold ? '' : '<input type="number" data-qty-for="' + esc(it.id) + '" min="1" max="' + max + '" value="1" aria-label="Quantity of ' + esc(it.name) + '" style="width:56px;' + BOX + '">';
+            // ADD vs BUY (2026-09-06). The element stays the same <a> in both
+            // modes — it keeps the no-script fallback (its href is the item's own
+            // pay page) and the data-variant hook a site may set before the click.
+            // data-add is what tells the handler below to put the line in the
+            // basket instead of leaving for the card checkout. A shop with a
+            // single item has nothing to combine, so it keeps the one-click Buy.
             var action = sold
-              ? '<span style="color:#9ca3af">Sold out</span>'
-              : '<a href="' + esc(it.payUrl) + '" data-item="' + esc(it.id) + '" style="background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none">Buy</a>';
-            return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb;font:14px system-ui,sans-serif' + (sold ? ';opacity:.6' : '') + '">' +
-              '<div style="flex:1"><b>' + esc(it.name) + '</b>' +
-              (it.description ? '<div style="font-size:12px;color:#6b7280">' + esc(it.description) + '</div>' : '') + '</div>' +
+              ? '<span class="gs-soldout" style="color:' + V.faint + '">Sold out</span>'
+              : '<a href="' + esc(it.payUrl) + '" data-item="' + esc(it.id) + '"' + (multi ? ' data-add="1"' : '') + ' class="gs-buy" style="background:' + V.accent + ';color:' + V.on + ';border-radius:var(--gs-button-radius,999px);padding:6px 14px;text-decoration:none">' + (multi ? 'Add' : 'Buy') + '</a>';
+            return '<div class="gs-row" style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid ' + V.line + ';font:' + V.font + (sold ? ';opacity:.6' : '') + '">' +
+              '<div style="flex:1"><b class="gs-name">' + esc(it.name) + '</b>' +
+              (it.description ? '<div class="gs-desc" style="font-size:12px;color:' + V.muted + '">' + esc(it.description) + '</div>' : '') + '</div>' +
               left + options + qty + amountBox +
-              '<span>' + priceText + '</span>' + action + '</div>';
+              '<span class="gs-price">' + priceText + '</span>' + action + '</div>';
           }).join("") +
-            '<p style="font:11px system-ui,sans-serif;color:#9ca3af">Sold by <a href="' + esc(s.group.url) + '" style="color:#7c5cff">' + esc(s.group.name) + '</a>' +
+            '<div class="gs-cart" data-cart></div>' +
+            '<p class="gs-note" style="font:' + V.tiny + ';color:' + V.faint + '">Sold by <a href="' + esc(s.group.url) + '" style="color:' + V.accent + '">' + esc(s.group.name) + '</a>' +
             (s.checkout && s.checkout.shipping ? ' \u00b7 Shipping address collected at checkout' : '') +
             (s.checkout && s.checkout.promoCodes ? ' \u00b7 Have a promo code? Enter it at checkout' : '') + '</p>';
+          // A basket kept from a previous visit can name an item the shop has
+          // since withdrawn or sold out. Drop those lines rather than carry a
+          // row the checkout would refuse, then draw what is left.
+          var before = cart.length;
+          cart = cart.filter(function (l) {
+            var it = itemById(l.item);
+            return !!it && it.soldOut !== true;
+          });
+          if (cart.length !== before) cartChanged(); else renderCart();
         })
         .catch(function () {
           clearTimeout(timer);
@@ -197,7 +330,38 @@ payments:
         });
     };
     el.addEventListener("click", function (e) {
-      var a = e.target && e.target.closest ? e.target.closest("a[data-item]") : null;
+      var t = e.target;
+      // The basket's own controls first: a step, a remove, or the one Checkout
+      // that takes every line at once.
+      var btn = t && t.closest ? t.closest("button[data-inc],button[data-dec],button[data-del],button[data-checkout]") : null;
+      if (btn) {
+        var inc = btn.getAttribute("data-inc"), dec = btn.getAttribute("data-dec"), del = btn.getAttribute("data-del");
+        if (del !== null) { cart.splice(Number(del), 1); cartChanged(); return; }
+        if (inc !== null || dec !== null) {
+          var at = Number(inc !== null ? inc : dec);
+          var line = cart[at];
+          if (!line) return;
+          // One fewer than one is no line at all — the same thing the \u00d7 does.
+          if (inc === null && line.quantity <= 1) { cart.splice(at, 1); cartChanged(); return; }
+          var itc = itemById(line.item);
+          var cap = (itc && typeof itc.stock === "number" && itc.stock > 0) ? Math.min(100, itc.stock) : 100;
+          line.quantity = Math.max(1, Math.min(cap, line.quantity + (inc !== null ? 1 : -1)));
+          cartChanged();
+          return;
+        }
+        cartError("");
+        btn.disabled = true;
+        btn.textContent = "Opening\u2026";
+        checkout(cart.slice(0)).catch(function (err) {
+          btn.disabled = false;
+          btn.textContent = "Checkout";
+          // The platform's own words — sold out, a choice the item does not
+          // offer, too many lines — so the buyer is told what to change.
+          cartError((err && err.message) || "Checkout failed");
+        });
+        return;
+      }
+      var a = t && t.closest ? t.closest("a[data-item]") : null;
       var s = store;
       if (!a || !s || !s.checkout.enabled) return;
       e.preventDefault();
@@ -210,9 +374,24 @@ payments:
       // the seller can fulfil it. A variant that costs more is a separate item.
       var sel = el.querySelector('[data-option-for="' + itemId + '"]');
       var variant = sel ? sel.value : (a.getAttribute("data-variant") || "");
-      if (sel && !variant) { sel.focus(); sel.style.borderColor = "#dc2626"; return; }
+      if (sel && !variant) { sel.focus(); sel.style.borderColor = V.bad; return; }
       var qtyBox = el.querySelector('[data-qty-for="' + itemId + '"]');
       var quantity = qtyBox ? Math.max(1, Math.min(100, Math.round(parseFloat(qtyBox.value) || 1))) : 1;
+      // ADD (2026-09-06): into the basket, and the page stays where it is. Only
+      // a multi-item shop draws these; a single-item one goes straight to the
+      // card checkout below, exactly as it did before the cart existed.
+      if (a.getAttribute("data-add")) {
+        var amt = el.querySelector('[data-amount-for="' + itemId + '"]');
+        var named = amt && amt.value ? Math.round(parseFloat(amt.value) * 100) : null;
+        var added = addToCart({ item: itemId, quantity: quantity, variant: variant, amountCents: (named && named > 0) ? named : undefined });
+        cartError(added ? "" : "That is as many different things as one order can hold.");
+        if (added) {
+          var was = a.textContent;
+          a.textContent = "Added";
+          setTimeout(function () { a.textContent = was; }, 1200);
+        }
+        return;
+      }
       a.textContent = "Opening\u2026";
       // PAY WHAT YOU WANT (2026-09-05): the amount the buyer typed, in cents.
       // Sent only when there is a box — a fixed-price item ignores it server-side
