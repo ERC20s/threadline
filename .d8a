@@ -226,7 +226,6 @@ login:
   redirect = https://verkl.com/
   redirect = https://verkl.com/account.html
   redirect = https://verkl.com/account
-  redirect = http://localhost:5077/account.html
   <!-- Login with D8A: accounts on this site with nothing secret on it. The script
        signs a visitor in with their D8A account (PKCE — no password ever touches
        this page) and brings them back to THIS page, which must therefore be one of
