@@ -214,15 +214,102 @@ items:
 server:
   host = verkl.com
 
-# login: — "Login with D8A" for this group's site. Paste the script where the
-# site's page loads; the client id is not a secret. Sign-in returns ONLY to a
-# redirect line (exact match — set on the group's Admin tab) and needs PKCE (S256).
+# login: — "Login with D8A": accounts on this group's site, with nothing secret
+# on the site. A visitor signs in with their D8A account; the site learns a
+# stable code for them, and what they buy here through the payments: block
+# while signed in is kept on their account — listed and redeemable once. The
+# client id is public by design (PKCE stands in for a secret). Sign-in returns
+# ONLY to a redirect line (exact match — set on the group's Admin tab), so the
+# page carrying the block below must be one. Paste it where the account page
+# is: the script, then the account panel — sign in, who is signed in, purchases.
 login:
   redirect = https://verkl.com/
-  <!-- Login with D8A: d8aLogin.signIn() to start, d8aLogin.user() for who is
-       signed in, d8aLogin.purchases() for what they bought here and
-       d8aLogin.redeem(orderId) to hand it over once. -->
+  redirect = https://verkl.com/account.html
+  redirect = https://verkl.com/account
+  redirect = http://localhost:5077/account.html
+  <!-- Login with D8A: accounts on this site with nothing secret on it. The script
+       signs a visitor in with their D8A account (PKCE — no password ever touches
+       this page) and brings them back to THIS page, which must therefore be one of
+       the redirect lines above. Then: d8aLogin.signIn() to start, d8aLogin.user()
+       for who is signed in (key your own data on .sub — it never changes),
+       d8aLogin.purchases() for what they bought here while signed in,
+       d8aLogin.redeem(orderId) to hand one purchase over ONCE, d8aLogin.signOut()
+       to leave. Load it ABOVE the payments: block so a signed-in buyer's order is
+       bound to their account. -->
   <script src="https://d8a.com/d8a-login.js" data-client="d8a_app_b3a35968bf907e64"></script>
+  <!-- The account panel: a Sign in button; once signed in, who they are and every
+       purchase from this shop with a Redeem button each. Paste it where the
+       account page is and restyle freely. Redeeming fires "d8a-login:redeemed" on
+       document with the platform's answer ({ already, purchase }) — grant the
+       download, the code, the role in that handler, exactly as "group-store:paid"
+       releases a sale. -->
+  <div id="d8a-account"></div>
+  <script>
+  (function () {
+    var el = document.getElementById("d8a-account");
+    var login = window.d8aLogin;
+    if (!el || !login) return;
+    var esc = function (s) {
+      return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; });
+    };
+    var F = "font:14px system-ui,sans-serif";
+    var BTN = "font:inherit;background:#7c5cff;color:#fff;border:0;border-radius:999px;padding:6px 14px;cursor:pointer";
+    var LINK = "font:inherit;color:#7c5cff;background:none;border:0;padding:0;cursor:pointer;text-decoration:underline";
+    var draw = function () {
+      var u = login.user();
+      if (!u) {
+        el.innerHTML = '<p style="' + F + '"><button type="button" data-d8a-signin style="' + BTN + '">Sign in with D8A</button>' +
+          ' <span style="font-size:12px;color:#6b7280">What you buy here is kept on your account.</span></p>';
+        return;
+      }
+      var who = u.preferred_username ? "@" + u.preferred_username : (u.name || "you");
+      el.innerHTML = '<p style="' + F + '">' +
+        (u.picture ? '<img src="' + esc(u.picture) + '" alt="" width="24" height="24" style="border-radius:50%;vertical-align:middle;margin-right:6px">' : '') +
+        'Signed in as <b>' + esc(who) + '</b> · <button type="button" data-d8a-signout style="' + LINK + '">Sign out</button></p>' +
+        '<div data-d8a-purchases style="' + F + ';color:#9ca3af">Loading your purchases…</div>';
+      var box = el.querySelector("[data-d8a-purchases]");
+      login.purchases().then(function (list) {
+        if (!list.length) {
+          box.innerHTML = '<p>Nothing bought here yet. Buy while signed in and it appears here.</p>';
+          return;
+        }
+        box.style.color = "";
+        box.innerHTML = list.map(function (o) {
+          var when = o.paidAt ? new Date(o.paidAt).toLocaleDateString() : "";
+          return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb">' +
+            '<div style="flex:1"><b>' + esc(o.itemName) + '</b>' + (o.quantity > 1 ? " ×" + o.quantity : "") +
+            (o.variant ? ' <span style="color:#6b7280">' + esc(o.variant) + '</span>' : '') +
+            '<div style="font-size:12px;color:#6b7280">' + esc(o.amount) + (when ? " · " + esc(when) : "") + ' · order ' + esc(o.id) + '</div></div>' +
+            (o.redeemed
+              ? '<span style="font-size:12px;color:#059669">Redeemed</span>'
+              : '<button type="button" data-d8a-redeem="' + esc(o.id) + '" style="' + BTN + '">Redeem</button>') +
+            '</div>';
+        }).join("");
+      }).catch(function () {
+        box.innerHTML = '<p>Your purchases could not be loaded. <button type="button" data-d8a-retry style="' + LINK + '">Try again</button></p>';
+      });
+    };
+    el.addEventListener("click", function (e) {
+      var t = e.target && e.target.closest ? e.target.closest("[data-d8a-signin],[data-d8a-signout],[data-d8a-redeem],[data-d8a-retry]") : null;
+      if (!t) return;
+      if (t.hasAttribute("data-d8a-signin")) { login.signIn(); return; }
+      if (t.hasAttribute("data-d8a-signout")) { login.signOut(); return; }
+      if (t.hasAttribute("data-d8a-retry")) { draw(); return; }
+      var id = t.getAttribute("data-d8a-redeem");
+      t.textContent = "Redeeming…";
+      login.redeem(id).then(function (r) {
+        // r.already is true when this order was handed over before (another
+        // device, an earlier visit) — grant it again only if your own records say
+        // the person never received it.
+        document.dispatchEvent(new CustomEvent("d8a-login:redeemed", { detail: r }));
+        draw();
+      }).catch(function () { t.textContent = "Redeem"; });
+    });
+    login.ready.then(draw);
+    document.addEventListener("d8a-login:signed-in", draw);
+    document.addEventListener("d8a-login:signed-out", draw);
+  })();
+  </script>
 
 url: https://verkl.com
 # run: — how to run it. Yours to edit; VS Code's ▶ (the VSD8A extension) launches each entry.
