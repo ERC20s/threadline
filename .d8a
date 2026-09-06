@@ -209,15 +209,20 @@ items:
   Rigid Denim Jacket = $118.00 — Raw 12oz denim that fades to your own pattern.
   Woven Shirt = $52.00 — Textured yarn-dyed cotton with a soft, lived-in hand.
 
-# login: — "Login with D8A" for this group's site. The client id is not a secret;
-# sign-in returns ONLY to a registered redirect (exact match) and needs PKCE (S256).
-# Load the script, call d8aLogin.signIn(); orders paid while signed in are listed
-# by d8aLogin.purchases(). Redirects are set on the group's Admin tab.
+# server: — where this project runs. Point a CNAME at this name; deploy to
+# it from the group's Admin tab.
+server:
+  host = verkl.com
+
+# login: — "Login with D8A" for this group's site. Paste the script where the
+# site's page loads; the client id is not a secret. Sign-in returns ONLY to a
+# redirect line (exact match — set on the group's Admin tab) and needs PKCE (S256).
 login:
-  client   = d8a_app_b3a35968bf907e64
-  issuer   = https://d8a.com
-  script   = https://d8a.com/d8a-login.js
   redirect = https://verkl.com/
+  <!-- Login with D8A: d8aLogin.signIn() to start, d8aLogin.user() for who is
+       signed in, d8aLogin.purchases() for what they bought here and
+       d8aLogin.redeem(orderId) to hand it over once. -->
+  <script src="https://d8a.com/d8a-login.js" data-client="d8a_app_b3a35968bf907e64"></script>
 
 url: https://verkl.com
 # run: — how to run it. Yours to edit; VS Code's ▶ (the VSD8A extension) launches each entry.
