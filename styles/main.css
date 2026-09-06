@@ -12,13 +12,52 @@
   --line:#e8e6f0;
   --tint:#faf9ff;
   --radius:10px;
+  /* The two surfaces every panel is drawn on: --page is behind the whole
+     document, --paper is a card, a table or a button sitting on it. They were
+     literal #fff until the dark theme below needed somewhere to intervene. */
+  --page:#fff;
+  --paper:#fff;
+  /* The studio the garments in scripts/garment.js stand in. */
+  --studio-1:#f4f2fb;
+  --studio-2:#e7e3f6;
+  --error:#b91c1c;
+  --ok:#059669;
+}
+
+/* ---------- dark ----------
+   One block, one job: repoint the tokens above. Nothing below this needs to
+   know which theme is on, because nothing below this names a colour that is
+   not a token — with one deliberate exception, #group-store, which stays a
+   light card because payments-widget.js writes its own inline #111 and
+   #6b7280 into it and this repository does not own that file. */
+@media (prefers-color-scheme:dark){
+  :root{
+    --accent:#a48bff;
+    --accent-dark:#c0aeff;
+    --ink:#eef0f6;
+    --muted:#a2a8b8;
+    --line:#2a2d3a;
+    --tint:#181a24;
+    --page:#101219;
+    --paper:#171a23;
+    --studio-1:#1c1f2b;
+    --studio-2:#12141c;
+    --error:#fca5a5;
+    --ok:#6ee7b7;
+  }
+  /* The photographs are lit for a white page; take a little glare off them. */
+  .thumb img,.look img,.media img{filter:brightness(0.92)}
 }
 
 *,*::before,*::after{box-sizing:border-box}
+/* .media img and friends set display:block, which outranks the user agent's
+   [hidden]{display:none} — the hidden photograph on product.html still took
+   its full height and pushed the view toggle 700px down the page. */
+[hidden]{display:none!important}
 html,body{height:100%}
 body{
   font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-  margin:0;padding:24px;color:var(--ink);background:#fff;
+  margin:0;padding:24px;color:var(--ink);background:var(--page);
   display:flex;justify-content:center;line-height:1.55;
 }
 .main{width:100%;max-width:var(--max-width)}
@@ -47,7 +86,7 @@ a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid rgb
 /* ---------- hero ---------- */
 .hero{
   display:block;padding:28px;border-radius:var(--radius);
-  background:linear-gradient(180deg,var(--tint),#fff);border:1px solid var(--line);margin-bottom:26px;
+  background:linear-gradient(180deg,var(--tint),var(--paper));border:1px solid var(--line);margin-bottom:26px;
 }
 .hero h1{margin:0 0 10px;font-size:1.7rem}
 .hero p{margin:0;color:var(--muted);max-width:52ch}
@@ -62,7 +101,7 @@ a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid rgb
 }
 .btn:hover{background:var(--accent-dark);border-color:var(--accent-dark);text-decoration:none}
 .btn[disabled],.btn[aria-disabled="true"]{opacity:0.5;cursor:not-allowed}
-.btn-ghost{background:#fff;color:var(--accent)}
+.btn-ghost{background:var(--paper);color:var(--accent)}
 .btn-ghost:hover{background:var(--tint);color:var(--accent-dark)}
 
 /* ---------- section headings ---------- */
@@ -77,16 +116,27 @@ a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid rgb
 .kicker a:hover,.kicker a:focus-visible{color:var(--accent);text-decoration:underline}
 .note{margin:0 0 16px;color:var(--muted);font-size:0.95rem}
 
-/* ---------- product grid ---------- */
-.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--gap);margin-top:18px}
-.card{display:flex;flex-direction:column;gap:10px;text-decoration:none;color:inherit;border-radius:var(--radius)}
+/* ---------- product grid ----------
+   The columns used to be counted by hand — two, then four above 900px — which
+   meant a 360px phone got two 150px cards and a card's blurb ("An easy
+   overshirt-weight button-down…") ran straight out of its column, because a
+   grid item's default min-width:auto lets content overflow its track. The
+   track now names a minimum instead of a count, so the browser fits as many
+   as the width really holds, and every card is allowed to be narrower than
+   its longest word. */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,140px),1fr));gap:var(--gap);margin-top:18px}
+.card{display:flex;flex-direction:column;gap:10px;text-decoration:none;color:inherit;border-radius:var(--radius);min-width:0}
 .card:hover{text-decoration:none}
 .card:hover .name{color:var(--accent)}
 .thumb{border-radius:var(--radius);overflow:hidden;background:var(--tint);aspect-ratio:9/11}
 .thumb img,.thumb svg{display:block;width:100%;height:100%;object-fit:cover}
-.card-body{display:flex;flex-direction:column;gap:4px}
-.name{font-weight:700;margin:0;font-size:1rem}
-.card-blurb{margin:0;color:var(--muted);font-size:0.88rem}
+/* A card showing a drawn garment (scripts/garment.js) instead of a photograph
+   takes its height from the garment's own proportions rather than from the
+   9/11 crop a photograph needed. */
+.thumb-garment{aspect-ratio:auto;background:none}
+.card-body{display:flex;flex-direction:column;gap:4px;min-width:0}
+.name{font-weight:700;margin:0;font-size:1rem;overflow-wrap:break-word}
+.card-blurb{margin:0;color:var(--muted);font-size:0.88rem;overflow-wrap:break-word}
 .price{color:var(--ink);font-weight:700}
 .actions{margin-top:18px;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
 
@@ -102,7 +152,7 @@ a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid rgb
 .sizes{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 4px}
 .size{
   display:inline-flex;align-items:center;justify-content:center;min-width:48px;
-  padding:9px 14px;border-radius:999px;border:1px solid var(--line);background:#fff;
+  padding:9px 14px;border-radius:999px;border:1px solid var(--line);background:var(--paper);
   color:var(--ink);font:inherit;font-weight:600;cursor:pointer;
 }
 .size:hover{border-color:var(--accent)}
@@ -110,32 +160,150 @@ a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid rgb
 .field-label{display:block;font-weight:700;margin-bottom:2px}
 .hint{color:var(--muted);font-size:0.86rem;margin:6px 0 0}
 .status{margin:10px 0 0;font-size:0.92rem;min-height:1.2em}
-.status[data-tone="error"]{color:#b91c1c}
-.status[data-tone="ok"]{color:#059669}
+.status[data-tone="error"]{color:var(--error)}
+.status[data-tone="ok"]{color:var(--ok)}
 .breadcrumb{font-size:0.86rem;color:var(--muted);margin:0 0 8px}
 .breadcrumb a{color:var(--muted)}
+
+/* ---------- the garments, drawn (scripts/garment.js) ----------
+   A stage with perspective, a scene that turns inside it, and four planes at
+   different depths: the back of the garment, the body carrying the fabric,
+   the sleeves, and the seams and buttons nearest the viewer. Everything the
+   script does is write --g3d-rx and --g3d-ry; the depth and the easing are
+   here. */
+.g3d{
+  position:relative;width:100%;aspect-ratio:400/560;
+  perspective:1100px;
+  border-radius:var(--radius);
+  background:radial-gradient(120% 90% at 50% 18%,var(--studio-1),var(--studio-2));
+  /* A turned garment swings wider than the studio it stands in, and on the
+     product page that put a sleeve over the size buttons. Clipped to the
+     frame instead — Chrome, Firefox and Safari all keep preserve-3d working
+     on the scene inside, because the perspective and the clip are here on
+     the stage rather than on the scene itself. */
+  overflow:hidden;
+  /* A vertical drag on a phone is a scroll, not a rotation. */
+  touch-action:pan-y;
+}
+.g3d-scene{
+  position:absolute;inset:0;
+  transform-style:preserve-3d;
+  transform:rotateX(var(--g3d-rx,0deg)) rotateY(var(--g3d-ry,0deg));
+  transition:transform 380ms cubic-bezier(0.22,0.61,0.36,1);
+}
+.g3d-layer{position:absolute;inset:0;transform-style:preserve-3d}
+.g3d-layer svg{display:block;width:100%;height:100%;overflow:visible}
+/* Pushed back by 26px, so scaled up by (perspective+26)/perspective to keep
+   the silhouette the same size on screen. */
+.g3d-layer-back{transform:translateZ(-26px) scale(1.008);opacity:0.95}
+.g3d-layer-body{transform:translateZ(0)}
+.g3d-layer-front{transform:translateZ(18px) scale(0.984)}
+.g3d-layer-detail{transform:translateZ(28px) scale(0.975)}
+/* The garment stands on something: a soft ellipse lying flat on the floor. */
+.g3d-floor{
+  position:absolute;left:16%;right:16%;bottom:2%;height:7%;
+  background:radial-gradient(ellipse at 50% 50%,rgba(15,23,42,0.34),rgba(15,23,42,0) 70%);
+  transform:translateZ(-46px) rotateX(74deg);
+}
+/* ---- the same garment, as a mesh (scripts/garment3d.js) ----
+   The WebGL frame is copied into this canvas, one per garment, because a
+   page may show a dozen of them and a browser hands out far fewer WebGL
+   contexts than that. It fades in over the SVG scene and only then is the
+   SVG stood down, so there is never a moment with nothing on screen. */
+.g3d-gl{
+  position:absolute;inset:0;width:100%;height:100%;display:block;
+  opacity:0;transition:opacity 220ms ease;
+}
+.g3d-gl.is-ready{opacity:1}
+.g3d[data-mode="webgl"] .g3d-scene{visibility:hidden}
+@media (prefers-reduced-motion:reduce){
+  .g3d-gl{transition:none}
+}
+
+.g3d-card{cursor:pointer}
+.g3d-card .g3d-layer-front{transform:translateZ(11px) scale(0.99)}
+.g3d-card .g3d-layer-detail{transform:translateZ(17px) scale(0.985)}
+/* The product page's copy: bigger, draggable, and focusable for the arrow
+   keys the script binds. */
+.g3d-full{cursor:grab}
+.g3d-full:active{cursor:grabbing}
+.g3d-full:focus-visible{outline:3px solid rgba(124,92,255,0.35);outline-offset:4px}
+/* Someone who asked for less movement gets a garment that does not chase the
+   pointer (scripts/garment.js skips that listener) and does not ease into a
+   new angle. A drag or an arrow key still turns it — that movement was asked
+   for — it simply arrives at once. */
+@media (prefers-reduced-motion:reduce){
+  .g3d-scene{transition:none}
+}
+/* The controls above the product-page garment: 3D or the fabric it is cut
+   from, and a line saying the thing can be turned. */
+/* A look, drawn: the garments it wears on one rail, the middle one nearest.
+   --rack-depth counts how far a slot is from the centre; how far a garment
+   turns away is written onto the garment itself, not onto its slot, so the
+   mesh renderer turns the piece rather than skewing a picture of it. */
+.look-rack{
+  display:flex;align-items:center;justify-content:center;
+  aspect-ratio:16/11;
+  background:radial-gradient(120% 90% at 50% 20%,var(--studio-1),var(--studio-2));
+  perspective:900px;
+}
+/* Each garment is sized from the rail's height and then overlapped: two or
+   three 400x560 pieces standing clear of each other would be thumbnails
+   floating in a lot of empty studio. How far they overlap depends on how many
+   are on the rail. Note the margins are percentages of the rail's width, not
+   of the garment's own, so they read smaller than the overlap they buy. */
+.look-rack-item{
+  flex:0 0 auto;height:90%;aspect-ratio:400/560;margin:0 -2%;
+  transform:translateZ(calc(var(--rack-depth,0) * -34px));
+  filter:brightness(calc(1 - var(--rack-depth,0) * 0.08));
+}
+.look-rack[data-count="3"] .look-rack-item{height:80%;margin:0 -3.5%}
+/* The negative margins are for the gaps between garments, not for the ends of
+   the rail — left on the outer edges they hang the first and last piece over
+   the side of the figure, which clips them. */
+.look-rack-item:first-child{margin-left:0}
+.look-rack-item:last-child{margin-right:0}
+.look-rack-item svg{display:block;width:100%;height:100%;overflow:visible}
+/* Each piece on the rail is a full garment stage, so the mesh renderer picks
+   it up the same way it picks up a card. */
+.look-rack-item .g3d{width:100%;height:100%;aspect-ratio:auto;background:none;border-radius:0}
+/* The centre slot sits on top of the ones leaning away from it. */
+.look-rack[data-count="2"] .look-rack-item:first-child,
+.look-rack[data-count="3"] .look-rack-item:nth-child(2){position:relative;z-index:2}
+
+.media-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0 0}
+.media-tools .hint{margin:0}
+.view-toggle{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:var(--paper)}
+.view-toggle button{
+  font:inherit;font-weight:600;font-size:0.84rem;border:0;background:none;color:var(--muted);
+  padding:7px 14px;cursor:pointer;
+}
+.view-toggle button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.view-toggle button:focus-visible{outline:3px solid rgba(124,92,255,0.35);outline-offset:-3px}
 
 /* ---------- store panel (payments widget) ---------- */
 .store-panel{margin-top:22px;padding:16px;border:1px solid var(--line);border-radius:var(--radius);background:var(--tint)}
 .store-panel h2,.store-panel h3{margin:0 0 6px;font-size:1rem}
 .store-panel p{margin:0 0 8px;color:var(--muted);font-size:0.88rem}
-#group-store{background:#fff;border-radius:8px;padding:8px 12px}
+#group-store{background:#fff;color:#111;border-radius:8px;padding:8px 12px}
 
 /* ---------- about / contact / lookbook ---------- */
 .about{display:grid;gap:18px;margin-top:18px}
 .about p{margin:0 0 10px;color:var(--muted)}
 .values{list-style:none;margin:0;padding:0;display:grid;gap:12px}
-.values li{padding:14px;border:1px solid var(--line);border-radius:var(--radius);background:#fff}
+.values li{padding:14px;border:1px solid var(--line);border-radius:var(--radius);background:var(--paper)}
 .values strong{display:block;margin-bottom:4px;color:var(--ink)}
 .contact{margin-top:18px;padding:18px;border-radius:var(--radius);background:var(--tint);border:1px solid var(--line)}
 .contact p{color:var(--muted)}
 .contact dl{display:grid;gap:6px;margin:12px 0 0}
 .contact dt{font-weight:700;font-size:0.86rem}
 .contact dd{margin:0 0 8px;color:var(--muted);font-size:0.92rem}
-.lookbook{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--gap);margin-top:18px}
+.lookbook{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:var(--gap);margin-top:18px}
 .look{margin:0;border-radius:var(--radius);overflow:hidden;background:var(--tint)}
 .look img{display:block;width:100%;height:100%;object-fit:cover;aspect-ratio:4/5}
-.look figcaption{padding:10px 12px;font-size:0.86rem;color:var(--muted);background:#fff}
+/* The product-page garment stage sits where the photograph used to. */
+.media-stage{width:100%}
+.look figcaption{padding:10px 12px;font-size:0.86rem;color:var(--muted);background:var(--paper)}
 /* Every piece a look wears gets its own link and its catalogue price
    (rendered by Threadline.renderLooks in scripts/products.js). */
 .look-note{display:block;margin-bottom:6px}
@@ -148,7 +316,7 @@ a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid rgb
 
 /* ---------- size guide ---------- */
 .table-wrap{overflow-x:auto;margin-top:14px}
-table{border-collapse:collapse;width:100%;font-size:0.94rem;background:#fff}
+table{border-collapse:collapse;width:100%;font-size:0.94rem;background:var(--paper)}
 caption{text-align:left;font-weight:700;padding:10px 0;color:var(--ink)}
 th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left}
 thead th{background:var(--tint);font-size:0.8rem;letter-spacing:0.6px;text-transform:uppercase;color:var(--muted)}
@@ -159,7 +327,7 @@ tbody tr:hover{background:var(--tint)}
 .guide-jump{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px}
 .guide-jump a{
   font-size:0.82rem;font-weight:600;text-decoration:none;color:var(--accent);
-  border:1px solid var(--line);border-radius:999px;padding:5px 12px;background:#fff
+  border:1px solid var(--line);border-radius:999px;padding:5px 12px;background:var(--paper)
 }
 .guide-jump a:hover{border-color:var(--accent)}
 /* An anchored section should not sit flush against the top of the window. */
@@ -172,6 +340,20 @@ footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);color:v
 .footer-cols ul{list-style:none;margin:0;padding:0;display:grid;gap:4px}
 
 /* ---------- wide screens ---------- */
+/* On a phone the page margin and the gutter are worth more as card width:
+   at 24px of padding and an 18px gap a 360px screen has room for one card,
+   and one card per row makes the collection a very long scroll. */
+@media(max-width:559px){
+  :root{--gap:12px}
+  body{padding:16px}
+}
+@media(min-width:560px){
+  /* Past a phone the cards can afford to be generous: a 220px floor keeps
+     the collection at four across on a 1080px page, where the 150px floor
+     above would fit six thin ones. Below this the floor stays small, so a
+     narrow screen gets two cards per row rather than one enormous one. */
+  .grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr))}
+}
 @media(min-width:760px){
   .about{grid-template-columns:1.2fr 1fr}
   .values{grid-template-columns:1fr}
@@ -180,8 +362,6 @@ footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);color:v
 }
 @media(min-width:900px){
   body{padding:32px}
-  .grid{grid-template-columns:repeat(4,1fr)}
-  .lookbook{grid-template-columns:repeat(3,1fr)}
   .hero{display:flex;align-items:center;justify-content:space-between;gap:28px;padding:40px}
   .hero h1{font-size:2rem}
   .product{grid-template-columns:1.1fr 1fr;align-items:start;gap:36px}

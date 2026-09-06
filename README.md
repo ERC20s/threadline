@@ -38,8 +38,8 @@ link when it does.
 | --- | --- |
 | `index.html` | Landing page: header and nav, hero, featured products reconciled with the live shop, the group shop panel, about, size-guide link, contact, footer |
 | `products.html` | The catalogue: all pieces in a responsive grid with a category filter, each card links to `product.html?id=<id>` |
-| `product.html` | One piece, chosen with the `?id=` query parameter (`/product/<id>` and `#<id>` also resolve): photo, description, details, size selection, Buy |
-| `lookbook.html` | Six looks rendered from the catalogue, every piece named in a look linked with its price |
+| `product.html` | One piece, chosen with the `?id=` query parameter (`/product/<id>` and `#<id>` also resolve): the garment as a lit 3D mesh you can drag to turn (with a Garment / Fabric toggle), description, details, size selection, Buy |
+| `lookbook.html` | Six looks rendered from the catalogue: each is a rail of the garments it wears, drawn, and every piece named is linked with its price |
 | `size-guide.html` | Body measurements, garment measurements (tops, bottoms, dresses, outerwear and knitwear), the one-size pieces and how to measure |
 
 ## How it fits together
@@ -49,7 +49,10 @@ link when it does.
   or reprice a garment there and every page follows — and list it for sale in the
   `items:` block of the root `.d8a` in the same change, with the same name and
   price, because that block is what the group actually sells. Images are placeholder URLs
-  (picsum.photos, seeded) — replace the `image` values with real photography.
+  (picsum.photos, seeded); `scripts/garment.js` wraps them onto a drawn garment
+  rather than passing them off as one, so a piece with no photography still
+  looks like the thing it is. Replace the `image` values with real photography
+  when there is some — nothing else has to change.
 - Which piece `product.html` shows is decided by
   `Threadline.productIdFromLocation(location)` in `scripts/products.js`. Every
   link the site builds is `productUrl(p)` — `product.html?id=<id>` — so the query
@@ -96,6 +99,120 @@ link when it does.
   advertises a helper that is not defined — the way the whole site went blank
   when `productUrl`, `categories`, `related` and `looks` were lost from
   `scripts/products.js`.
+- `scripts/garment.js` draws the garments. The `image` values in the
+  catalogue are placeholder photographs (picsum, seeded), so a card that
+  simply showed one was a picture of the wrong thing: a sunset stood in for
+  the Everyday Tee and a night skyline for the Relaxed Shirt. This file draws
+  the piece in its own shape instead and wraps that photograph onto it as the
+  cloth. It runs on every page that shows a piece — the grids, the product
+  page and the lookbook — and it must be loaded **after** `scripts/products.js`,
+  which assigns `window.Threadline` outright and would wipe these helpers.
+  Its surface: `garmentShape(product)`, `garment3d(product, opts)` (the
+  layered scene), `garmentSVG(product)` (one flat `<svg>`), `renderGarment(el,
+  product)`, `lookRack(pieces)` and `GARMENT_SHAPES`.
+
+  What is drawn is four planes in a `transform-style: preserve-3d` scene —
+  the rear panel, the body carrying the cloth through a clip path, the
+  sleeves, and the seams, buttons and cuffs nearest the viewer — so the
+  sleeves and the collar move against the body as it turns. It turns towards
+  the pointer on the product page, follows a drag, and answers the arrow keys
+  (Home or Escape re-centres it). `prefers-reduced-motion` takes away the
+  hover chase and the easing and nothing else: a drag or an arrow key is the
+  reader's own doing and still turns the garment.
+
+  Geometry is parametric, not eleven hand-drawn silhouettes: one torso builder
+  takes shoulder, chest, waist and hem half-widths plus a sleeve length and
+  returns the torso and the two sleeves as separate paths, so every top — tee,
+  longsleeve, shirt, overshirt, knit, hoodie, jacket, dress — is that builder
+  with different numbers and a fix to the armhole fixes all of them. Pants,
+  the cap and the scarf have their own small builders. Which shape a piece is
+  drawn as comes from `GARMENT_SHAPES`, keyed by catalogue id, with the
+  category as the fallback: **a new garment needs a line there in the same
+  change**, and `tests/payments-widget.test.html` fails
+  (`garment-shape-per-piece`) if one is missing. `garment-every-piece-drawn`
+  fails if any catalogue entry does not render a body path and its cloth, and
+  `garment-clip-ids-unique` guards the per-instance clip ids — two cards in
+  one grid sharing an id would make the second wear the first's shape.
+
+  Everything is built with `createElementNS`, never `innerHTML`, and every
+  page keeps a fallback: with `garment.js` absent the cards render the plain
+  `<img>` they always did, the lookbook renders its placeholder photograph,
+  and `product.html` shows the photograph with no toggle.
+
+- `scripts/garment3d.js` builds the same garments as real geometry, with
+  three.js. The SVG renderer stacks flat panels on parallel planes, which is a
+  good trick but still a trick; this one lofts a torso with a front, a back
+  and two sides, tubes for the sleeves, a shell for a hood, and lights the lot
+  in a scene. Turning one turns an object.
+
+  It is an **upgrade, never a requirement**. `garment.js` draws first and this
+  module runs after it, replacing the SVG scene inside a stage only once the
+  mesh and its texture are both ready — and only then is the drawing stood
+  down (`.g3d[data-mode="webgl"]`), so there is never a moment with nothing on
+  screen. No WebGL, a texture the image host will not share cross-origin, a
+  lost context: every one of those leaves the drawn garment exactly where it
+  was. That is the whole reason `garment.js` is still the renderer every page
+  loads first, and why it must stay.
+
+  Geometry is parametric here too. `loft()` skins a stack of rings — half
+  width, half depth, roundness, centre offset — smoothed with a Catmull-Rom;
+  a torso, a sleeve, a trouser leg and a dress skirt are all that one
+  function. `surface()` is a parametric patch for the rest: a hood, a cap
+  crown and peak, a scarf. The shapes live in `SHAPES`, keyed exactly as
+  `Threadline.garmentShape` keys the drawings, so the two renderers can never
+  disagree about what a piece is. **A garment added to the catalogue needs a
+  shape in `garment.js` and rings here, under the same key** — the
+  `garment3d-shapes-cover-catalogue` assertion fails if the second is missing,
+  because without it the piece is quietly built as a tee.
+
+  UVs are the interesting part. Cloth is cut flat and then wrapped, so `u`
+  runs by **arc length** around each ring rather than by x — no pinching where
+  the surface turns away from the viewer — and it runs as a triangle wave, so
+  the whole photograph lies across the front and again, mirrored, across the
+  back. That is what an all-over print looks like. Trims are cut from the
+  cloth they sit on (`bodyUVRect`): without that a chest pocket carries a
+  complete copy of the picture shrunk to pocket size.
+
+  One `WebGLRenderer` serves the whole page. A browser hands out roughly a
+  dozen WebGL contexts before it starts discarding the oldest, and the shop
+  page wants thirteen garments at once, so the shared renderer draws into its
+  own canvas and every view copies that frame into a plain 2D canvas of its
+  own. Frames are drawn **on demand** — turned, resized, first revealed —
+  never on a loop, and a garment is not built at all until it is near the
+  viewport.
+
+  Input is not duplicated. `garment.js` owns the pointer, the drag and the
+  arrow keys and calls `stage.__garmentTurn(rx, ry)` on every change; this
+  module installs that hook. One input implementation, two renderers, and the
+  `garment3d-turn-reaches-the-mesh` assertion holds them together.
+
+  Two doors exist for callers that cannot wait for the browser:
+  `Threadline.garment3dNow(stage)` builds and draws one stage immediately, and
+  `Threadline.garment3dDraw()` draws every garment waiting for a frame. A tab
+  that is not the visible one is given neither IntersectionObserver callbacks
+  nor animation frames — right for a shop opened in a background tab, fatal
+  for a test page, which usually is not the visible tab either.
+
+- `vendor/three.module.min.js` is three.js r160, checked in rather than pulled
+  from a CDN, with its MIT licence beside it in `vendor/three.LICENSE`. The
+  promise at the top of this file is that serving the folder is enough; a shop
+  whose product images go flat when someone else's CDN is unreachable would
+  not keep it. It is the only third-party code here, it is loaded by exactly
+  one file, and there is still no build step: `garment3d.js` is a
+  `<script type="module">`, which is also why it always runs after the classic
+  scripts that build `window.Threadline`.
+
+- `styles/main.css` also carries a dark theme. The palette is a block of
+  custom properties on `:root` and a `prefers-color-scheme: dark` block that
+  repoints them; nothing else in the file names a colour that is not a token,
+  with one deliberate exception. `#group-store` stays a light card because
+  `payments-widget.js` writes inline `#111` and `#6b7280` into it and this
+  repository does not own that file — so keep new rules on the tokens.
+  The product grid names a minimum track width rather than a column count
+  (`repeat(auto-fill, minmax(…))`, 150px on a phone and 220px from 560px up),
+  which is what stopped a card's blurb running out of its column on a narrow
+  screen; `.card` carries `min-width:0` for the same reason.
+
 - `styles/main.css` is the only stylesheet; every page links it. No frameworks.
   `styles/size-guide.css` is retired and simply imports `main.css`.
 - `payments-widget.js` is the group's shop widget. Pages that sell carry the
@@ -210,6 +327,23 @@ Read-only shop fallback (opt-in, on for the home and product pages)
   outage wording, that no fallback row carries `data-item`, that a
   `[data-d8a-retry]` button is present, that `storePanelFailed()` sees it, and
   that clicking it re-fetches and renders the live row.
+
+## Running the tests
+
+Serve the repository root and open `tests/payments-widget.test.html`. It is a
+browser-run suite: every assertion prints PASS or FAIL on the page, and the
+fixtures mock `fetch`, so nothing leaves the machine.
+
+The fixture items deliberately carry pay URLs that point back at the test page
+with a fragment. They used to be absolute `d8a.com` URLs, and because the
+checkout mock never settles the widget reached its href fallback and the
+browser left for `d8a.com/pay/c1` — taking every result on the page with it, so
+the suite could not actually be read. Nothing asserts on those URLs; they only
+have to be somewhere the widget is willing to send a shopper.
+
+`tests/product-page-sanity.test.html` is the other, smaller guardrail: it
+fetches `product.html` and `scripts/cart.js` as text and checks for markers a
+past change removed by accident.
 
 .d8a declares the group, the run entry and the payments block. Do not hand-edit
 its generated blocks.
