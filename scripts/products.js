@@ -473,15 +473,25 @@
        live shop panel (Threadline.shopPriceIndex). */
     a.dataset.productId = p.id;
 
+    /* The picture on a card is the garment itself, drawn by scripts/garment.js
+       with this entry's `image` wrapped onto it as the cloth. The photographs
+       in this file are placeholders — a sunset stood in for the tee — so a
+       card that simply showed one was a picture of the wrong thing. The plain
+       <img> stays as the fallback for a page that does not load garment.js. */
     var thumb = document.createElement("div");
     thumb.className = "thumb";
-    var image = document.createElement("img");
-    image.src = p.image;
-    image.alt = p.alt || p.name;
-    image.loading = "lazy";
-    image.width = 900;
-    image.height = 1100;
-    thumb.appendChild(image);
+    if (typeof global.Threadline !== "undefined" && global.Threadline.garment3d) {
+      thumb.className = "thumb thumb-garment";
+      thumb.appendChild(global.Threadline.garment3d(p, { detail: "card" }));
+    } else {
+      var image = document.createElement("img");
+      image.src = p.image;
+      image.alt = p.alt || p.name;
+      image.loading = "lazy";
+      image.width = 900;
+      image.height = 1100;
+      thumb.appendChild(image);
+    }
     a.appendChild(thumb);
 
     var body = document.createElement("div");
@@ -529,13 +539,25 @@
     fig.className = "look";
     fig.dataset.look = look.seed;
 
-    var image = document.createElement("img");
-    image.src = look.image;
-    image.alt = look.alt || "";
-    image.loading = "lazy";
-    image.width = 800;
-    image.height = 1000;
-    fig.appendChild(image);
+    /* The picture of a look is the pieces it wears, drawn on a rail by
+       scripts/garment.js — the caption below names the same garments, so the
+       two finally agree. The placeholder photograph is the fallback for a page
+       that does not load garment.js. */
+    var rack = (typeof global.Threadline !== "undefined" && global.Threadline.lookRack)
+      ? global.Threadline.lookRack(look.pieces)
+      : null;
+
+    if (rack) {
+      fig.appendChild(rack);
+    } else {
+      var image = document.createElement("img");
+      image.src = look.image;
+      image.alt = look.alt || "";
+      image.loading = "lazy";
+      image.width = 800;
+      image.height = 1000;
+      fig.appendChild(image);
+    }
 
     var caption = document.createElement("figcaption");
 

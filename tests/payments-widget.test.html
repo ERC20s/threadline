@@ -144,6 +144,19 @@
         }
       } catch (e) {}
 
+      // A pay URL that cannot take this page away.
+      //
+      // Every fixture item used to carry an absolute payUrl on d8a.com. The
+      // widget falls back to that href whenever a checkout POST does not answer
+      // with a url — and the checkout mock below deliberately never settles, so
+      // its timeout reached that fallback and the browser left for
+      // d8a.com/pay/c1, taking every result on this page with it: the suite
+      // could not be read in a browser at all. Nothing here asserts on these
+      // URLs; they only have to be somewhere the widget is willing to send a
+      // shopper. This page plus a fragment is exactly that, and a fragment
+      // navigation leaves the document — and the results — in place.
+      var payUrl = function (id) { return location.pathname + location.search + "#pay-" + id; };
+
       // items endpoint
       if (url.indexOf('/api/v1/store/items') !== -1) {
         var g = (url.match(/[?&]group=([^&]+)/) || [])[1] || '';
@@ -151,7 +164,7 @@
         // retry-group: first call fails (network reject), second call succeeds
         if (g === 'retry-group') {
           callState['retry-group']++; if (callState['retry-group'] === 1) return Promise.reject(new Error('network'));
-          return jsonResponse({ items: [ { id: 'r1', name: 'Retry Tee', price: '$10', payUrl: 'https://d8a.com/pay/r1' } ], group: { name: 'Retry', url: 'https://d8a.com/g/retry-group' }, checkout: { enabled: false } }, true);
+          return jsonResponse({ items: [ { id: 'r1', name: 'Retry Tee', price: '$10', payUrl: payUrl('r1') } ], group: { name: 'Retry', url: 'https://d8a.com/g/retry-group' }, checkout: { enabled: false } }, true);
         }
 
         // fallback-test: the first call fails, so the widget's opt-in
@@ -161,7 +174,7 @@
         if (g === 'fallback-test') {
           callState['fallback-test']++;
           if (callState['fallback-test'] === 1) return Promise.reject(new Error('network'));
-          return jsonResponse({ items: [ { id: 'f1', name: 'Fallback Tee', price: '$18', payUrl: 'https://d8a.com/pay/f1' } ], group: { name: 'Fallback', url: 'https://d8a.com/g/fallback-test' }, checkout: { enabled: false } }, true);
+          return jsonResponse({ items: [ { id: 'f1', name: 'Fallback Tee', price: '$18', payUrl: payUrl('f1') } ], group: { name: 'Fallback', url: 'https://d8a.com/g/fallback-test' }, checkout: { enabled: false } }, true);
         }
 
         // d8aaaa-batch_threadline (the real group slug): return a payload with one unsafe payUrl
@@ -180,7 +193,7 @@
           return new Promise(function (resolve) {
             setTimeout(function () {
               resolve({ ok: true, status: 200, json: function () {
-                return Promise.resolve({ items: [ { id: 'i1', name: 'Everyday Tee', price: '$38', payUrl: 'https://d8a.com/pay/i1' } ], group: { name: 'Intent', url: 'https://d8a.com/g/intent-group' }, checkout: { enabled: true, url: 'https://d8a.com/api/v1/store/checkout' } });
+                return Promise.resolve({ items: [ { id: 'i1', name: 'Everyday Tee', price: '$38', payUrl: payUrl('i1') } ], group: { name: 'Intent', url: 'https://d8a.com/g/intent-group' }, checkout: { enabled: true, url: 'https://d8a.com/api/v1/store/checkout' } });
               } });
             }, 900);
           });
@@ -191,8 +204,8 @@
         // and let the second through.
         if (g === 'guard-group') {
           return jsonResponse({ items: [
-            { id: 'g-sized', name: 'Guarded Tee', price: '$30', payUrl: 'https://d8a.com/pay/g-sized' },
-            { id: 'g-onesize', name: 'Guarded Cap', price: '$20', payUrl: 'https://d8a.com/pay/g-onesize' }
+            { id: 'g-sized', name: 'Guarded Tee', price: '$30', payUrl: payUrl('g-sized') },
+            { id: 'g-onesize', name: 'Guarded Cap', price: '$20', payUrl: payUrl('g-onesize') }
           ], group: { name: 'Guard', url: 'https://d8a.com/g/guard-group' }, checkout: { enabled: true, url: 'https://d8a.com/api/v1/store/checkout' } }, true);
         }
 
@@ -207,7 +220,7 @@
 
         // checkout-group: provide an item and enable checkout so Buy triggers a POST
         if (g === 'checkout-group') {
-          return jsonResponse({ items: [ { id: 'c1', name: 'Checkout Tee', price: '$15', payUrl: 'https://d8a.com/pay/c1' } ], group: { name: 'Checkout', url: 'https://d8a.com/g/checkout-group' }, checkout: { enabled: true, url: 'https://d8a.com/api/v1/store/checkout' } }, true);
+          return jsonResponse({ items: [ { id: 'c1', name: 'Checkout Tee', price: '$15', payUrl: payUrl('c1') } ], group: { name: 'Checkout', url: 'https://d8a.com/g/checkout-group' }, checkout: { enabled: true, url: 'https://d8a.com/api/v1/store/checkout' } }, true);
         }
 
         // default fallback
@@ -273,6 +286,9 @@
        reads the real catalogue from its own closure, so that stub cannot
        change its answers. -->
   <script src="../scripts/products.js"></script>
+  <script src="../scripts/garment.js"></script>
+  <!-- A module, so it runs after every classic script on this page. -->
+  <script type="module" src="../scripts/garment3d.js"></script>
   <script src="../scripts/checkout-intent.js"></script>
   <script src="../payments-widget.js"></script>
 
@@ -765,6 +781,141 @@
           .map(function (p) { return p.id; });
         note('lookbook-covers-catalogue', uncovered.length === 0,
           'pieces in no look=' + (uncovered.length ? JSON.stringify(uncovered) : 'none'));
+
+        // 13) Every piece has to be drawable. scripts/garment.js is what the
+        // cards, the product page and the lookbook now show instead of the
+        // placeholder photographs, so a catalogue entry it cannot draw is a
+        // blank thumbnail on three pages. The shape map is keyed by catalogue
+        // id, which is exactly the pairing that rots when a piece is renamed.
+        var G = window.Threadline;
+        var garmentApi = ['garmentShape', 'garment3d', 'garmentSVG', 'renderGarment', 'lookRack', 'GARMENT_SHAPES'];
+        var missingGarment = garmentApi.filter(function (k) { return typeof G[k] === "undefined"; });
+        note('garment-namespace-present', missingGarment.length === 0,
+          'missing keys=' + (missingGarment.length ? JSON.stringify(missingGarment) : 'none'));
+
+        if (!missingGarment.length) {
+          // Every catalogue id names a shape of its own, rather than falling
+          // through to the category default and being drawn as a tee.
+          var unshaped = CATALOGUE_SNAPSHOT.filter(function (p) {
+            return !G.GARMENT_SHAPES[p.id];
+          }).map(function (p) { return p.id; });
+          note('garment-shape-per-piece', unshaped.length === 0,
+            'pieces with no shape of their own=' + (unshaped.length ? JSON.stringify(unshaped) : 'none'));
+
+          // And every one of them really renders: a stage with the four
+          // planes in it, and a path with real geometry on the body plane.
+          var undrawn = [];
+          CATALOGUE_SNAPSHOT.forEach(function (p) {
+            var piece = T.byId(p.id);
+            try {
+              var stage = G.garment3d(piece, { detail: "card", interactive: false });
+              var body = stage.querySelector(".g3d-layer-body path[d]");
+              var image = stage.querySelector(".g3d-layer-body image");
+              if (!body || String(body.getAttribute("d")).length < 40) undrawn.push(p.id + ":no-body");
+              else if (!image) undrawn.push(p.id + ":no-cloth");
+            } catch (err) {
+              undrawn.push(p.id + ":" + (err && err.message));
+            }
+          });
+          note('garment-every-piece-drawn', undrawn.length === 0,
+            'pieces=' + CATALOGUE_SNAPSHOT.length + ' undrawn=' + (undrawn.length ? JSON.stringify(undrawn) : 'none'));
+
+          // The clip path ids have to be unique per garment: two cards in one
+          // grid sharing an id would make the second wear the first's shape.
+          var a = G.garment3d(T.byId("everyday-tee"), { detail: "card", interactive: false });
+          var b = G.garment3d(T.byId("casual-pant"), { detail: "card", interactive: false });
+          var idsOf = function (el) {
+            return Array.prototype.map.call(el.querySelectorAll("clipPath[id]"), function (c) { return c.id; });
+          };
+          var idsA = idsOf(a), idsB = idsOf(b);
+          var shared = idsA.filter(function (id) { return idsB.indexOf(id) !== -1; });
+          note('garment-clip-ids-unique', idsA.length > 0 && shared.length === 0,
+            'first=' + idsA.length + ' second=' + idsB.length + ' shared=' + JSON.stringify(shared));
+
+          // A look draws the pieces it wears, and never a piece it does not:
+          // an id the catalogue no longer has contributes no garment.
+          var look = G.lookRack(T.looks()[0].pieces);
+          var strayRack = G.lookRack([{ id: "gone", name: "Gone", product: null }]);
+          note('garment-look-rack', !!look && look.children.length === T.LOOKS[0].pieces.length && strayRack === null,
+            'slots=' + (look ? look.children.length : 0) + ' expected=' + T.LOOKS[0].pieces.length +
+            ' unresolved-look=' + (strayRack === null ? 'no rack' : 'rack drawn'));
+        }
+
+        // 14) The mesh renderer (scripts/garment3d.js). It is an upgrade, so
+        // these assertions are about the contract rather than about pixels:
+        // every shape the drawings know has to have rings to be built from,
+        // and a stage has to end up showing a garment either way.
+        //
+        // The module is ESM and therefore deferred, so it may not have run
+        // when this block does; wait for it rather than racing it.
+        (function () {
+          var waited = 0;
+          var ready = function () {
+            if (window.Threadline && window.Threadline.GARMENT_MESH_SHAPES) return check();
+            if ((waited += 100) > 5000) {
+              return note('garment3d-module-loaded', false, 'scripts/garment3d.js did not run within 5s');
+            }
+            setTimeout(ready, 100);
+          };
+
+          var check = function () {
+            var G = window.Threadline;
+            note('garment3d-module-loaded', typeof G.garment3dNow === 'function',
+              'garment3dNow=' + typeof G.garment3dNow);
+
+            // Every shape the SVG renderer draws must have a mesh recipe. A
+            // shape with none is silently built as a tee.
+            var drawn = {};
+            Object.keys(G.GARMENT_SHAPES).forEach(function (id) { drawn[G.GARMENT_SHAPES[id]] = true; });
+            var noRings = Object.keys(drawn).filter(function (key) {
+              return !G.GARMENT_MESH_SHAPES[key];
+            });
+            note('garment3d-shapes-cover-catalogue', noRings.length === 0,
+              'shapes drawn=' + Object.keys(drawn).length +
+              ' with no mesh=' + (noRings.length ? JSON.stringify(noRings) : 'none'));
+
+            // And the promise the module actually makes: after it has had its
+            // go at a stage, that stage shows a garment. Either it built the
+            // mesh (data-mode="webgl" and a canvas), or it stood aside and the
+            // drawn one is still there. Never neither.
+            var host = document.createElement("div");
+            host.style.cssText = "position:absolute;left:-9999px;width:300px;height:420px";
+            document.body.appendChild(host);
+            var stage = G.garment3d(T.byId("everyday-tee"), { detail: "card", interactive: false });
+            host.appendChild(stage);
+
+            var verdict = function (how) {
+              var mesh = stage.dataset.mode === "webgl" && !!stage.querySelector(".g3d-gl");
+              var drawing = !!stage.querySelector(".g3d-layer-body path[d]");
+              note('garment3d-stage-always-shows-a-garment', mesh || drawing,
+                how + ' — mesh=' + mesh + ' drawing=' + drawing);
+              host.parentNode.removeChild(host);
+            };
+
+            G.garment3dNow(stage).then(function () {
+              // The angles the pages send arrive at the mesh: one input
+              // implementation in garment.js, whichever renderer is on screen.
+              var view = null;
+              G.garment3dViews.forEach(function (v) { if (v.stage === stage) view = v; });
+              var before = view ? view.pivot.rotation.y : 0;
+              if (stage.__garmentTurn) stage.__garmentTurn(0, 30);
+              for (var i = 0; i < 40 && G.garment3dDraw; i++) G.garment3dDraw();
+              var after = view ? view.pivot.rotation.y : 0;
+              note('garment3d-turn-reaches-the-mesh', !!view && Math.abs(after - before) > 0.4,
+                'from ' + before.toFixed(2) + ' to ' + after.toFixed(2) + ' radians');
+              verdict('mesh built');
+            }).catch(function (err) {
+              // No WebGL here, or the texture host would not share the image.
+              // That is a supported outcome, not a failure — but the drawn
+              // garment had better still be on screen.
+              note('garment3d-turn-reaches-the-mesh', true,
+                'skipped, no mesh in this browser (' + (err && err.message) + ')');
+              verdict('fell back: ' + (err && err.message));
+            });
+          };
+
+          ready();
+        })();
       })();
     } catch (err) {
       note('runChecks', false, 'threw: ' + String(err && err.message ? err.message : err));

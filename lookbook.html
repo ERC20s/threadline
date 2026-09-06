@@ -6,6 +6,9 @@
   <title>Lookbook — Threadline Clothing Co.</title>
   <meta name="description" content="The Threadline autumn lookbook: the collection worn together, shot in one afternoon at the studio.">
   <link rel="stylesheet" href="styles/main.css">
+  <!-- The brand mark, inline so the site never asks for a file that is not
+       in the repository (every page used to log a 404 for /favicon.ico). -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%237c5cff'/%3E%3Cpath d='M8 10.5h16M16 10.5v13' stroke='%23fff' stroke-width='3.4' stroke-linecap='round'/%3E%3C/svg%3E">
 </head>
 <body>
   <div class="main">
@@ -26,7 +29,7 @@
     <main id="content">
       <p class="breadcrumb"><a href="index.html">Home</a> &rsaquo; Lookbook</p>
       <h1>Autumn lookbook</h1>
-      <p class="note">Six looks, shot in one afternoon at the studio. Every piece links straight to its page. Photography here is placeholder imagery.</p>
+      <p class="note">Six looks, each drawn as the pieces it wears, on one rail. Every piece links straight to its page. The cloth on them is placeholder photography.</p>
 
       <!-- The looks are rendered from scripts/products.js (Threadline.LOOKS +
            Threadline.renderLooks): names, prices and links all come from the
@@ -82,12 +85,21 @@
           </ul>
         </div>
       </div>
-      <div>Threadline Clothing Co. — small-batch apparel. Product photography is placeholder imagery.</div>
+      <div>Threadline Clothing Co. — small-batch apparel. Each piece is drawn to its own shape; the cloth on it is placeholder photography.</div>
     </footer>
   </div>
 
   <!-- The catalogue owns the looks as well as the grid. -->
   <script src="scripts/products.js"></script>
+  <!-- Draws each piece as the garment it is, with the catalogue photograph
+       wrapped onto it as cloth. Loaded after products.js, which owns the
+       window.Threadline namespace. -->
+  <script src="scripts/garment.js"></script>
+  <!-- Upgrades those drawn garments to real meshes where the browser can:
+       three.js, vendored in vendor/. A module, so it is deferred and always
+       runs after the classic scripts above. If it cannot run, the SVG
+       garments it would have replaced simply stay. -->
+  <script type="module" src="scripts/garment3d.js"></script>
   <script>
     (function () {
       var T = window.Threadline;

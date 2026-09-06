@@ -4,8 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Product — Threadline Clothing Co.</title>
-  <meta name="description" content="A single Threadline piece: photograph, description, size selection and checkout through the group's payments widget.">
+  <meta name="description" content="A single Threadline piece: the garment drawn and turnable, description, size selection and checkout through the group's payments widget.">
   <link rel="stylesheet" href="styles/main.css">
+  <!-- The brand mark, inline so the site never asks for a file that is not
+       in the repository (every page used to log a 404 for /favicon.ico). -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%237c5cff'/%3E%3Cpath d='M8 10.5h16M16 10.5v13' stroke='%23fff' stroke-width='3.4' stroke-linecap='round'/%3E%3C/svg%3E">
 </head>
 <body>
   <div class="main">
@@ -29,10 +32,23 @@
       <!-- Filled by the script below from ?id=<product id>; scripts/products.js is the catalogue. -->
       <section class="product" id="product" aria-live="polite">
         <div class="media">
+          <!-- The garment itself, drawn by scripts/garment.js and turnable:
+               the catalogue's photograph is wrapped onto a tee-shaped tee
+               rather than shown as though it were one. Filled by the script
+               below; the toggle swaps it for the flat photograph, which is
+               the cloth the piece is cut from. -->
+          <div class="media-stage" id="product-media"></div>
           <!-- No src= until the script sets a real one: an empty src makes the
                browser re-request this document as an image before the piece is
                known, which costs a round trip and logs a broken image. -->
-          <img id="product-image" alt="" width="900" height="1100">
+          <img id="product-image" alt="" width="900" height="1100" hidden>
+          <div class="media-tools" id="media-tools" hidden>
+            <div class="view-toggle" role="group" aria-label="How to show this piece">
+              <button type="button" id="view-garment" aria-pressed="true">Garment</button>
+              <button type="button" id="view-fabric" aria-pressed="false">Fabric</button>
+            </div>
+            <p class="hint" id="media-hint">Drag it to turn, or press the arrow keys.</p>
+          </div>
         </div>
         <div class="meta">
           <p class="kicker" id="product-category"></p>
@@ -143,11 +159,20 @@
           </ul>
         </div>
       </div>
-      <div>Threadline Clothing Co. — small-batch apparel. Product photography is placeholder imagery.</div>
+      <div>Threadline Clothing Co. — small-batch apparel. Each piece is drawn to its own shape; the cloth on it is placeholder photography.</div>
     </footer>
   </div>
 
   <script src="scripts/products.js"></script>
+  <!-- Draws each piece as the garment it is, with the catalogue photograph
+       wrapped onto it as cloth. Loaded after products.js, which owns the
+       window.Threadline namespace. -->
+  <script src="scripts/garment.js"></script>
+  <!-- Upgrades those drawn garments to real meshes where the browser can:
+       three.js, vendored in vendor/. A module, so it is deferred and always
+       runs after the classic scripts above. If it cannot run, the SVG
+       garments it would have replaced simply stay. -->
+  <script type="module" src="scripts/garment3d.js"></script>
   <!-- Queues a Buy click until payments-widget.js has rendered #group-store. -->
   <script src="scripts/checkout-intent.js"></script>
   <script src="payments-widget.js"></script>
@@ -217,9 +242,51 @@
       document.getElementById("product-price").textContent = T.money(product.price);
       document.getElementById("product-description").textContent = product.description;
 
+      /* ---- the picture of the piece ----
+         Two views of the same thing. "Garment" is scripts/garment.js: the
+         piece drawn in its own shape with this photograph wrapped onto it as
+         cloth, turnable with the pointer or the arrow keys. "Fabric" is the
+         photograph itself, flat — the catalogue's `image`, which is what the
+         cloth is cut from. The garment leads because the photographs in
+         scripts/products.js are placeholders: showing one on its own was
+         showing a picture of the wrong thing.
+
+         With scripts/garment.js absent the toggle never appears and the
+         photograph is simply shown, exactly as this page used to work. */
       var image = document.getElementById("product-image");
       image.src = product.image;
       image.alt = product.alt || product.name;
+
+      var mediaStage = document.getElementById("product-media");
+      var mediaTools = document.getElementById("media-tools");
+      var garmentBtn = document.getElementById("view-garment");
+      var fabricBtn = document.getElementById("view-fabric");
+      var mediaHint = document.getElementById("media-hint");
+
+      if (mediaStage && T.renderGarment && T.renderGarment(mediaStage, product, { detail: "full" })) {
+        image.hidden = true;
+        if (mediaTools) mediaTools.hidden = false;
+
+        var showView = function (view) {
+          var garment = view !== "fabric";
+          mediaStage.hidden = !garment;
+          image.hidden = garment;
+          if (garmentBtn) garmentBtn.setAttribute("aria-pressed", garment ? "true" : "false");
+          if (fabricBtn) fabricBtn.setAttribute("aria-pressed", garment ? "false" : "true");
+          if (mediaHint) {
+            mediaHint.textContent = garment
+              ? "Drag it to turn, or press the arrow keys."
+              : "The cloth this piece is cut from.";
+          }
+        };
+
+        if (garmentBtn) garmentBtn.addEventListener("click", function () { showView("garment"); });
+        if (fabricBtn) fabricBtn.addEventListener("click", function () { showView("fabric"); });
+      } else {
+        /* No garment renderer: the photograph is the whole picture. */
+        image.hidden = false;
+        if (mediaStage) mediaStage.hidden = true;
+      }
 
       var details = document.getElementById("product-details");
       product.details.forEach(function (d) {
