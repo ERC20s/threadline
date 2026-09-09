@@ -110,9 +110,16 @@
         <div class="grid" id="fallback-grid"></div>
       </section>
 
-      <section class="store-panel" aria-labelledby="store-heading">
+      <!-- store-panel--buy-integrated (styles/main.css): the Buy button above
+           IS the store's checkout anchor — it finds the matching row inside
+           #group-store and clicks it (see the inline script's openCheckout /
+           T.whenBuyAnchor below), so this panel no longer needs to show a
+           second, separate Buy link per catalogue item underneath it. The
+           class only hides those per-item links on THIS page; index.html and
+           products.html keep theirs, since the panel is their only Buy control. -->
+      <section class="store-panel store-panel--buy-integrated" aria-labelledby="store-heading">
         <h2 id="store-heading">Checkout</h2>
-        <p>Buy sends you to the group's checkout for this piece; you come back here with your receipt. Prices in the panel are set on the group's Admin tab.</p>
+        <p>Buy above sends you to the group's checkout for this piece; you come back here with your receipt. Prices are set on the group's Admin tab and read from the list below.</p>
         <!-- d8a payments widget container from the repository .d8a payments: block.
              payments-widget.js renders the group's items here and owns the checkout POST.
              data-d8a-fallback="readonly" opts this panel in to the read-only
@@ -121,7 +128,11 @@
              button instead of a bare error line. The fallback rows carry no
              data-item, so nothing can be bought from them; the Retry button is
              also what Threadline.storePanelFailed() looks for, so Buy reports
-             the outage at once instead of waiting out the timeout. -->
+             the outage at once instead of waiting out the timeout.
+             The rows' own Buy links (a[data-item]) stay in the DOM — the Buy
+             button above finds and .click()s one of them — but
+             store-panel--buy-integrated (styles/main.css) hides them from
+             view, so a shopper here sees one Buy control, not one per item. -->
         <div id="group-store" aria-live="polite" data-d8a-group="d8aaaa-batch_threadline" data-default-quantity="1" data-d8a-fallback="readonly"><p>Loading store…</p></div>
         <noscript><p>Shop: <a href="https://d8a.com/g/d8aaaa-batch_threadline">https://d8a.com/g/d8aaaa-batch_threadline</a></p></noscript>
       </section>
