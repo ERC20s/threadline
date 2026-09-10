@@ -611,6 +611,42 @@
         // groupStoreCheckout contract. Fall back to clicking the widget's own
         // anchor if the API is not present or if it rejects.
         try {
+          // Prefer builder when present — it is a guarded, well-scoped helper that
+          // returns an <a> wired to the widget's own duplicate-click guard and POST.
+          if (typeof window.groupStoreBuildBuyAnchor === 'function') {
+            var built = null;
+            try { built = window.groupStoreBuildBuyAnchor(product.id, { container: panel }); } catch (e) { built = null; }
+            if (built) {
+              try {
+                built.className = built.className + ' btn';
+                built.setAttribute('role', 'button');
+                built.setAttribute('aria-describedby', 'buy-status');
+                built.style.textDecoration = 'none';
+              } catch (e) {}
+              var swapAndClick = function () {
+                try { if (buy.parentNode) buy.parentNode.replaceChild(built, buy); } catch (e) {}
+                try {
+                  if (chosenQuantity > 1) built.setAttribute('data-quantity', String(chosenQuantity)); else built.removeAttribute('data-quantity');
+                  if (chosenSize) { built.setAttribute('data-size', chosenSize); built.setAttribute('data-d8a-note', product.name + ' - size ' + chosenSize); } else { built.removeAttribute('data-size'); built.removeAttribute('data-d8a-note'); }
+                } catch (e) {}
+                try { built.click(); } catch (e) {}
+              };
+
+              // Keep the same pending UI state while the Promise resolves.
+              pending = true;
+              buy.disabled = true;
+              buy.setAttribute("aria-busy", "true");
+              var restoreUI = function () {
+                pending = false;
+                buy.disabled = notListed;
+                buy.removeAttribute("aria-busy");
+              };
+
+              Promise.resolve().then(function () { swapAndClick(); }).then(function () { restoreUI(); }).catch(function (err) { restoreUI(); try { built.click(); } catch (e) {} });
+              return;
+            }
+          }
+
           if (typeof window.groupStoreCheckout === 'function') {
             var itemId = anchor && anchor.getAttribute ? anchor.getAttribute('data-item') : null;
             if (!itemId) itemId = product.id;
