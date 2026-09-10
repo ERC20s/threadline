@@ -514,6 +514,28 @@
       var buy = document.getElementById("buy");
       var STORE_URL = "https://d8a.com/g/d8aaaa-batch_threadline";
 
+      // If the payments widget exposes a builder for a platform anchor, use
+      // it to create the visible Buy control so the page shows the platform's
+      // actual anchor element. Fallback to the existing button when the
+      // helper is not present.
+      if (typeof window.groupStoreBuildBuyAnchor === 'function') {
+        try {
+          var built = window.groupStoreBuildBuyAnchor(product.id, { container: panel });
+          if (built) {
+            // Style integration: give it the .btn appearance and swap it into
+            // the page in place of the existing button while mirroring the
+            // page's disabled/busy behaviour onto the anchor's aria attributes.
+            built.className = (built.className ? built.className + ' ' : '') + 'btn';
+            var parent = buy.parentNode;
+            if (parent) {
+              try { parent.replaceChild(built, buy); } catch (e) { }
+              // Keep a reference for the rest of the code that expects `buy`.
+              buy = built;
+            }
+          }
+        } catch (e) {}
+      }
+
       /* The failure line, with a way out: the group's own storefront. */
       var sayNotListed = function (scroll) {
         say("This piece isn't listed in the shop panel yet. Pick it in Checkout below, or email hello@threadline.example and we'll reserve " +

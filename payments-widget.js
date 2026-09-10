@@ -262,6 +262,115 @@
 
   window.groupStoreVerify = groupStoreVerify;
 
+  // Build a platform checkout anchor wired to perform the widget's exact
+  // checkout flow. Accepts an itemId and an options object:
+  //   { container: <#group-store element> }
+  // The returned element is an <a> with data-item set and a click handler
+  // that duplicates the widget's POST logic and uses the same duplicate-click
+  // guard (window.__d8aPaymentsWidgetOpening). It does not remove or alter
+  // the widget's own listeners; callers should prefer this anchor when they
+  // want the visible Buy control to be the platform's anchor.
+  window.groupStoreBuildBuyAnchor = function (itemId, options) {
+    options = options || {};
+    var el = options.container || null;
+    try {
+      var a = document.createElement('a');
+      a.setAttribute('data-item', String(itemId == null ? '' : itemId));
+      a.setAttribute('href', '#');
+      a.className = (a.className ? a.className + ' ' : '') + 'platform-buy-anchor';
+      a.setAttribute('role', 'button');
+
+      // Reflect a disabled property into aria-disabled so site code that writes
+      // `buy.disabled = true` (a property write) behaves sensibly on an <a>.
+      try {
+        Object.defineProperty(a, 'disabled', {
+          configurable: true,
+          enumerable: true,
+          get: function () { return this.getAttribute('aria-disabled') === 'true'; },
+          set: function (v) { if (v) this.setAttribute('aria-disabled', 'true'); else this.removeAttribute('aria-disabled'); }
+        });
+      } catch (e) {}
+
+      a.addEventListener('click', function (e) {
+        var anchor = this;
+        // Read the store attached to the provided container if available.
+        var store = null;
+        try { store = el && el.__d8a_store ? el.__d8a_store : null; } catch (e) { store = null; }
+        if (!store || !store.checkout || !store.checkout.enabled) {
+          // Let the link behave as a normal navigation if the store is not ready.
+          return;
+        }
+        // Respect modified clicks and target=_blank like the widget does.
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || (anchor.getAttribute && anchor.getAttribute('target') === '_blank')) return;
+
+        // Determine quantity in the same order the widget does.
+        var qty = 1;
+        try {
+          var qAttr = anchor.getAttribute('data-quantity');
+          var qDef = anchor.getAttribute('data-default-quantity') || (el && el.getAttribute ? el.getAttribute('data-default-quantity') : null) || (store && store.defaultQuantity);
+          if (qAttr != null) {
+            var n = parseInt(qAttr, 10);
+            if (!isNaN(n) && n > 0) qty = n;
+          } else if (qDef != null) {
+            var nd = parseInt(qDef, 10);
+            if (!isNaN(nd) && nd > 0) qty = nd;
+          }
+        } catch (err) {}
+
+        var readExtra = function (name, max) {
+          try {
+            var raw = anchor.getAttribute ? anchor.getAttribute(name) : null;
+            if (raw == null) return '';
+            var v = String(raw).replace(/\s+/g, ' ').trim();
+            if (!v) return '';
+            return v.length > max ? v.slice(0, max) : v;
+          } catch (err) { return ''; }
+        };
+        var size = readExtra('data-size', 40);
+        var noteText = readExtra('data-d8a-note', 140);
+
+        var group = getGroupForElement(el);
+        var variant = noteText || size;
+        var key = group + '::' + (anchor.getAttribute('data-item') || '') + '::' + qty + '::' + variant;
+        if (globalOpening[key]) return;
+        try { globalOpening[key] = true; } catch (e) {}
+
+        e.preventDefault();
+        var originalText = anchor.textContent;
+        try { anchor.textContent = 'Opening…'; } catch (err) {}
+
+        var here = location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1");
+
+        var payload = { group: group, item: anchor.getAttribute('data-item'), quantity: qty, returnUrl: here };
+        var plainBody = JSON.stringify(payload);
+        if (size) payload.size = size;
+        if (noteText) payload.note = noteText;
+        var body = JSON.stringify(payload);
+        var hasExtras = body !== plainBody;
+
+        var checkoutUrl = (store && store.checkout && store.checkout.url) ? store.checkout.url : (BASE + '/api/v1/store/checkout');
+        try { var elBase = getBaseForElement(el); if (typeof checkoutUrl === 'string' && checkoutUrl.charAt(0) === '/' && elBase) { checkoutUrl = elBase + checkoutUrl; } } catch (e) {}
+
+        var release = function () { try { delete globalOpening[key]; } catch (err) {} };
+        var fallback = function () { try { anchor.textContent = originalText; } catch (err) {};
+          var safe = sanitizeUrl(anchor.getAttribute('href')) || (store && store.group && store.group.url) || anchor.getAttribute('href');
+          location.href = safe;
+        };
+        var post = function (bodyText) { return doFetch(checkoutUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyText }, 10000).then(function (r) { return (r && r.json) ? r.json() : null; }); };
+
+        post(body)
+          .then(function (d) {
+            if (d && d.url) { release(); location.href = d.url; return null; }
+            if (!hasExtras) { release(); fallback(); return null; }
+            return post(plainBody).then(function (d2) { release(); if (d2 && d2.url) { location.href = d2.url; return null; } fallback(); return null; }).catch(function () { release(); fallback(); return null; });
+          })
+          .catch(function () { release(); fallback(); });
+      });
+
+      return a;
+    } catch (e) { return null; }
+  };
+
   var back = (location.search.match(/[?&]d8a_order=([A-Za-z0-9_-]+)/) || [])[1];
   if (back) groupStoreVerify(back).then(function (o) {
     if (!o) return;
