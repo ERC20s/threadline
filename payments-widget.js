@@ -262,6 +262,108 @@
 
   window.groupStoreVerify = groupStoreVerify;
 
+  // Expose a guarded builder that constructs a single-anchor Buy control for a
+  // product page to prefer over rendering a second, separate Buy link. The
+  // builder is intentionally defensive: when the widget's helpers are absent
+  // it returns null so callers fall back to their existing behaviour.
+  window.groupStoreBuildBuyAnchor = function (itemId, opts) {
+    try {
+      if (!itemId) return null;
+      // Minimal helper presence checks — be defensive about globals.
+      if (typeof sanitizeUrl !== 'function' || typeof doFetch !== 'function' || typeof getBaseForElement !== 'function' || typeof getGroupForElement !== 'function' || !window.__d8aPaymentsWidgetOpening) return null;
+    } catch (e) { return null; }
+
+    opts = opts || {};
+    var el = opts.container || null;
+    if (!el || !el.getAttribute) return null;
+
+    try {
+      var group = getGroupForElement(el) || GROUP;
+      var anchor = document.createElement('a');
+      anchor.className = 'platform-buy-anchor btn';
+      // A conservative href that points at the group's storefront as fallback.
+      anchor.setAttribute('href', sanitizeUrl(BASE + '/g/' + encodeURIComponent(group)) || '#');
+      anchor.setAttribute('data-item', String(itemId));
+
+      // Propagate container-level default quantity if present so the anchor
+      // honours what the host page declared.
+      try {
+        var qdef = el.getAttribute('data-default-quantity');
+        if (qdef) anchor.setAttribute('data-default-quantity', qdef);
+      } catch (e) {}
+
+      // Click handler mirrors the widget's own POST / fallback flow and uses
+      // the shared opening guard so duplicate clicks are collapsed.
+      anchor.addEventListener('click', function (e) {
+        // Read quantity in the same order the widget does: explicit data-quantity,
+        // then anchor/container defaults, then 1.
+        var qty = 1;
+        try {
+          var qAttr = anchor.getAttribute('data-quantity');
+          var qDef = anchor.getAttribute('data-default-quantity') || (el && el.getAttribute ? el.getAttribute('data-default-quantity') : null);
+          if (qAttr != null) {
+            var n = parseInt(qAttr, 10); if (!isNaN(n) && n > 0) qty = n;
+          } else if (qDef != null) {
+            var nd = parseInt(qDef, 10); if (!isNaN(nd) && nd > 0) qty = nd;
+          }
+        } catch (err) {}
+
+        var size = '';
+        var noteText = '';
+        try { size = (anchor.getAttribute && anchor.getAttribute('data-size')) || ''; } catch (e) { size = ''; }
+        try { noteText = (anchor.getAttribute && anchor.getAttribute('data-d8a-note')) || ''; } catch (e) { noteText = ''; }
+
+        var groupLocal = getGroupForElement(el);
+        var variant = (noteText || size || '').toString();
+        var key = groupLocal + '::' + itemId + '::' + qty + '::' + variant;
+        if (window.__d8aPaymentsWidgetOpening[key]) return;
+        try { window.__d8aPaymentsWidgetOpening[key] = true; } catch (e) {}
+
+        e.preventDefault();
+        var originalText = anchor.textContent;
+        try { anchor.textContent = 'Opening…'; } catch (e) {}
+
+        var here = location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1");
+        var payload = { group: groupLocal, item: itemId, quantity: qty, returnUrl: here };
+        var plainBody = JSON.stringify(payload);
+        if (size) payload.size = size;
+        if (noteText) payload.note = noteText;
+        var body = JSON.stringify(payload);
+        var hasExtras = body !== plainBody;
+
+        // Resolve checkout endpoint from the container's current store if the
+        // widget has already populated it; otherwise fall back to the global.
+        var checkoutUrl = null;
+        var store = null;
+        try { store = el.__d8a_store || null; } catch (e) { store = null; }
+        if (store && store.checkout && store.checkout.url) checkoutUrl = store.checkout.url;
+        if (!checkoutUrl) checkoutUrl = BASE + '/api/v1/store/checkout';
+        try { var elBase = getBaseForElement(el); if (typeof checkoutUrl === 'string' && checkoutUrl.charAt(0) === '/' && elBase) checkoutUrl = elBase + checkoutUrl; } catch (e) {}
+
+        var release = function () { try { delete window.__d8aPaymentsWidgetOpening[key]; } catch (err) {} };
+        var fallback = function () {
+          try { anchor.textContent = originalText; } catch (err) {}
+          var safe = sanitizeUrl(anchor.getAttribute('href')) || (store && store.group && store.group.url) || anchor.getAttribute('href');
+          location.href = safe;
+        };
+        var post = function (bodyText) {
+          return doFetch(checkoutUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyText }, 10000)
+            .then(function (r) { return (r && r.json) ? r.json() : null; });
+        };
+
+        post(body)
+          .then(function (d) {
+            if (d && d.url) { release(); location.href = d.url; return null; }
+            if (!hasExtras) { release(); fallback(); return null; }
+            return post(plainBody).then(function (d2) { release(); if (d2 && d2.url) { location.href = d2.url; return null; } fallback(); return null; }).catch(function () { release(); fallback(); return null; });
+          })
+          .catch(function () { release(); fallback(); });
+      }, false);
+
+      return anchor;
+    } catch (e) { return null; }
+  };
+
   var back = (location.search.match(/[?&]d8a_order=([A-Za-z0-9_-]+)/) || [])[1];
   if (back) groupStoreVerify(back).then(function (o) {
     if (!o) return;
