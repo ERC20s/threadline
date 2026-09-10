@@ -615,9 +615,12 @@
           // returns an <a> wired to the widget's own duplicate-click guard and POST.
           if (typeof window.groupStoreBuildBuyAnchor === 'function') {
             var built = null;
-            try { built = window.groupStoreBuildBuyAnchor(product.id, { container: panel }); } catch (e) { built = null; }
+            try { built = window.groupStoreBuildBuyAnchor(product.id, { container: panel, asButton: true }); } catch (e) { built = null; }
             if (built) {
               try {
+                // If the builder returned a button, ensure it still looks like a
+                // control and is accessible; if it returned an anchor, the existing
+                // swap logic continues to work.
                 built.className = built.className + ' btn';
                 built.setAttribute('role', 'button');
                 built.setAttribute('aria-describedby', 'buy-status');

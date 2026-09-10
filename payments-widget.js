@@ -279,10 +279,17 @@
 
     try {
       var group = getGroupForElement(el) || GROUP;
-      var anchor = document.createElement('a');
+      // Create either an <a> or a <button> depending on opts.asButton. Buttons do
+      // not get an href but otherwise mirror the anchor's behaviour so hosts can
+      // swap a real button into their UI without losing the widget's click logic.
+      var anchor = (opts && opts.asButton) ? document.createElement('button') : document.createElement('a');
       anchor.className = 'platform-buy-anchor btn';
-      // A conservative href that points at the group's storefront as fallback.
-      anchor.setAttribute('href', sanitizeUrl(BASE + '/g/' + encodeURIComponent(group)) || '#');
+      if (opts && opts.asButton) {
+        try { anchor.setAttribute('type', 'button'); } catch (e) {}
+      } else {
+        // A conservative href that points at the group's storefront as fallback.
+        try { anchor.setAttribute('href', sanitizeUrl(BASE + '/g/' + encodeURIComponent(group)) || '#'); } catch (e) {}
+      }
       anchor.setAttribute('data-item', String(itemId));
 
       // Propagate container-level default quantity if present so the anchor
@@ -343,8 +350,10 @@
         var release = function () { try { delete window.__d8aPaymentsWidgetOpening[key]; } catch (err) {} };
         var fallback = function () {
           try { anchor.textContent = originalText; } catch (err) {}
-          var safe = sanitizeUrl(anchor.getAttribute('href')) || (store && store.group && store.group.url) || anchor.getAttribute('href');
-          location.href = safe;
+          // For buttons there is no href attribute: fall back to the store URL
+          // or the group's storefront host so navigation always goes somewhere safe.
+          var safe = sanitizeUrl(anchor.getAttribute && anchor.getAttribute('href') ? anchor.getAttribute('href') : '') || (store && store.group && store.group.url) || (BASE + '/g/' + encodeURIComponent(group)) || '#';
+          try { location.href = safe; } catch (err) {}
         };
         var post = function (bodyText) {
           return doFetch(checkoutUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyText }, 10000)
