@@ -425,11 +425,14 @@
       var itemId = a.getAttribute('data-item');
       if (!itemId) return;
 
-      // Determine quantity: data-quantity (explicit) or data-default-quantity fallback to store default.
+      // Determine quantity: data-quantity (explicit), then per-anchor data-default-quantity,
+      // then the container's data-default-quantity, then the store default. This makes a
+      // single integrated Buy anchor honour a container-level default like product.html/index.html set.
       var qty = 1;
       try {
         var qAttr = a.getAttribute('data-quantity');
-        var qDef = a.getAttribute('data-default-quantity') || (store && store.defaultQuantity);
+        // Read fallback in this order: anchor's own data-default-quantity, container's attribute, then store.defaultQuantity.
+        var qDef = a.getAttribute('data-default-quantity') || (el && el.getAttribute ? el.getAttribute('data-default-quantity') : null) || (store && store.defaultQuantity);
         if (qAttr != null) {
           var n = parseInt(qAttr, 10);
           if (!isNaN(n) && n > 0) qty = n;
