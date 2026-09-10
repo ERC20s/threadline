@@ -602,8 +602,48 @@
 
       var openCheckout = function (anchor) {
         stampRow(anchor);
-        say("Opening checkout for " + product.name + ", size " + chosenSize +
-          (chosenQuantity > 1 ? " ×" + chosenQuantity : "") + "…");
+        var openingText = "Opening checkout for " + product.name + ", size " + chosenSize +
+          (chosenQuantity > 1 ? " ×" + chosenQuantity : "") + "…";
+        say(openingText);
+
+        // Prefer the platform-exposed API when available. The payload shape is
+        // { item, quantity, variant } inside an array, matching the platform's
+        // groupStoreCheckout contract. Fall back to clicking the widget's own
+        // anchor if the API is not present or if it rejects.
+        try {
+          if (typeof window.groupStoreCheckout === 'function') {
+            var itemId = anchor && anchor.getAttribute ? anchor.getAttribute('data-item') : null;
+            if (!itemId) itemId = product.id;
+            var payload = [{ item: itemId, quantity: chosenQuantity, variant: chosenSize }];
+
+            // Keep the same pending UI state while the Promise resolves.
+            pending = true;
+            buy.disabled = true;
+            buy.setAttribute("aria-busy", "true");
+            var restoreUI = function () {
+              pending = false;
+              buy.disabled = notListed;
+              buy.removeAttribute("aria-busy");
+            };
+
+            Promise.resolve()
+              .then(function () { return window.groupStoreCheckout(payload, { returnUrl: location.href }); })
+              .then(function () {
+                // The widget typically navigates away. If it resolves without
+                // navigating, restore the button state.
+                restoreUI();
+              })
+              .catch(function (err) {
+                // On error, restore the UI and fall back to the anchor click so
+                // behaviour is unchanged for hosts that do not provide the API.
+                restoreUI();
+                try { anchor.click(); } catch (e) {}
+              });
+            return;
+          }
+        } catch (e) {}
+
+        // Fallback: click the widget's anchor as before.
         anchor.click();
       };
 
