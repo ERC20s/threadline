@@ -614,23 +614,43 @@
           // Prefer builder when present — it is a guarded, well-scoped helper that
           // returns an <a> wired to the widget's own duplicate-click guard and POST.
           if (typeof window.groupStoreBuildBuyAnchor === 'function') {
+            var hostId, hostClass, hostAria;
+            try {
+              hostId = buy && buy.id ? buy.id : undefined;
+              hostClass = buy && buy.className ? buy.className : undefined;
+              hostAria = buy && buy.getAttribute ? buy.getAttribute('aria-describedby') : undefined;
+            } catch (e) { hostId = undefined; hostClass = undefined; hostAria = undefined; }
+
             var built = null;
-            try { built = window.groupStoreBuildBuyAnchor(product.id, { container: panel, asButton: true }); } catch (e) { built = null; }
+            try {
+              built = window.groupStoreBuildBuyAnchor(product.id, { container: panel, asButton: true, hostId: hostId, hostClass: hostClass, hostAriaDescribedBy: hostAria });
+            } catch (e) { built = null; }
+
+            if (!built) {
+              // Try legacy call without hints for older widget versions.
+              try { built = window.groupStoreBuildBuyAnchor(product.id, { container: panel, asButton: true }); } catch (e) { built = null; }
+            }
+
             if (built) {
               try {
-                // Preserve the logical identity of the original Buy control so
-                // subsequent UI updates act on the element the shopper sees.
-                try { if (buy && buy.id) built.id = buy.id; } catch (e) {}
-                try { var buyDesc = buy && buy.getAttribute ? buy.getAttribute('aria-describedby') : null; if (buyDesc) built.setAttribute('aria-describedby', buyDesc); } catch (e) {}
-                // Merge classes so host CSS targeting the original control still applies
+                // Ensure role and visual affordance are present.
+                try { built.setAttribute('role', 'button'); } catch (e) {}
+                try { built.style.textDecoration = 'none'; } catch (e) {}
+                // If the builder did not accept the host-provided attributes,
+                // merge them now defensively.
+                try { if (hostId && !built.id) built.id = hostId; } catch (e) {}
                 try {
-                  var buyClasses = (buy && buy.className) ? buy.className : '';
-                  built.className = (built.className || '') + ' ' + buyClasses;
-                  built.className = built.className.replace(/\s+/g, ' ').trim();
-                  if (built.className.indexOf('btn') === -1) built.className += ' btn';
+                  var bDesc = null;
+                  try { bDesc = built.getAttribute ? built.getAttribute('aria-describedby') : null; } catch (e) { bDesc = null; }
+                  if (hostAria && !bDesc) try { built.setAttribute('aria-describedby', hostAria); } catch (e) {}
                 } catch (e) {}
-                built.setAttribute('role', 'button');
-                built.style.textDecoration = 'none';
+                try {
+                  var builtClasses = (built.className || '').split(/\s+/).filter(function (t) { return !!t; });
+                  var hostTokens = (hostClass && String(hostClass)) ? String(hostClass).split(/\s+/).filter(function (t) { return !!t; }) : [];
+                  hostTokens.forEach(function (t) { if (builtClasses.indexOf(t) === -1) builtClasses.push(t); });
+                  if (builtClasses.indexOf('btn') === -1) builtClasses.push('btn');
+                  built.className = builtClasses.join(' ');
+                } catch (e) {}
               } catch (e) {}
 
               var swapAndClick = function () {
