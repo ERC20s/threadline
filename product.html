@@ -618,16 +618,25 @@
             try { built = window.groupStoreBuildBuyAnchor(product.id, { container: panel, asButton: true }); } catch (e) { built = null; }
             if (built) {
               try {
-                // If the builder returned a button, ensure it still looks like a
-                // control and is accessible; if it returned an anchor, the existing
-                // swap logic continues to work.
-                built.className = built.className + ' btn';
+                // Preserve the logical identity of the original Buy control so
+                // subsequent UI updates act on the element the shopper sees.
+                try { if (buy && buy.id) built.id = buy.id; } catch (e) {}
+                try { var buyDesc = buy && buy.getAttribute ? buy.getAttribute('aria-describedby') : null; if (buyDesc) built.setAttribute('aria-describedby', buyDesc); } catch (e) {}
+                // Merge classes so host CSS targeting the original control still applies
+                try {
+                  var buyClasses = (buy && buy.className) ? buy.className : '';
+                  built.className = (built.className || '') + ' ' + buyClasses;
+                  built.className = built.className.replace(/\s+/g, ' ').trim();
+                  if (built.className.indexOf('btn') === -1) built.className += ' btn';
+                } catch (e) {}
                 built.setAttribute('role', 'button');
-                built.setAttribute('aria-describedby', 'buy-status');
                 built.style.textDecoration = 'none';
               } catch (e) {}
+
               var swapAndClick = function () {
-                try { if (buy.parentNode) buy.parentNode.replaceChild(built, buy); } catch (e) {}
+                try { if (buy && buy.parentNode) buy.parentNode.replaceChild(built, buy); } catch (e) {}
+                // Ensure the page's buy variable now refers to the visible control
+                try { buy = built; } catch (e) {}
                 try {
                   if (chosenQuantity > 1) built.setAttribute('data-quantity', String(chosenQuantity)); else built.removeAttribute('data-quantity');
                   if (chosenSize) { built.setAttribute('data-size', chosenSize); built.setAttribute('data-d8a-note', product.name + ' - size ' + chosenSize); } else { built.removeAttribute('data-size'); built.removeAttribute('data-d8a-note'); }
@@ -637,12 +646,13 @@
 
               // Keep the same pending UI state while the Promise resolves.
               pending = true;
-              buy.disabled = true;
-              buy.setAttribute("aria-busy", "true");
+              try { if (built && typeof built.disabled !== 'undefined') built.disabled = true; } catch (e) {}
+              try { if (built) built.setAttribute("aria-busy", "true"); } catch (e) {}
+
               var restoreUI = function () {
                 pending = false;
-                buy.disabled = notListed;
-                buy.removeAttribute("aria-busy");
+                try { buy.disabled = notListed; } catch (e) {}
+                try { buy.removeAttribute("aria-busy"); } catch (e) {}
               };
 
               Promise.resolve().then(function () { swapAndClick(); }).then(function () { restoreUI(); }).catch(function (err) { restoreUI(); try { built.click(); } catch (e) {} });
