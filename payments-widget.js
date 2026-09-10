@@ -283,7 +283,37 @@
       // not get an href but otherwise mirror the anchor's behaviour so hosts can
       // swap a real button into their UI without losing the widget's click logic.
       var anchor = (opts && opts.asButton) ? document.createElement('button') : document.createElement('a');
+      // Default classes the widget likes; hosts can pass their classes in opts.hostClass
       anchor.className = 'platform-buy-anchor btn';
+
+      // If the host provided attributes to preserve on the built element, apply
+      // them defensively: id, aria-describedby and class merging (dedupe tokens,
+      // ensure the 'btn' token is present). Also set role and a conservative
+      // textDecoration so the built anchor matches the original button's affordance.
+      try {
+        var hostId = (opts && typeof opts.hostId !== 'undefined') ? opts.hostId : null;
+        var hostClass = (opts && typeof opts.hostClass !== 'undefined') ? opts.hostClass : '';
+        var hostAria = (opts && typeof opts.hostAriaDescribedBy !== 'undefined') ? opts.hostAriaDescribedBy : null;
+
+        // Merge class lists without duplicating tokens.
+        try {
+          var baseClasses = (anchor.className || '').split(/\s+/).filter(function (t) { return !!t; });
+          var hostTokens = (hostClass && String(hostClass)) ? String(hostClass).split(/\s+/).filter(function (t) { return !!t; }) : [];
+          hostTokens.forEach(function (t) { if (baseClasses.indexOf(t) === -1) baseClasses.push(t); });
+          if (baseClasses.indexOf('btn') === -1) baseClasses.push('btn');
+          anchor.className = baseClasses.join(' ');
+        } catch (e) {}
+
+        if (hostId) {
+          try { anchor.id = String(hostId); } catch (e) {}
+        }
+        if (hostAria) {
+          try { anchor.setAttribute('aria-describedby', String(hostAria)); } catch (e) {}
+        }
+        try { anchor.setAttribute('role', 'button'); } catch (e) {}
+        try { anchor.style.textDecoration = 'none'; } catch (e) {}
+      } catch (e) {}
+
       if (opts && opts.asButton) {
         try { anchor.setAttribute('type', 'button'); } catch (e) {}
       } else {
