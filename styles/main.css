@@ -287,6 +287,17 @@ a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid rgb
 .store-panel p{margin:0 0 8px;color:var(--muted);font-size:0.88rem}
 #group-store{background:#fff;color:#111;border-radius:8px;padding:8px 12px}
 
+/* product.html only (proposal #250): the page's own #buy button forwards to
+   the matching row inside #group-store — findBuyAnchor()/whenBuyAnchor() in
+   scripts/checkout-intent.js locate it, product.html's openCheckout() stamps
+   size/quantity onto it and calls anchor.click(). A synthetic .click() fires
+   normally on a hidden element, so the row's own Buy link can be hidden here
+   without touching that mechanism or payments-widget.js's checkout POST.
+   Scoped to .store-panel--buy-integrated so index.html and products.html,
+   where the panel's per-item Buy links are the only way to buy, are
+   untouched. */
+.store-panel--buy-integrated #group-store a[data-item]{display:none}
+
 /* ---------- about / contact / lookbook ---------- */
 .about{display:grid;gap:18px;margin-top:18px}
 .about p{margin:0 0 10px;color:var(--muted)}
