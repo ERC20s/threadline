@@ -149,7 +149,80 @@
 
       var paintGrid = function () {
         if (!shopIndex || !T.reconcileGrid) return 0;
-        return T.reconcileGrid(grid, shopIndex);
+        var out = T.reconcileGrid(grid, shopIndex);
+        // After repainting prices and notes, ensure every card has the
+        // appropriate Buy control (idempotent).
+        try { addBuyButtonsToCards(); } catch (e) {}
+        return out;
+      };
+
+      /* Add platform-built Buy anchors into each catalogue card when possible.
+         One-size products get the platform anchor inserted; sized garments get
+         a conservative "Choose size" link to the product page. The builder
+         expects the shop panel element (panel) as its container so pass that
+         in so the returned anchor is wired to the widget's checkout logic. */
+      var addBuyButtonsToCards = function () {
+        if (!grid) return;
+        var cards = [];
+        try { cards = Array.prototype.slice.call(grid.querySelectorAll(".card")); } catch (e) { cards = []; }
+        cards.forEach(function (card) {
+          try {
+            // remove any previously-inserted buy control to stay idempotent
+            var prev = card.querySelector("[data-threadline-card-buy]");
+            if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+
+            var body = card.querySelector(".card-body") || card;
+            var wrapper = document.createElement("div");
+            wrapper.setAttribute("data-threadline-card-buy", "");
+            wrapper.style.marginTop = "8px";
+
+            var prodId = card.dataset && card.dataset.productId ? card.dataset.productId : (card.getAttribute ? card.getAttribute("data-product-id") : "");
+            var product = (typeof T.byId === "function") ? T.byId(prodId) : null;
+            if (!product) {
+              var a = document.createElement("a");
+              a.className = "btn";
+              a.href = (typeof T.productUrl === "function") ? T.productUrl(prodId) : "#";
+              a.textContent = "View";
+              wrapper.appendChild(a);
+              body.appendChild(wrapper);
+              return;
+            }
+
+            var isOneSize = product.sizes && product.sizes.length === 1;
+            if (!isOneSize) {
+              var link = document.createElement("a");
+              link.className = "btn";
+              link.href = T.productUrl(product);
+              link.textContent = "Choose size";
+              wrapper.appendChild(link);
+              body.appendChild(wrapper);
+              return;
+            }
+
+            var built = null;
+            try {
+              if (typeof window.groupStoreBuildBuyAnchor === "function" && panel) {
+                built = window.groupStoreBuildBuyAnchor(product.id, { container: panel, asButton: true, hostClass: "btn" });
+              }
+            } catch (e) { built = null; }
+
+            if (built) {
+              try { built.setAttribute("data-threadline-card-buy", "1"); } catch (e) {}
+              wrapper.appendChild(built);
+              body.appendChild(wrapper);
+              return;
+            }
+
+            var fb = document.createElement("a");
+            fb.className = "btn";
+            fb.href = T.productUrl(product);
+            fb.textContent = "Buy";
+            fb.setAttribute("data-threadline-card-buy", "1");
+            wrapper.appendChild(fb);
+            body.appendChild(wrapper);
+
+          } catch (e) {}
+        });
       };
 
       var show = function (category) {
@@ -160,6 +233,8 @@
         /* renderGrid rebuilds the cards on every filter click, so the live
            prices and notes have to be painted again each time. */
         var unlisted = paintGrid();
+        // Ensure the cards have Buy controls even when the shop index is not yet available.
+        try { addBuyButtonsToCards(); } catch (e) {}
         /* A receipt in the status line outranks the count: the shop panel can
            render (and this pass run again, or a filter be clicked) after a
            returning buyer's order was verified, and the confirmation must not
