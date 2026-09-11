@@ -283,6 +283,13 @@
       // not get an href but otherwise mirror the anchor's behaviour so hosts can
       // swap a real button into their UI without losing the widget's click logic.
       var anchor = (opts && opts.asButton) ? document.createElement('button') : document.createElement('a');
+      // Give either control visible text by default; opts.label overrides it.
+      // Leave existing content intact and treat the label as text, never HTML.
+      try {
+        if (!anchor.hasChildNodes()) {
+          anchor.textContent = opts.label != null ? String(opts.label) : 'Buy';
+        }
+      } catch (e) {}
       // Default classes the widget likes; hosts can pass their classes in opts.hostClass
       anchor.className = 'platform-buy-anchor btn';
 
