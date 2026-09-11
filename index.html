@@ -83,9 +83,9 @@
             <p><a href="size-guide.html">Read the size guide</a> before you order — our fits run relaxed, and the chart lists the flat measurements of every piece.</p>
           </div>
           <ul class="values">
-            <li><strong>Short runs</strong>Only what we can sell through, so nothing ends up in a landfill.</li>
-            <li><strong>Named makers</strong>Two workshops, both visited, both paid on 14-day terms.</li>
-            <li><strong>Repairs, not replacements</strong>Free repairs on outerwear for five years.</li>
+            <li><strong>Short runs</strong> Only what we can sell through, so nothing ends up in a landfill.</li>
+            <li><strong>Named makers</strong> Two workshops, both visited, both paid on 14-day terms.</li>
+            <li><strong>Repairs, not replacements</strong> Free repairs on outerwear for five years.</li>
           </ul>
         </div>
       </section>
@@ -219,7 +219,7 @@
         /* checkout-intent.js failed to load: still say something true. */
         status.textContent = "Thank you — order " + (order.id || "") +
           " is paid. A confirmation email is on its way.";
-      });
+      }, { once: true });
 
       /* Wait for the shop panel — no matchFn, so this resolves as soon as
          payments-widget.js has rendered any row — then index it once and

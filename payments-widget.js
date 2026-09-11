@@ -20,7 +20,7 @@
   // Return the original trimmed string when allowed, or null when unsafe.
   var sanitizeUrl = function (u) {
     try {
-      if (!u && u !== 0) return null;
+      if (u == null) return null;
       var s = String(u).trim();
       if (!s) return null;
       // Reject any control characters or whitespace inside the URL
@@ -89,7 +89,7 @@
     timeoutMs = typeof timeoutMs === 'number' ? timeoutMs : 10000;
     var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     var signal = controller ? controller.signal : undefined;
-    var fetchOpts = opts ? Object.assign({}, opts) : {};
+    var fetchOpts = opts ? (typeof Object.assign === 'function' ? Object.assign({}, opts) : (function(o){var r={}; for(var k in o) if (Object.prototype.hasOwnProperty.call(o,k)) r[k]=o[k]; return r;})(opts)) : {};
     if (signal) fetchOpts.signal = signal;
 
     return new Promise(function (resolve, reject) {

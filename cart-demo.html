@@ -28,23 +28,52 @@
 
   <script src="scripts/cart-ui.js"></script>
   <script>
-    document.getElementById('render-once').addEventListener('click', function () {
-      window.ThreadlineCartUI.renderInto('cart-demo-root');
-    });
-    document.getElementById('render-again').addEventListener('click', function () {
-      // call multiple times to ensure idempotency
-      window.ThreadlineCartUI.renderInto('cart-demo-root');
-      window.ThreadlineCartUI.renderInto('cart-demo-root');
-      window.ThreadlineCartUI.renderInto('cart-demo-root');
-    });
-    document.getElementById('dispatch-add').addEventListener('click', function () {
-      document.dispatchEvent(new CustomEvent('threadline:add-to-cart', { detail: { quantity: 1 } }));
-    });
+    (function () {
+      var btnOnce = document.getElementById('render-once');
+      if (btnOnce) {
+        btnOnce.addEventListener('click', function () {
+          var ui = window.ThreadlineCartUI;
+          if (ui && typeof ui.renderInto === 'function') {
+            ui.renderInto('cart-demo-root');
+          } else {
+            console.warn('ThreadlineCartUI.renderInto is not available');
+          }
+        });
+      }
 
-    // log cart-updated events
-    document.addEventListener('threadline:cart-updated', function (ev) {
-      console.log('cart-updated', ev.detail);
-    });
+      var btnAgain = document.getElementById('render-again');
+      if (btnAgain) {
+        btnAgain.addEventListener('click', function () {
+          var ui = window.ThreadlineCartUI;
+          if (ui && typeof ui.renderInto === 'function') {
+            // call multiple times to ensure idempotency
+            ui.renderInto('cart-demo-root');
+            ui.renderInto('cart-demo-root');
+            ui.renderInto('cart-demo-root');
+          } else {
+            console.warn('ThreadlineCartUI.renderInto is not available');
+          }
+        });
+      }
+
+      var btnDispatch = document.getElementById('dispatch-add');
+      if (btnDispatch) {
+        btnDispatch.addEventListener('click', function () {
+          if (typeof document.dispatchEvent === 'function') {
+            document.dispatchEvent(new CustomEvent('threadline:add-to-cart', { detail: { quantity: 1 } }));
+          } else {
+            console.warn('document.dispatchEvent is not available');
+          }
+        });
+      }
+
+      // log cart-updated events
+      if (typeof document.addEventListener === 'function') {
+        document.addEventListener('threadline:cart-updated', function (ev) {
+          console.log('cart-updated', ev.detail);
+        });
+      }
+    })();
   </script>
 </body>
 </html>
