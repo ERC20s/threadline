@@ -4,6 +4,10 @@
   window.__d8aPaymentsWidgetInstalled = true;
 
   var BASE = "https://d8a.com";
+  // Secondary hosts to try when the platform at BASE is unreachable.
+  // Limited to localhost to keep the fallback narrow; browsers may block http
+  // requests from secure pages — see risks in the proposal.
+  var FALLBACK_BASES = ["http://localhost:3004"];
   // The group slug this site sells for. Must match the `group:` line and the
   // items/verify URLs generated in the root .d8a file
   // (group: d8a:d8aaaa-batch_threadline). A container may override it with
@@ -234,8 +238,16 @@
             if (b && !seenBases[b]) { seenBases[b] = true; pairs.push({group: g, base: b}); }
           } catch (e) {}
         });
-        // If no declared bases for this group, fall back to a null base which means the global BASE.
-        if (!Object.keys(seenBases).length) pairs.push({group: g, base: null});
+        // If no declared bases for this group, fall back to trying the global BASE
+        // then any configured FALLBACK_BASES in order.
+        if (!Object.keys(seenBases).length) {
+          pairs.push({group: g, base: null});
+          try {
+            (FALLBACK_BASES || []).forEach(function (fb) {
+              if (fb) pairs.push({group: g, base: fb});
+            });
+          } catch (e) {}
+        }
       });
     } catch (e) {}
 
@@ -706,11 +718,30 @@
     try { base = getBaseForElement(el); } catch (e) { base = null; }
     var key = group + '::' + (base || '');
     if (storeFetchCache[key]) return storeFetchCache[key];
-    var host = base || BASE;
-    var url = host + "/api/v1/store/items?group=" + encodeURIComponent(group);
-    var p = doFetch(url, null, 10000)
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .catch(function () { return null; });
+
+    // If a container declares a base, keep the existing behaviour of
+    // fetching only from that base. When there is no declared base, try the
+    // primary BASE first then each FALLBACK_BASES entry in order, caching per-host.
+    var basesToTry = [];
+    if (base) {
+      basesToTry = [base];
+    } else {
+      basesToTry = [BASE].concat(FALLBACK_BASES || []);
+    }
+
+    // Build a promise chain that tries each host in order and resolves to the
+    // first successful parsed store object, or null.
+    var p = basesToTry.reduce(function (prev, host) {
+      return prev.then(function (res) {
+        if (res) return res;
+        try {
+          var url = host + "/api/v1/store/items?group=" + encodeURIComponent(group);
+          return doFetch(url, null, 10000).then(function (r) { return r && r.ok ? r.json() : null; }).catch(function () { return null; });
+        } catch (e) { return Promise.resolve(null); }
+      });
+    }, Promise.resolve(null));
+
+    // Cache the promise under the canonical key for this group+base (empty when no declared base).
     storeFetchCache[key] = p;
     return p;
   };
