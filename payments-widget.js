@@ -322,6 +322,15 @@
       }
       anchor.setAttribute('data-item', String(itemId));
 
+      // If the host did not supply any visible content, set a sensible default
+      // label so the returned control is accessible and visible for keyboard users.
+      try {
+        var label = (opts && typeof opts.label !== 'undefined') ? opts.label : ((opts && typeof opts.text !== 'undefined') ? opts.text : 'Buy');
+        var hasVisible = false;
+        try { hasVisible = (anchor.textContent && String(anchor.textContent).replace(/\s+/g, '').length > 0) || anchor.childNodes.length > 0; } catch (e) { hasVisible = false; }
+        if (!hasVisible) try { anchor.textContent = String(label); } catch (e) {}
+      } catch (e) {}
+
       // Propagate container-level default quantity if present so the anchor
       // honours what the host page declared.
       try {
