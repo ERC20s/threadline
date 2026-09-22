@@ -226,6 +226,8 @@ link when it does.
   must equal the slug in `.d8a` (`group: d8a:d8aaaa-batch_threadline`), and the
   shop pages repeat it as `data-d8a-group`. If they ever disagree the panel says
   "There was an error loading the store (group …)" and names the slug it tried.
+  Which platform it asks is no longer a constant — see "Which platform the
+  widget talks to" below; served from localhost it talks to the local one.
 - `scripts/checkout-intent.js` closes the early-click race. The widget only fills
   `#group-store` once its items request returns, so a shopper who clicks Buy in
   the first seconds used to be told the piece was not listed. The helper adds
@@ -248,6 +250,50 @@ link when it does.
   disables Buy and says it is not listed. If the panel fails or times out the
   page is left exactly as written and the queued-click path still applies.
   Prices are set on the group's Admin tab, so the shop always wins.
+
+---
+
+Which platform the widget talks to
+
+- The group's server is no longer the public one: `https://d8a.com` answers
+  `/api/v1/store/items?group=d8aaaa-batch_threadline` with a 404, and the group
+  runs on this machine instead — `http://localhost:3004`, the host the last
+  generated `.d8a` named for the Admin tab. A widget that hard-coded
+  `https://d8a.com` therefore drew "the shop could not be reached" on every
+  page, which is what the read-only fallback was standing in for.
+- `payments-widget.js` no longer names one host. It resolves its base once, on
+  load, in this order:
+  1. `window.D8A_BASE`, if a page sets it **before** the script — an explicit
+     override for a staging platform or a different local port. It is validated
+     by the widget's own `sanitizeUrl` (absolute http(s), `//host`, or a
+     same-origin `/path`) and trailing slashes are dropped.
+  2. `http://localhost:3004` when the page itself is served from a local origin
+     — `localhost`, `127.0.0.1`, `::1`, any `*.localhost` name, or `file://`.
+     That is the `site` run entry, `serve -l 5004`, so opening
+     <http://localhost:5004/> now reaches the local platform with no per-page
+     configuration.
+  3. `https://d8a.com` otherwise, so a public deployment behaves exactly as it
+     did before.
+  The two hosts are the `LOCAL_BASE` and `REMOTE_BASE` constants at the top of
+  the file; change the port there if the platform moves.
+- The resolved value is published as `window.d8aPaymentsBase` so a page can
+  build its own links to the same platform. `product.html` uses it for the
+  "Open the group shop" link on the not-listed line, which used to point at
+  `d8a.com` while every request on the page went to localhost, and
+  `tests/payments-widget.test.html` asserts the read-only footer link against
+  it rather than against a fixed host.
+- A single `#group-store` container still overrides all of this with
+  `data-d8a-base` (next section), and the checkout POST still prefers the
+  `checkout.url` the items response carries — the local platform returns its own
+  absolute URL there, so nothing on the buy path is guessed.
+- The `<noscript>` shop links on `index.html`, `product.html` and
+  `products.html` are deliberately left pointing at `https://d8a.com/g/…`: they
+  are static markup, so they cannot follow the resolution above, and the public
+  group page is the right thing to name for a reader with no JavaScript.
+- Local checkout is cross-origin (site on 5004, platform on 3004). The platform
+  answers with `access-control-allow-origin: *` and allows `POST` plus a
+  `Content-Type` preflight, so the items GET and the checkout POST both work as
+  they stand.
 
 ---
 
@@ -341,9 +387,19 @@ browser left for `d8a.com/pay/c1` — taking every result on the page with it, s
 the suite could not actually be read. Nothing asserts on those URLs; they only
 have to be somewhere the widget is willing to send a shopper.
 
-`tests/product-page-sanity.test.html` is the other, smaller guardrail: it
-fetches `product.html` and `scripts/cart.js` as text and checks for markers a
-past change removed by accident.
+`tests/product-page-sanity.test.html` is a smaller guardrail: it fetches
+`product.html` and `scripts/cart.js` as text and checks for markers a past
+change removed by accident.
+
+`tests/cart.test.html` drives `scripts/cart.js` and `scripts/cart-ui.js`
+together against real `localStorage` and asserts the badge and drawer follow
+the stored cart. The two modules had drifted apart: cart.js published the badge
+number as `totalQuantity` while cart-ui.js read `count`, so the badge stayed
+blank through every real update, and cart-ui.js ran its own tally of
+`threadline:add-to-cart` alongside cart.js's, so the badge showed the last
+add's quantity rather than the cart total. cart.js now publishes `count`, and
+cart-ui.js defers to the cart module whenever the page loads one — its own
+tally is only a stand-in for a page that renders the UI without it.
 
 .d8a declares the group, the run entry and the payments block. Do not hand-edit
 its generated blocks.

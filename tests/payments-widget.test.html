@@ -383,14 +383,29 @@
             var priceOk = !!price && price.textContent.indexOf('$') !== -1;
             note('fallback-readonly-renders', infoOk && anchorTextOk && noDataItem && priceOk, 'info='+(info?info.textContent:'null')+' anchor='+ (anchor?anchor.outerHTML:'null') + ' price='+ (price?price.textContent:'null'));
 
+            /* The View links are the only navigation this fallback has, and
+               "renders a View link" was not enough to know they work: every
+               one of them was href="#" for a while, because the relative URL
+               they are built from was being run through the widget's
+               sanitizeUrl, which whitelists only absolute and root-relative
+               URLs and so returned null for all of them. Assert the address,
+               not just the word. */
+            var viewHref = anchor ? (anchor.getAttribute('href') || '') : '';
+            var viewOk = /^product\.html\?id=.+/.test(viewHref) && viewHref !== '#';
+            note('fallback-readonly-view-link-goes-somewhere', viewOk, 'href=' + viewHref);
+
             // The read-only fallback's footer link must be usable: a real href
             // pointing at the container's group page and readable link text.
             var anchors = container ? Array.prototype.slice.call(container.querySelectorAll('a')) : [];
             var footer = anchors.length ? anchors[anchors.length - 1] : null;
             var footerHref = footer ? (footer.getAttribute('href') || '') : '';
             var footerText = footer ? (footer.textContent || '') : '';
+            /* Built by the widget from its resolved base, which is the local
+               platform when this page is served from localhost and d8a.com
+               when it is not — so assert against the base in force, not a
+               host. */
             var footerOk = !!footer
-              && footerHref === 'https://d8a.com/g/fallback-test'
+              && footerHref === (window.d8aPaymentsBase || 'https://d8a.com') + '/g/fallback-test'
               && footerText.length > 0
               && footerText !== 'View';
             note('fallback-readonly-footer-link', footerOk, 'href=' + footerHref + ' text=' + footerText);

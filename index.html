@@ -172,12 +172,19 @@
         var unlisted = (shopIndex && T.reconcileGrid) ? T.reconcileGrid(grid, shopIndex) : 0;
         /* A receipt in the status line outranks the grid's own count: the shop
            panel can render (and this pass run again) after a returning buyer's
-           order has been verified, and that must not wipe the confirmation. */
+           order has been verified, and that must not wipe the confirmation.
+           An outage notice has to survive this write too — it is taken down
+           when the shop answers, not by a repaint — so it is put back after
+           the line is rewritten rather than blocking the rewrite. */
         if (status && !(T.receiptIn && T.receiptIn(status))) {
+          var wasDown = !!(T.shopDownIn && T.shopDownIn(status));
           status.textContent = unlisted
             ? unlisted + (unlisted === 1 ? " featured piece is" : " featured pieces are") +
               " not in the shop yet — the rest check out at the price shown."
             : "";
+          if (wasDown && T.renderShopDown) {
+            T.renderShopDown(status, { brief: true, append: true });
+          }
         }
       };
 
@@ -226,21 +233,31 @@
          repaint the featured grid. A panel that fails, times out or renders no
          rows changes nothing on this page. */
       if (panel && T.whenBuyAnchor && T.shopPriceIndex) {
+        var shopAnswered = function () {
+          var index = T.shopPriceIndex(panel);
+          if (!index || !index.size) return;
+          /* Down to up: the outage notice comes off before show() rewrites
+             the line, which it will not do while the notice is standing. */
+          if (T.clearShopDown) T.clearShopDown(status);
+          shopIndex = index;
+          show();
+        };
+
         T.whenBuyAnchor(panel, null, T.BUY_ANCHOR_TIMEOUT || 12000)
-          .then(function () {
-            var index = T.shopPriceIndex(panel);
-            if (!index || !index.size) return;
-            shopIndex = index;
-            show();
-          })
+          .then(shopAnswered)
           .catch(function () {
             /* Nothing to reconcile against — and every reason whenBuyAnchor
                rejects for is the shop's, not ours. Say so in one short line so
                the shopper knows the prices on these cards are the catalogue's,
                and that Retry lives in the Checkout panel below. Never over a
                paid receipt. */
-            if (!status || !T.renderShopDown) return;
-            T.renderShopDown(status, { brief: true, append: true });
+            if (status && T.renderShopDown) {
+              T.renderShopDown(status, { brief: true, append: true });
+            }
+            /* That wait is over, but the shopper's Retry can still bring the
+               shop back. Keep watching, or these cards would hold catalogue
+               prices and the outage line under a shop that is answering. */
+            if (T.whenShopRows) T.whenShopRows(panel, shopAnswered);
           });
       }
     })();

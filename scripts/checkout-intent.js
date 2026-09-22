@@ -740,6 +740,27 @@
     return box;
   };
 
+  /* The counterpart to receiptIn, for the pages that write their own text into
+     the same status line: an outage notice is there and must not be written
+     over. A filter click used to do exactly that, dropping the one sentence
+     explaining why the prices on the cards are the catalogue's. */
+  var shopDownIn = function (target) {
+    try {
+      if (!target || !target.querySelector) return null;
+      return target.querySelector("[" + SHOP_DOWN_ATTR + "]");
+    } catch (e) { return null; }
+  };
+
+  /* Take the notice back down once the shop is answering again, so the line
+     underneath is free to say what it normally says. */
+  var clearShopDown = function (target) {
+    var box = shopDownIn(target);
+    if (!box || !box.parentNode) return false;
+    box.parentNode.removeChild(box);
+    if (target.removeAttribute) target.removeAttribute("data-tone");
+    return true;
+  };
+
   var whenBuyAnchor = function (container, matchFn, timeoutMs) {
     var limit = (typeof timeoutMs === "number" && timeoutMs > 0) ? timeoutMs : DEFAULT_TIMEOUT;
 
@@ -790,6 +811,61 @@
     });
   };
 
+  /* whenBuyAnchor settles once and then stops watching — observer
+     disconnected, poll and timeout cleared. That is right for the wait itself,
+     but the Retry control payments-widget.js draws on a failed panel can bring
+     the shop back long afterwards, and nothing was listening for it: the grid
+     kept its catalogue prices and the "isn't answering" line stayed on screen
+     under a panel that was answering again.
+
+     whenShopRows is the watch that outlives the rejection. No timeout and no
+     rejection of its own: it calls back the first time the panel has a buy
+     row, however many failed Retries it takes to get there. Returns the
+     function that stops it. */
+  var whenShopRows = function (container, onRows) {
+    var stopped = false;
+    var observer = null;
+    var poll = null;
+
+    var stop = function () {
+      stopped = true;
+      if (observer) { try { observer.disconnect(); } catch (e) {} observer = null; }
+      if (poll) { clearInterval(poll); poll = null; }
+    };
+
+    if (!container || typeof onRows !== "function") return stop;
+
+    var tick = function () {
+      if (stopped) return true;
+      var hit = findBuyAnchor(container, null);
+      if (!hit) return false;
+      stop();
+      onRows(hit);
+      return true;
+    };
+
+    /* Back already by the time we are asked: nothing to wait for. */
+    if (tick()) return stop;
+
+    if (typeof MutationObserver !== "undefined") {
+      try {
+        observer = new MutationObserver(function () { tick(); });
+        observer.observe(container, { childList: true, subtree: true });
+      } catch (e) { observer = null; }
+    }
+
+    /* The widget only ever paints rows through the DOM, so the observer sees
+       every way the shop can come back and no polling is needed beside it.
+       Without one there is nothing else to notice, so fall back to a poll —
+       bounded, because this watch has no timeout to end it. */
+    if (!observer) {
+      poll = setInterval(tick, 1000);
+      setTimeout(function () { if (!stopped) stop(); }, 5 * 60 * 1000);
+    }
+
+    return stop;
+  };
+
   ns.findBuyAnchor = findBuyAnchor;
   ns.buyRowPrice = buyRowPrice;
   ns.buyRowName = buyRowName;
@@ -814,9 +890,12 @@
   ns.CONTACT_EMAIL = CONTACT_EMAIL;
   ns.isShopDownReason = isShopDownReason;
   ns.renderShopDown = renderShopDown;
+  ns.shopDownIn = shopDownIn;
+  ns.clearShopDown = clearShopDown;
   ns.shopDownMailto = shopDownMailto;
   ns.SHOP_DOWN_NOTE = SHOP_DOWN_NOTE;
   ns.SHOP_DOWN_ATTR = SHOP_DOWN_ATTR;
   ns.whenBuyAnchor = whenBuyAnchor;
+  ns.whenShopRows = whenShopRows;
   ns.BUY_ANCHOR_TIMEOUT = DEFAULT_TIMEOUT;
 })(window);

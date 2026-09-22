@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Your account — Threadline Clothing Co.</title>
+  <meta name="description" content="Sign in with your D8A account to see what you bought from Threadline and pick it up.">
+  <link rel="stylesheet" href="styles/main.css">
+  <!-- The brand mark, inline so the site never asks for a file that is not
+       in the repository (every page used to log a 404 for /favicon.ico). -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%237c5cff'/%3E%3Cpath d='M8 10.5h16M16 10.5v13' stroke='%23fff' stroke-width='3.4' stroke-linecap='round'/%3E%3C/svg%3E">
+</head>
+<body>
+  <div class="main">
+    <a class="skip-link" href="#content">Skip to content</a>
+
+    <header class="header">
+      <div class="brand"><a href="index.html">Threadline<small>Clothing Co.</small></a></div>
+      <nav class="nav" aria-label="Site navigation">
+        <a href="index.html">Home</a>
+        <a href="products.html">Shop</a>
+        <a href="lookbook.html">Lookbook</a>
+        <a href="index.html#about">About</a>
+        <a href="size-guide.html">Size guide</a>
+        <a href="account.html" aria-current="page">Account</a>
+      </nav>
+    </header>
+
+    <main id="content">
+      <section aria-labelledby="account-title">
+        <p class="kicker">Your account</p>
+        <h1 id="account-title">Sign in with D8A</h1>
+        <p>No password to make up: sign in with your D8A account and everything you buy here while signed in is kept on it — see it below, and pick each piece up once.</p>
+
+        <!-- Everything between here and the closing comment is the login: block of this
+             repository's .d8a, pasted as it stands. This page is one of that block's
+             redirect lines, so a sign-in returns here. Change it there, not here. -->
+        <!-- Login with D8A: accounts on this site with nothing secret on it. The script
+             signs a visitor in with their D8A account (PKCE — no password ever touches
+             this page) and brings them back to THIS page, which must therefore be one of
+             the redirect lines above. Then: d8aLogin.signIn() to start, d8aLogin.user()
+             for who is signed in (key your own data on .sub — it never changes),
+             d8aLogin.purchases() for what they bought here while signed in,
+             d8aLogin.redeem(orderId) to hand one purchase over ONCE, d8aLogin.signOut()
+             to leave. Load it ABOVE the payments: block so a signed-in buyer's order is
+             bound to their account. -->
+        <!-- DEVIATION from the pasted block, kept as small as possible because
+             regenerating .d8a is the real fix. The block names
+             https://d8a.com/d8a-login.js, which 404s — the group's platform serves
+             this script, the public host does not. So the host is resolved exactly
+             the way payments-widget.js resolves its base (window.D8A_BASE, then a
+             local origin, then the public host) and the tag is written from here.
+             NOTE: loading the script is only half of sign-in. The redirect lines in
+             the login: block are verkl.com, and sign-in returns ONLY to an exact
+             redirect match set on the group's Admin tab — so a sign-in started from
+             this site cannot come back to it until this site's origin is added
+             there. That part is platform configuration, not repository code. -->
+        <script>
+        (function () {
+          var base = (function () {
+            try {
+              var o = String(window.D8A_BASE || '');
+              if (o.indexOf('http://') === 0 || o.indexOf('https://') === 0) {
+                while (o.length > 1 && o.slice(-1) === '/') o = o.slice(0, -1);
+                return o;
+              }
+            } catch (e) {}
+            try {
+              var h = String(location.hostname || '').toLowerCase();
+              if (location.protocol === 'file:' || h === 'localhost' || h === '127.0.0.1' ||
+                  h === '::1' || h === '[::1]' || h.slice(-10) === '.localhost') return 'http://localhost:3004';
+            } catch (e) {}
+            return 'https://d8a.com';
+          })();
+          var s = document.createElement('script');
+          s.src = base + '/d8a-login.js';
+          s.setAttribute('data-client', 'd8a_app_b3a35968bf907e64');
+          /* Injecting the tag means it no longer blocks the parser, so the panel
+             below can run before d8aLogin exists. It waits on this instead.
+             Resolves on failure too — the panel then says so rather than rendering
+             nothing at all, which is what the old silent return did. */
+          window.__d8aLoginReady = new Promise(function (resolve) {
+            s.onload = resolve;
+            s.onerror = function () { resolve(); };
+          });
+          document.head.appendChild(s);
+        })();
+        </script>
+        <!-- The account panel: a Sign in button; once signed in, who they are and every
+             purchase from this shop with a Redeem button each. Paste it where the
+             account page is and restyle freely. Redeeming fires "d8a-login:redeemed" on
+             document with the platform's answer ({ already, purchase }) — grant the
+             download, the code, the role in that handler, exactly as "group-store:paid"
+             releases a sale. -->
+        <div id="d8a-account"></div>
+        <script>
+        (function () {
+          /* Wait for the loader above before reading window.d8aLogin. This used to
+             read it synchronously and return silently when the script had not
+             arrived — which, with the script 404ing, is every time: the page showed
+             its heading and then nothing at all. */
+          (window.__d8aLoginReady || Promise.resolve()).then(function () {
+          var el = document.getElementById("d8a-account");
+          var login = window.d8aLogin;
+          if (!el) return;
+          if (!login) {
+            var p = document.createElement("p");
+            p.style.cssText = "font:14px system-ui,sans-serif;color:#6b7280";
+            p.textContent = "Sign-in is unavailable right now.";
+            el.appendChild(p);
+            return;
+          }
+          var esc = function (s) {
+            return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; });
+          };
+          var F = "font:14px system-ui,sans-serif";
+          var BTN = "font:inherit;background:#7c5cff;color:#fff;border:0;border-radius:999px;padding:6px 14px;cursor:pointer";
+          var LINK = "font:inherit;color:#7c5cff;background:none;border:0;padding:0;cursor:pointer;text-decoration:underline";
+          var draw = function () {
+            var u = login.user();
+            if (!u) {
+              el.innerHTML = '<p style="' + F + '"><button type="button" data-d8a-signin style="' + BTN + '">Sign in with D8A</button>' +
+                ' <span style="font-size:12px;color:#6b7280">What you buy here is kept on your account.</span></p>';
+              return;
+            }
+            var who = u.preferred_username ? "@" + u.preferred_username : (u.name || "you");
+            el.innerHTML = '<p style="' + F + '">' +
+              (u.picture ? '<img src="' + esc(u.picture) + '" alt="" width="24" height="24" style="border-radius:50%;vertical-align:middle;margin-right:6px">' : '') +
+              'Signed in as <b>' + esc(who) + '</b> · <button type="button" data-d8a-signout style="' + LINK + '">Sign out</button></p>' +
+              '<div data-d8a-purchases style="' + F + ';color:#9ca3af">Loading your purchases…</div>';
+            var box = el.querySelector("[data-d8a-purchases]");
+            /* Race the call against a deadline. purchases() rejects on a failure,
+               but a request that simply never answers is not a failure — it never
+               settles, and the panel sat on "Loading your purchases…" for as long
+               as the page was open. The platform's /api/login/purchases does hang
+               this way when the group is missing: the preflight returns 204 and the
+               GET stays pending. Ten seconds matches the payments widget. */
+            var deadline = new Promise(function (_, reject) {
+              setTimeout(function () { reject(new Error("timeout")); }, 10000);
+            });
+            Promise.race([login.purchases(), deadline]).then(function (list) {
+              if (!list.length) {
+                box.innerHTML = '<p>Nothing bought here yet. Buy while signed in and it appears here.</p>';
+                return;
+              }
+              box.style.color = "";
+              box.innerHTML = list.map(function (o) {
+                var when = o.paidAt ? new Date(o.paidAt).toLocaleDateString() : "";
+                return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #e5e7eb">' +
+                  '<div style="flex:1"><b>' + esc(o.itemName) + '</b>' + (o.quantity > 1 ? " ×" + o.quantity : "") +
+                  (o.variant ? ' <span style="color:#6b7280">' + esc(o.variant) + '</span>' : '') +
+                  '<div style="font-size:12px;color:#6b7280">' + esc(o.amount) + (when ? " · " + esc(when) : "") + ' · order ' + esc(o.id) + '</div></div>' +
+                  (o.redeemed
+                    ? '<span style="font-size:12px;color:#059669">Redeemed</span>'
+                    : '<button type="button" data-d8a-redeem="' + esc(o.id) + '" style="' + BTN + '">Redeem</button>') +
+                  '</div>';
+              }).join("");
+            }).catch(function () {
+              box.innerHTML = '<p>Your purchases could not be loaded. <button type="button" data-d8a-retry style="' + LINK + '">Try again</button></p>';
+            });
+          };
+          el.addEventListener("click", function (e) {
+            var t = e.target && e.target.closest ? e.target.closest("[data-d8a-signin],[data-d8a-signout],[data-d8a-redeem],[data-d8a-retry]") : null;
+            if (!t) return;
+            if (t.hasAttribute("data-d8a-signin")) { login.signIn(); return; }
+            if (t.hasAttribute("data-d8a-signout")) { login.signOut(); return; }
+            if (t.hasAttribute("data-d8a-retry")) { draw(); return; }
+            var id = t.getAttribute("data-d8a-redeem");
+            t.textContent = "Redeeming…";
+            login.redeem(id).then(function (r) {
+              // r.already is true when this order was handed over before (another
+              // device, an earlier visit) — grant it again only if your own records say
+              // the person never received it.
+              document.dispatchEvent(new CustomEvent("d8a-login:redeemed", { detail: r }));
+              draw();
+            }).catch(function () { t.textContent = "Redeem"; });
+          });
+          login.ready.then(draw);
+          document.addEventListener("d8a-login:signed-in", draw);
+          document.addEventListener("d8a-login:signed-out", draw);
+          });
+        })();
+        </script>
+        <!-- end of the .d8a login: block -->
+      </section>
+    </main>
+  </div>
+  <script>
+    // What redeeming grants is ours to decide: for now, a note on the page.
+    document.addEventListener("d8a-login:redeemed", function (e) {
+      var d = e.detail || {}, p = d.purchase || {};
+      var el = document.getElementById("d8a-account");
+      if (!el) return;
+      var note = document.createElement("p");
+      note.className = "kicker";
+      note.textContent = (d.already ? "Already picked up earlier: " : "Picked up: ") + (p.itemName || p.id || "your order");
+      el.parentNode.insertBefore(note, el.nextSibling);
+    });
+  </script>
+</body>
+</html>

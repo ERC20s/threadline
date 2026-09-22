@@ -3,7 +3,6 @@
   if (window.__d8aPaymentsWidgetInstalled) return;
   window.__d8aPaymentsWidgetInstalled = true;
 
-  var BASE = "https://d8a.com";
   // The group slug this site sells for. Must match the `group:` line and the
   // items/verify URLs generated in the root .d8a file
   // (group: d8a:d8aaaa-batch_threadline). A container may override it with
@@ -35,6 +34,76 @@
     } catch (e) { return null; }
   };
 
+  // Where the platform lives. Two hosts, because the group's server is no
+  // longer on the public one: `https://d8a.com` still 404s the store API, and
+  // the group now runs on this machine (the admin tab the last generated .d8a
+  // pointed at is http://localhost:3004/g/d8aaaa-batch_threadline?section=admin).
+  // So the widget resolves its base per page instead of naming one host:
+  //
+  //   1. window.D8A_BASE, if a page sets it before this script — an explicit
+  //      override for a staging platform or a different local port. Validated
+  //      by sanitizeUrl, trailing slashes dropped.
+  //   2. LOCAL_BASE when the page itself is served from a local origin
+  //      (localhost, 127.0.0.1, ::1, a *.localhost name, or file://) — which
+  //      is the `site` run entry in .d8a, `serve -l 5004`.
+  //   3. REMOTE_BASE otherwise, so a public deployment behaves exactly as it
+  //      did before.
+  //
+  // A single #group-store container can still override all of this with
+  // data-d8a-base; see getBaseForElement below.
+  var LOCAL_BASE = "http://localhost:3004";
+  // REMOTE_BASE is NOT a working default. https://d8a.com is up, but it answers
+  // 404 for this group's store API (and for /d8a-login.js) — the group's platform
+  // is elsewhere now. It is kept only so a deployment that forgets to say where
+  // the platform is still degrades to the widget's "shop is not answering" panel
+  // rather than throwing. A real deployment MUST say where the platform is, by
+  // setting window.D8A_BASE before this script, by putting data-d8a-base on the
+  // #group-store container, or by editing this constant. resolveBase warns once
+  // when it falls through to here, so this is not something a deploy can ship
+  // without a trace in the console.
+  var REMOTE_BASE = "https://d8a.com";
+
+  var stripTrailingSlashes = function (s) {
+    while (s.length > 1 && s[s.length - 1] === '/') s = s.slice(0, -1);
+    return s;
+  };
+
+  var isLocalOrigin = function () {
+    try {
+      if (location.protocol === 'file:') return true;
+      var h = String(location.hostname || '').toLowerCase();
+      // The brackets are how location.hostname reports an IPv6 literal in some
+      // browsers and not others, so accept both spellings.
+      return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '[::1]' || /\.localhost$/.test(h);
+    } catch (e) { return false; }
+  };
+
+  var resolveBase = function () {
+    try {
+      var override = sanitizeUrl(window.D8A_BASE);
+      if (override) return stripTrailingSlashes(override);
+    } catch (e) {}
+    if (isLocalOrigin()) return LOCAL_BASE;
+    // Falling through to a base that is known not to serve this group's store.
+    // Say so once, plainly, naming the fix — a silent 404 here reads to a shopper
+    // as "the shop is down" and to a deployer as nothing at all.
+    try {
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('[d8a] No platform base set for this deployment, falling back to ' +
+          REMOTE_BASE + ', which does not serve group "' + GROUP + '". The shop will ' +
+          'show as unreachable. Set window.D8A_BASE before payments-widget.js, or ' +
+          'data-d8a-base on the #group-store container.');
+      }
+    } catch (e) {}
+    return REMOTE_BASE;
+  };
+
+  var BASE = resolveBase();
+  // Published so a page can build its own links to the same platform (the
+  // "not listed" fallback on product.html does) and so the test suite can
+  // assert against the base actually in force rather than a hard-coded host.
+  try { window.d8aPaymentsBase = BASE; } catch (e) {}
+
   // Resolve a per-container base declared on the container element.
   // Reads data-d8a-base, runs through sanitizeUrl, strips trailing slashes,
   // caches the resolved value on el.__d8a_base and returns null when absent/invalid.
@@ -45,8 +114,7 @@
       var raw = el.getAttribute('data-d8a-base');
       var s = sanitizeUrl(raw);
       if (!s) { el.__d8a_base = null; return null; }
-      // Strip trailing slashes
-      while (s.length > 1 && s[s.length - 1] === '/') s = s.slice(0, -1);
+      s = stripTrailingSlashes(s);
       el.__d8a_base = s;
       return s;
     } catch (e) { try { el.__d8a_base = null; } catch (err) {} return null; }
@@ -373,9 +441,14 @@
           var price = document.createElement('span'); price.textContent = priceText; row.appendChild(price);
 
           var a = document.createElement('a');
-          var href = 'product.html?id=' + encodeURIComponent(p.id || '');
-          var safe = sanitizeUrl(href) || '#';
-          a.setAttribute('href', safe);
+          /* Built here rather than taken from the platform: a fixed relative
+             path with the id percent-encoded into it, so there is no scheme
+             for sanitizeUrl to guard against. It must NOT go through
+             sanitizeUrl — that whitelists only absolute and root-relative
+             URLs, so it returned null for this one and left every View link
+             an inert href="#", which is the whole navigation this fallback
+             has. */
+          a.setAttribute('href', 'product.html?id=' + encodeURIComponent(p.id || ''));
           // Intentionally do NOT set data-item, do not attach checkout behavior.
           a.setAttribute('rel', 'noopener noreferrer');
           a.style.cssText = 'background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;text-decoration:none';
