@@ -46,6 +46,18 @@
       <div id="group-store" data-d8a-group="fallback-test" data-d8a-fallback="readonly"></div>
     </div>
     <div>
+      <h3>Fallback guard (fallback-guard-group)</h3>
+      <!-- Every /api/v1/store/items request for this group always fails, no
+           matter the host, so fetchStoreForGroup exhausts every base it will
+           try. Which hosts that includes is exactly what proposal #283 gates:
+           the assertions below read window.__testFallbackGuardUrls to see
+           whether a request naming localhost:3004 was ever attempted, and
+           compare that against window.d8aPaymentsIsLocalOrigin() — the same
+           guard fetchStoreForGroup and groupStoreVerify are now required to
+           go through via getFallbackBases(). -->
+      <div id="group-store" data-d8a-group="fallback-guard-group"></div>
+    </div>
+    <div>
       <h3>Checkout fixture (checkout-group)</h3>
       <!-- Dedicated fixture for the checkout test: avoids adding another #group-store id -->
       <div id="group-store-checkout" data-d8a-group="checkout-group"></div>
@@ -185,6 +197,16 @@
         // other-group: empty list
         if (g === 'other-group') {
           return jsonResponse({ items: [], group: { name: 'Other', url: 'https://d8a.com/g/other-group' }, checkout: { enabled: false } }, true);
+        }
+
+        // fallback-guard-group: every host fails, always — so fetchStoreForGroup
+        // walks BASE plus whatever getFallbackBases() adds, and never succeeds.
+        // Record every URL asked for so the assertions below can see whether a
+        // request naming localhost:3004 was ever made — see proposal #283.
+        if (g === 'fallback-guard-group') {
+          window.__testFallbackGuardUrls = window.__testFallbackGuardUrls || [];
+          window.__testFallbackGuardUrls.push(url);
+          return Promise.reject(new Error('network'));
         }
 
         // intent-group: same shape as checkout-group but the answer arrives late,
@@ -340,6 +362,39 @@
       } else {
         note('groupStoreVerify-paid', false, 'groupStoreVerify not found');
       }
+
+      // 3b) getFallbackBases() — the one helper every FALLBACK_BASES reader is
+      // now required to go through (proposal #283) — must return the local
+      // fallback host only when the page's own origin is local, and an empty
+      // list otherwise. This exercises the guard directly, so it catches a
+      // regression in the helper itself no matter which call site is at fault.
+      var isLocal = (typeof window.d8aPaymentsIsLocalOrigin === 'function') ? window.d8aPaymentsIsLocalOrigin() : null;
+      var fallbacks = (typeof window.d8aPaymentsGetFallbackBases === 'function') ? window.d8aPaymentsGetFallbackBases() : null;
+      var gatedOk = isLocal === true
+        ? (Array.isArray(fallbacks) && fallbacks.length === 1 && fallbacks[0] === 'http://localhost:3004')
+        : isLocal === false
+          ? (Array.isArray(fallbacks) && fallbacks.length === 0)
+          : false;
+      note('fallback-bases-gated-by-local-origin', gatedOk,
+        'isLocalOrigin=' + isLocal + ' fallbacks=' + JSON.stringify(fallbacks));
+
+      // 3c) Integration: the fallback-guard-group container is fetched
+      // automatically at page load, and every host answers with a network
+      // rejection, so fetchStoreForGroup exhausts BASE plus whatever
+      // getFallbackBases() adds. A request naming http://localhost:3004 must
+      // appear among those attempts if and only if isLocalOrigin() says this
+      // page is local — never on a real visitor's non-local origin. Waits
+      // past fetchStoreForGroup's sequential reduce(), which settles fast
+      // since every host rejects immediately.
+      setTimeout(function () {
+        var urls = window.__testFallbackGuardUrls || [];
+        var askedLocalhost3004 = urls.some(function (u) { return u.indexOf('http://localhost:3004/') === 0; });
+        var isLocal2 = (typeof window.d8aPaymentsIsLocalOrigin === 'function') ? window.d8aPaymentsIsLocalOrigin() : null;
+        var expectAsked = isLocal2 === true;
+        var ok = urls.length > 0 && askedLocalhost3004 === expectAsked;
+        note('fetchStoreForGroup-localhost-fallback-matches-local-origin', ok,
+          'isLocalOrigin=' + isLocal2 + ' askedLocalhost3004=' + askedLocalhost3004 + ' urls=' + JSON.stringify(urls));
+      }, 500);
 
       // 4) Retry control: retry-group should show Retry button, clicking it should trigger a second network attempt and render items
       var retryContainer = document.querySelector('#fixtures div [data-d8a-group="retry-group"]') || document.querySelector('#fixtures [data-d8a-group="retry-group"]') || document.querySelector('[data-d8a-group="retry-group"]');

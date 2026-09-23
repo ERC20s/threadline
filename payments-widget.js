@@ -87,6 +87,16 @@
     } catch (e) { return false; }
   };
 
+  // The only place FALLBACK_BASES should be read from. Every call site that
+  // wants to try the secondary host must go through this helper instead of
+  // reading FALLBACK_BASES directly, so the isLocalOrigin() guard cannot be
+  // bypassed by a call site that forgets to check it — see proposal #283.
+  // On a real visitor's browser (a non-local origin) this always returns an
+  // empty array, so no request naming localhost:3004 is ever issued.
+  var getFallbackBases = function () {
+    return isLocalOrigin() ? FALLBACK_BASES : [];
+  };
+
   var resolveBase = function () {
     try {
       var override = sanitizeUrl(window.D8A_BASE);
@@ -112,6 +122,14 @@
   // "not listed" fallback on product.html does) and so the test suite can
   // assert against the base actually in force rather than a hard-coded host.
   try { window.d8aPaymentsBase = BASE; } catch (e) {}
+  // Published for the same reason as d8aPaymentsBase above: the test suite
+  // needs to assert against the guard actually in force (isLocalOrigin) and
+  // the one function every FALLBACK_BASES reader is required to go through
+  // (getFallbackBases), rather than re-implementing either check itself.
+  try {
+    window.d8aPaymentsIsLocalOrigin = isLocalOrigin;
+    window.d8aPaymentsGetFallbackBases = getFallbackBases;
+  } catch (e) {}
 
   // Resolve a per-container base declared on the container element.
   // Reads data-d8a-base, runs through sanitizeUrl, strips trailing slashes,
@@ -316,7 +334,7 @@
         if (!Object.keys(seenBases).length) {
           pairs.push({group: g, base: null});
           try {
-            (FALLBACK_BASES || []).forEach(function (fb) {
+            (getFallbackBases() || []).forEach(function (fb) {
               if (fb) pairs.push({group: g, base: fb});
             });
           } catch (e) {}
@@ -799,12 +817,13 @@
 
     // If a container declares a base, keep the existing behaviour of
     // fetching only from that base. When there is no declared base, try the
-    // primary BASE first then each FALLBACK_BASES entry in order, caching per-host.
+    // primary BASE first then each fallback host in order (getFallbackBases()
+    // is empty on a real visitor's non-local origin), caching per-host.
     var basesToTry = [];
     if (base) {
       basesToTry = [base];
     } else {
-      basesToTry = [BASE].concat(FALLBACK_BASES || []);
+      basesToTry = [BASE].concat(getFallbackBases() || []);
     }
 
     // Build a promise chain that tries each host in order and resolves to the
