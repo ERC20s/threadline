@@ -940,7 +940,10 @@ class GarmentView {
   attach() {
     const stage = this.stage;
     stage.appendChild(this.canvas);
-    stage.dataset.mode = "webgl";
+    /* data-mode is NOT set here. It hides the SVG scene, and the canvas is
+       still at opacity:0 until draw() adds is-ready on the first frame — a
+       rAF away, longer on a busy page — so setting it now leaves the stage
+       blank for that gap. draw() sets the two together. */
 
     /* garment.js owns the pointer, the drag and the arrow keys; it calls this
        on every change. One input implementation, two renderers. */
@@ -1115,22 +1118,31 @@ function start() {
   /* The grids re-render on every category click, and product.html builds its
      hero after this module has run, so new stages keep arriving. */
   const mo = new MutationObserver((records) => {
-    let touched = false;
+    let added = false;
+    let removed = false;
     for (const r of records) {
-      for (const node of r.addedNodes) {
-        if (node.nodeType === 1) { touched = true; break; }
+      if (!added) {
+        for (const node of r.addedNodes) {
+          if (node.nodeType === 1) { added = true; break; }
+        }
       }
-      if (touched) break;
+      if (!removed && r.removedNodes.length) {
+        for (const node of r.removedNodes) {
+          if (node.nodeType === 1) { removed = true; break; }
+        }
+      }
+      if (added && removed) break;
     }
-    if (touched) sweep(document);
+    if (added) sweep(document);
+    /* Views whose stage has been thrown away (a filter click rebuilds the
+       grid) let go of their meshes rather than waiting for the tab to close.
+       This used to be a 5s interval, which never stopped — it woke every tab
+       that had ever loaded this module, for the life of the tab, on pages
+       where no grid is ever rebuilt. A stage can only leave the document
+       through a removal, and this observer is already watching for those. */
+    if (removed) views.forEach((v) => { if (!v.stage.isConnected) v.dispose(); });
   });
   mo.observe(document.body, { childList: true, subtree: true });
-
-  /* Views whose stage has been thrown away (a filter click rebuilds the grid)
-     let go of their meshes rather than waiting for the tab to close. */
-  setInterval(() => {
-    views.forEach((v) => { if (!v.stage.isConnected) v.dispose(); });
-  }, 5000);
 }
 
 /* Build and draw one stage right now, skipping both the wait to be scrolled

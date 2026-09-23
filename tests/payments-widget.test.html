@@ -18,15 +18,15 @@
   <div id="results"></div>
   <div id="fixtures">
     <div>
-      <h3>Default group (d8aaaa-batch_threadline)</h3>
+      <h3>Default group (admin-batch_threadline2)</h3>
       <!-- default group: no data-d8a-group attr — must resolve to the GROUP
            constant in payments-widget.js, i.e. the slug declared in .d8a -->
       <div id="group-store"></div>
     </div>
     <div>
-      <h3>Explicit same group (d8aaaa-batch_threadline)</h3>
+      <h3>Explicit same group (admin-batch_threadline2)</h3>
       <!-- duplicate id intentionally to exercise multi-container handling -->
-      <div id="group-store" data-d8a-group="d8aaaa-batch_threadline"></div>
+      <div id="group-store" data-d8a-group="admin-batch_threadline2"></div>
     </div>
     <div>
       <h3>Different group (other-group)</h3>
@@ -177,9 +177,9 @@
           return jsonResponse({ items: [ { id: 'f1', name: 'Fallback Tee', price: '$18', payUrl: payUrl('f1') } ], group: { name: 'Fallback', url: 'https://d8a.com/g/fallback-test' }, checkout: { enabled: false } }, true);
         }
 
-        // d8aaaa-batch_threadline (the real group slug): return a payload with one unsafe payUrl
-        if (g === 'd8aaaa-batch_threadline') {
-          return jsonResponse({ items: [ { id: 'item-unsafe', name: 'Bad Link Tee', description: 'edge payUrl', price: '$12', payUrl: 'javascript:alert(1)' } ], group: { name: 'Threadline', url: 'https://d8a.com/g/d8aaaa-batch_threadline' }, checkout: { enabled: false } }, true);
+        // admin-batch_threadline2 (the real group slug): return a payload with one unsafe payUrl
+        if (g === 'admin-batch_threadline2') {
+          return jsonResponse({ items: [ { id: 'item-unsafe', name: 'Bad Link Tee', description: 'edge payUrl', price: '$12', payUrl: 'javascript:alert(1)' } ], group: { name: 'Threadline', url: 'https://d8a.com/g/admin-batch_threadline2' }, checkout: { enabled: false } }, true);
         }
 
         // other-group: empty list
@@ -231,7 +231,7 @@
       if (url.indexOf('/api/v1/store/orders/') !== -1) {
         var oid = (url.match(/\/api\/v1\/store\/orders\/([^?]+)/) || [])[1] || '';
         oid = decodeURIComponent(oid);
-        // We accept 'paid-1' as a paid order for d8aaaa-batch_threadline
+        // We accept 'paid-1' as a paid order for admin-batch_threadline2
         if (oid === 'paid-1') {
           return jsonResponse({ paid: true, order: { id: 'paid-1', itemName: 'T-Shirt', quantity: 1 } }, true);
         }
@@ -318,23 +318,23 @@
   // Run assertions after a short delay to allow the widget to initialize.
   function runChecks() {
     try {
-      // 1) Shared in-memory cache used for same group: d8aaaa-batch_threadline
+      // 1) Shared in-memory cache used for same group: admin-batch_threadline2
       // This also pins the default group: the container with no data-d8a-group
       // must resolve to the slug declared in .d8a, so both fixtures share one fetch.
       var counts = window.__testFetchCounts || {};
-      var sharedOk = (counts['d8aaaa-batch_threadline'] === 1);
-      note('shared-cache-used', sharedOk, 'items fetch count for d8aaaa-batch_threadline = ' + (counts['d8aaaa-batch_threadline']||0));
+      var sharedOk = (counts['admin-batch_threadline2'] === 1);
+      note('shared-cache-used', sharedOk, 'items fetch count for admin-batch_threadline2 = ' + (counts['admin-batch_threadline2']||0));
 
-      // 2) Safe href fallback for unsafe payUrl: item-unsafe should have href https://d8a.com/g/d8aaaa-batch_threadline
+      // 2) Safe href fallback for unsafe payUrl: item-unsafe should have href https://d8a.com/g/admin-batch_threadline2
       var anchors = Array.prototype.slice.call(document.querySelectorAll('#group-store a[data-item="item-unsafe"]'));
       var a = anchors.length ? anchors[0] : null;
-      var hrefOk = !!a && a.getAttribute('href') === 'https://d8a.com/g/d8aaaa-batch_threadline';
+      var hrefOk = !!a && a.getAttribute('href') === 'https://d8a.com/g/admin-batch_threadline2';
       note('safe-href-fallback', hrefOk, a ? ('href=' + a.getAttribute('href')) : 'anchor not found');
 
       // 3) groupStoreVerify resolves to paid order when orders endpoint returns paid
       if (typeof window.groupStoreVerify === 'function') {
         window.groupStoreVerify('paid-1').then(function (o) {
-          var ok = o && o.id === 'paid-1' && o._d8a_group === 'd8aaaa-batch_threadline';
+          var ok = o && o.id === 'paid-1' && o._d8a_group === 'admin-batch_threadline2';
           note('groupStoreVerify-paid', ok, ok ? ('id='+o.id+', group='+o._d8a_group) : JSON.stringify(o));
         }).catch(function (e) { note('groupStoreVerify-paid', false, String(e)); });
       } else {
@@ -383,14 +383,29 @@
             var priceOk = !!price && price.textContent.indexOf('$') !== -1;
             note('fallback-readonly-renders', infoOk && anchorTextOk && noDataItem && priceOk, 'info='+(info?info.textContent:'null')+' anchor='+ (anchor?anchor.outerHTML:'null') + ' price='+ (price?price.textContent:'null'));
 
+            /* The View links are the only navigation this fallback has, and
+               "renders a View link" was not enough to know they work: every
+               one of them was href="#" for a while, because the relative URL
+               they are built from was being run through the widget's
+               sanitizeUrl, which whitelists only absolute and root-relative
+               URLs and so returned null for all of them. Assert the address,
+               not just the word. */
+            var viewHref = anchor ? (anchor.getAttribute('href') || '') : '';
+            var viewOk = /^product\.html\?id=.+/.test(viewHref) && viewHref !== '#';
+            note('fallback-readonly-view-link-goes-somewhere', viewOk, 'href=' + viewHref);
+
             // The read-only fallback's footer link must be usable: a real href
             // pointing at the container's group page and readable link text.
             var anchors = container ? Array.prototype.slice.call(container.querySelectorAll('a')) : [];
             var footer = anchors.length ? anchors[anchors.length - 1] : null;
             var footerHref = footer ? (footer.getAttribute('href') || '') : '';
             var footerText = footer ? (footer.textContent || '') : '';
+            /* Built by the widget from its resolved base, which is the local
+               platform when this page is served from localhost and d8a.com
+               when it is not — so assert against the base in force, not a
+               host. */
             var footerOk = !!footer
-              && footerHref === 'https://d8a.com/g/fallback-test'
+              && footerHref === (window.d8aPaymentsBase || 'https://d8a.com') + '/g/fallback-test'
               && footerText.length > 0
               && footerText !== 'View';
             note('fallback-readonly-footer-link', footerOk, 'href=' + footerHref + ' text=' + footerText);

@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>cart — browser test</title>
+  <style>
+    body{font-family:system-ui,Arial,sans-serif;padding:18px}
+    .ok{color:#059669}
+    .fail{color:#b91c1c}
+    .case{margin:8px 0}
+    pre{background:#f9fafb;border:1px solid #e5e7eb;padding:10px;overflow:auto}
+    #sandbox{position:fixed;left:-9999px;top:0}
+  </style>
+</head>
+<body>
+  <h1>scripts/cart.js + scripts/cart-ui.js — browser test</h1>
+  <p>Open this file served from the repository root (so relative script paths
+    resolve). It drives the real modules against real <code>localStorage</code>
+    and asserts that the badge and drawer follow the stored cart.</p>
+  <p>The cases below exist because the two modules did not agree on the shape of
+    the <code>threadline:cart-updated</code> detail: cart.js published
+    <code>totalQuantity</code>, cart-ui.js read <code>count</code>, and the badge
+    stayed blank through every real update. cart-ui.js also ran its own tally of
+    <code>threadline:add-to-cart</code> alongside cart.js's, so the badge ended up
+    showing the last add's quantity instead of the cart total.</p>
+
+  <div id="results"></div>
+  <div id="sandbox"></div>
+
+  <h2>Notes</h2>
+  <p>This test writes to <code>localStorage['threadline_cart']</code> and clears
+    it again when it finishes.</p>
+
+  <script>
+  function addResult(name, ok, msg){
+    var r = document.getElementById('results');
+    var d = document.createElement('div'); d.className = 'case';
+    var s = document.createElement('span'); s.textContent = (ok? 'PASS' : 'FAIL') + ' — ' + name + ': '; s.className = ok? 'ok' : 'fail';
+    d.appendChild(s);
+    var m = document.createElement('span'); m.textContent = ' ' + (msg || ''); d.appendChild(m);
+    r.appendChild(d);
+    if(!ok){ var p = document.createElement('pre'); p.textContent = msg || ''; r.appendChild(p); }
+  }
+  </script>
+
+  <script src="../scripts/cart.js"></script>
+  <script src="../scripts/cart-ui.js"></script>
+
+  <script>
+  (function () {
+    var Cart = window.ThreadlineCart;
+    var UI = window.ThreadlineCartUI;
+
+    if (!Cart || !UI) {
+      addResult('modules-load', false, 'ThreadlineCart=' + typeof Cart + ' ThreadlineCartUI=' + typeof UI +
+        '. Serve this file from the repo root so ../scripts/*.js resolve.');
+      return;
+    }
+    addResult('modules-load', true, 'both modules present');
+
+    localStorage.removeItem('threadline_cart');
+
+    var root = document.createElement('div');
+    root.id = 'cart-test-root';
+    document.getElementById('sandbox').appendChild(root);
+    UI.renderInto(root);
+
+    var badgeEl = root.querySelector('.threadline-cart-badge');
+    var drawerEl = root.querySelector('.threadline-cart-drawer');
+    var buttonEl = root.querySelector('.threadline-cart-button');
+
+    function badge(){ return badgeEl ? badgeEl.textContent : '(no badge)'; }
+    function drawer(){ return drawerEl ? drawerEl.textContent.replace(/\s+/g,' ').trim() : '(no drawer)'; }
+    function qty(){ return Cart.read().totalQuantity; }
+    function fire(id, name, price, quantity){
+      document.dispatchEvent(new CustomEvent('threadline:add-to-cart', {
+        detail: { id: id, name: name, price: price, quantity: quantity }, bubbles: true
+      }));
+    }
+
+    addResult('renders-once', !!badgeEl && !!drawerEl && !!buttonEl, 'badge/drawer/button built');
+
+    // The summary a UI reads must carry the badge number under `count`.
+    // Asserted on a stocked cart, so a summary that simply omits `count`
+    // cannot pass by matching a totalQuantity that is also zero.
+    Cart.clear();
+    Cart.add({ id: 'probe', name: 'Probe', price: 7, quantity: 3 });
+    var summary = Cart.read();
+    addResult('summary-publishes-count',
+      summary.count === 3 && summary.count === summary.totalQuantity,
+      'count=' + summary.count + ' totalQuantity=' + summary.totalQuantity +
+      '. cart-ui.js reads detail.count; without it the badge blanks on every update.');
+
+    // Badge must follow the cart through add / merge / setQuantity / remove.
+    Cart.clear();
+    fire('tee', 'Merino Tee', 42, 2);
+    addResult('badge-after-add', badge() === '2' && qty() === 2, 'badge=' + badge() + ' qty=' + qty());
+
+    fire('cap', 'Cap', 20, 1);
+    addResult('badge-after-second-add', badge() === '3' && qty() === 3,
+      'badge=' + badge() + ' qty=' + qty() + '. A badge of 1 here means two tallies are fighting over the event.');
+
+    fire('tee', 'Merino Tee', 42, 1);
+    addResult('badge-after-merge', badge() === '4' && qty() === 4, 'badge=' + badge() + ' qty=' + qty());
+
+    Cart.setQuantity('cap', 4);
+    addResult('badge-after-setQuantity', badge() === '7' && qty() === 7, 'badge=' + badge() + ' qty=' + qty());
+
+    Cart.remove('tee');
+    addResult('badge-after-remove', badge() === '4' && qty() === 4, 'badge=' + badge() + ' qty=' + qty());
+
+    Cart.clear();
+    addResult('badge-hidden-when-empty',
+      badge() === '' && badgeEl.style.display === 'none' && qty() === 0,
+      'badge=' + JSON.stringify(badge()) + ' display=' + badgeEl.style.display);
+
+    // The count is only in the badge visually; the button carries it for
+    // assistive tech because the badge is aria-hidden.
+    fire('sock', 'Sock', 9.5, 1);
+    addResult('button-announces-count',
+      /1 item\b/.test(buttonEl.getAttribute('aria-label') || ''),
+      'aria-label=' + buttonEl.getAttribute('aria-label'));
+
+    // The drawer lists the real lines and totals them.
+    Cart.clear();
+    fire('tee', 'Merino Tee', 42, 2);
+    fire('sock', 'Sock', 9.5, 1);
+    var drawerText = drawer();
+    addResult('drawer-lists-lines',
+      drawerText.indexOf('Merino Tee') !== -1 && drawerText.indexOf('Sock') !== -1,
+      'drawer=' + drawerText);
+    addResult('drawer-totals',
+      drawerText.indexOf('$84.00') !== -1 && drawerText.indexOf('$9.50') !== -1 && drawerText.indexOf('$93.50') !== -1,
+      'drawer=' + drawerText + '. Expected 2x$42, 1x$9.50 and a $93.50 total.');
+
+    Cart.clear();
+    addResult('drawer-empty-state', drawer().indexOf('empty') !== -1, 'drawer=' + drawer());
+
+    // Repeated renderInto must not duplicate UI or double-count.
+    UI.renderInto(root); UI.renderInto(root); UI.renderInto(root);
+    var dupes = {
+      wrappers: root.querySelectorAll('.threadline-cart-ui-wrapper').length,
+      badges: root.querySelectorAll('.threadline-cart-badge').length,
+      drawers: root.querySelectorAll('.threadline-cart-drawer').length
+    };
+    addResult('renderInto-idempotent',
+      dupes.wrappers === 1 && dupes.badges === 1 && dupes.drawers === 1, JSON.stringify(dupes));
+
+    var before = Number(badge() || 0);
+    fire('tee', 'Merino Tee', 42, 1);
+    addResult('single-add-counts-once', Number(badge() || 0) - before === 1,
+      'badge went ' + before + ' -> ' + badge() + ' for one add of quantity 1');
+
+    // A badge rendered after the fact must show what is already stored.
+    Cart.clear();
+    fire('tee', 'Merino Tee', 42, 3);
+    var late = document.createElement('div');
+    document.getElementById('sandbox').appendChild(late);
+    UI.renderInto(late);
+    var lateBadge = late.querySelector('.threadline-cart-badge');
+    addResult('seeds-from-stored-cart',
+      lateBadge && lateBadge.textContent === '3',
+      'late badge=' + (lateBadge ? JSON.stringify(lateBadge.textContent) : '(none)') +
+      '. localStorage survives a reload, so a fresh badge must not start at zero.');
+
+    // Guard rails and hostile input.
+    Cart.clear();
+    var perItem = Cart.add({ id: 'x', name: 'X', price: 5, quantity: 5 });
+    Cart.add({ id: 'x', price: 5, quantity: 3 });
+    addResult('per-item-cap', Cart.read().items[0].quantity === Cart._MAX_PER_ITEM,
+      'quantity=' + Cart.read().items[0].quantity + ' max=' + Cart._MAX_PER_ITEM + ' (first add ok=' + perItem.ok + ')');
+
+    Cart.clear();
+    var sixth = null;
+    for (var i = 1; i <= 6; i++) sixth = Cart.add({ id: 'i' + i, name: 'I' + i, price: 1, quantity: 1 });
+    addResult('distinct-cap', sixth.ok === false && Cart.read().totalItems === Cart._MAX_DISTINCT,
+      'sixth.ok=' + sixth.ok + ' distinct=' + Cart.read().totalItems + ' max=' + Cart._MAX_DISTINCT);
+
+    Cart.clear();
+    document.dispatchEvent(new CustomEvent('threadline:add-to-cart', { detail: { quantity: 2 }, bubbles: true }));
+    addResult('ignores-event-without-id', qty() === 0 && badge() === '',
+      'qty=' + qty() + ' badge=' + JSON.stringify(badge()));
+
+    // A free item keeps its zero price when re-added.
+    Cart.clear();
+    Cart.add({ id: 'free', name: 'Gift', price: 0, quantity: 1 });
+    Cart.add({ id: 'free', price: 99, quantity: 1 });
+    addResult('zero-price-not-overwritten', Cart.read().items[0].price_cents === 0,
+      'price_cents=' + Cart.read().items[0].price_cents + '. 0 is a real price, not a missing one.');
+
+    // Corrupt storage must not brick the cart.
+    localStorage.setItem('threadline_cart', '{{{ not json');
+    var recovered = Cart.add({ id: 'r', name: 'R', price: 3, quantity: 1 });
+    addResult('recovers-from-corrupt-storage', recovered.ok === true && qty() === 1,
+      'add.ok=' + recovered.ok + ' qty=' + qty());
+
+    Cart.clear();
+    localStorage.removeItem('threadline_cart');
+
+    var fails = document.querySelectorAll('.fail').length;
+    addResult('final', fails === 0, fails === 0 ? 'All cart checks passed.' : (fails + ' checks failed.'));
+  })();
+  </script>
+</body>
+</html>

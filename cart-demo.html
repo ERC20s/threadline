@@ -14,6 +14,9 @@
   <main style="padding:24px">
     <h1>Cart UI Demo</h1>
     <p>This page demonstrates the non-invasive, idempotent ThreadlineCartUI module. It renders into a known container so repeated calls do not rewire the document.</p>
+    <p>It loads <code>scripts/cart.js</code> too, so the badge and drawer reflect the
+      real, persisted cart rather than a throwaway counter &mdash; which is how a
+      product page uses them.</p>
 
     <div id="cart-demo-root" style="margin:18px 0"></div>
 
@@ -21,11 +24,21 @@
       <button id="render-once">Render cart into #cart-demo-root</button>
       <button id="render-again">Call renderInto repeatedly</button>
       <button id="dispatch-add">Dispatch add-to-cart (quantity 1)</button>
+      <button id="add-two">Add 2 &times; Merino Tee ($42)</button>
+      <button id="remove-tee">Remove Merino Tee</button>
+      <button id="clear-cart">Clear cart</button>
     </p>
+
+    <p>The cart persists in localStorage, so reloading this page should show the
+      same badge count and drawer contents.</p>
 
     <p>Open the console to see events. Repeated calls should not create duplicate badges or handlers.</p>
   </main>
 
+  <!-- The cart module first: it owns the add-to-cart event and the stored
+       state, and cart-ui.js checks for it to decide whether to run its own
+       stand-in tally. -->
+  <script src="scripts/cart.js"></script>
   <script src="scripts/cart-ui.js"></script>
   <script>
     document.getElementById('render-once').addEventListener('click', function () {
@@ -38,8 +51,26 @@
       window.ThreadlineCartUI.renderInto('cart-demo-root');
     });
     document.getElementById('dispatch-add').addEventListener('click', function () {
-      document.dispatchEvent(new CustomEvent('threadline:add-to-cart', { detail: { quantity: 1 } }));
+      /* The cart module ignores a detail with no id, which is what a real
+         add-to-cart always carries. */
+      document.dispatchEvent(new CustomEvent('threadline:add-to-cart', {
+        detail: { id: 'demo-item', name: 'Demo item', price: 12, quantity: 1 }, bubbles: true
+      }));
     });
+    document.getElementById('add-two').addEventListener('click', function () {
+      document.dispatchEvent(new CustomEvent('threadline:add-to-cart', {
+        detail: { id: 'merino-tee', name: 'Merino Tee', price: 42, quantity: 2 }, bubbles: true
+      }));
+    });
+    document.getElementById('remove-tee').addEventListener('click', function () {
+      window.ThreadlineCart.remove('merino-tee');
+    });
+    document.getElementById('clear-cart').addEventListener('click', function () {
+      window.ThreadlineCart.clear();
+    });
+
+    /* Render on load so the badge shows the persisted cart straight away. */
+    window.ThreadlineCartUI.renderInto('cart-demo-root');
 
     // log cart-updated events
     document.addEventListener('threadline:cart-updated', function (ev) {

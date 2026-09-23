@@ -52,7 +52,12 @@
       items: state.items.slice(),
       totalItems: state.items.length,
       totalQuantity: totalQuantity,
-      totalPriceCents: totalPriceCents
+      totalPriceCents: totalPriceCents,
+      // `count` is the number a cart badge shows — the same value as
+      // totalQuantity, published under the name a UI naturally reads off the
+      // event detail. scripts/cart-ui.js read detail.count, found undefined,
+      // and hid the badge on every real cart update.
+      count: totalQuantity
     };
   }
 
@@ -97,9 +102,11 @@
         var existing = state.items[idx];
         var newQty = Math.min(MAX_PER_ITEM, existing.quantity + qty);
         existing.quantity = newQty;
-        // prefer keeping stored name/price if present, but overwrite with provided if missing
+        // Prefer the stored name, but take the provided one if there is none.
+        // There is no matching price fallback: load() has already coerced
+        // every stored price_cents to a finite integer, so a guard on
+        // Number.isFinite(existing.price_cents) could never run.
         existing.name = existing.name || name;
-        existing.price_cents = existing.price_cents || price_cents;
       }
       if (!save(state)) return { ok: false, error: 'storage failed' };
       dispatchUpdate(state);

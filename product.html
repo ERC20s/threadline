@@ -5,6 +5,35 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Product — Threadline Clothing Co.</title>
   <meta name="description" content="A single Threadline piece: the garment drawn and turnable, description, size selection and checkout through the group's payments widget.">
+  <!-- serve.json rewrites /product/<id> to this file without redirecting, so
+       the browser stays on a two-segment path and every relative URL below —
+       styles/, scripts/, payments-widget.js and every nav link — would resolve
+       under /product/ and 404. (Worse: href="index.html" would resolve to
+       /product/index.html, which matches the same rewrite and serves this page
+       again.) Point them at the site root before the parser reaches them.
+       Only that one shape needs it: /product.html?id=… and the extensionless
+       single-segment routes already resolve correctly, and file:// — which
+       payments-widget.js supports — must be left alone. -->
+  <script>
+    (function () {
+      var protocol = location.protocol;
+      if (protocol !== "http:" && protocol !== "https:") return;
+      if (!/^\/product\/[^/]/.test(location.pathname)) return;
+
+      var base = document.createElement("base");
+      base.setAttribute("href", "/");
+      document.head.appendChild(base);
+
+      /* A <base> re-points bare fragments too, so "#content" would leave for
+         the home page. Give every in-page link this page's own address. */
+      document.addEventListener("DOMContentLoaded", function () {
+        var here = location.pathname + location.search;
+        Array.prototype.forEach.call(document.querySelectorAll('a[href^="#"]'), function (a) {
+          a.setAttribute("href", here + a.getAttribute("href"));
+        });
+      });
+    })();
+  </script>
   <link rel="stylesheet" href="styles/main.css">
   <!-- The brand mark, inline so the site never asks for a file that is not
        in the repository (every page used to log a 404 for /favicon.ico). -->
@@ -133,8 +162,8 @@
              button above finds and .click()s one of them — but
              store-panel--buy-integrated (styles/main.css) hides them from
              view, so a shopper here sees one Buy control, not one per item. -->
-        <div id="group-store" aria-live="polite" data-d8a-group="d8aaaa-batch_threadline" data-default-quantity="1" data-d8a-fallback="readonly"><p>Loading store…</p></div>
-        <noscript><p>Shop: <a href="https://d8a.com/g/d8aaaa-batch_threadline">https://d8a.com/g/d8aaaa-batch_threadline</a></p></noscript>
+        <div id="group-store" aria-live="polite" data-d8a-group="admin-batch_threadline2" data-default-quantity="1" data-d8a-fallback="readonly"><p>Loading store…</p></div>
+        <noscript><p>Shop: <a href="https://d8a.com/g/admin-batch_threadline2">https://d8a.com/g/admin-batch_threadline2</a></p></noscript>
       </section>
 
       <section class="section" aria-labelledby="more-heading">
@@ -512,7 +541,13 @@
 
       var panel = document.getElementById("group-store");
       var buy = document.getElementById("buy");
-      var STORE_URL = "https://d8a.com/g/d8aaaa-batch_threadline";
+      /* The group's own storefront, on whichever platform the widget resolved
+         (window.d8aPaymentsBase — localhost when the site is served locally,
+         d8a.com when it is deployed). Hard-coding d8a.com here sent a shopper
+         to a host that no longer answers for this group while everything else
+         on the page was talking to the local platform. */
+      var STORE_BASE = (typeof window.d8aPaymentsBase === "string" && window.d8aPaymentsBase) ? window.d8aPaymentsBase : "https://d8a.com";
+      var STORE_URL = STORE_BASE + "/g/admin-batch_threadline2";
 
       /* The failure line, with a way out: the group's own storefront. */
       var sayNotListed = function (scroll) {
@@ -522,7 +557,7 @@
           status.appendChild(document.createTextNode(" "));
           var link = document.createElement("a");
           link.href = STORE_URL;
-          link.textContent = "Open the shop on d8a.com";
+          link.textContent = "Open the group shop";
           status.appendChild(link);
         }
         /* Only jump to the shop panel when the shopper asked for it by clicking

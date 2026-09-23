@@ -638,7 +638,12 @@
   // Attach money as a non-enumerable property if the page hasn't provided one.
   if (!global.Threadline.money) {
     try {
-      Object.defineProperty(global.Threadline, 'money', { value: money, enumerable: false, configurable: true });
+      // writable is spelled out: it defaults to false, which locked the
+      // property and made a later `Threadline.money = ...` fail silently in
+      // sloppy mode and throw in strict mode — while the fallback below
+      // (plain assignment) left it writable. Non-enumerable was the intent,
+      // read-only was not, and the two paths now agree.
+      Object.defineProperty(global.Threadline, 'money', { value: money, enumerable: false, configurable: true, writable: true });
     } catch (err) {
       // Older environments might throw; fall back to a plain assignment.
       global.Threadline.money = money;

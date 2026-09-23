@@ -61,8 +61,8 @@
         <!-- d8a payments widget: the container from the repository .d8a payments: block.
              data-default-quantity is read by payments-widget.js; a Buy link may override it
              with data-quantity. -->
-        <div id="group-store" aria-live="polite" data-d8a-group="d8aaaa-batch_threadline" data-default-quantity="1"><p>Loading store…</p></div>
-        <noscript><p>Shop: <a href="https://d8a.com/g/d8aaaa-batch_threadline">https://d8a.com/g/d8aaaa-batch_threadline</a></p></noscript>
+        <div id="group-store" aria-live="polite" data-d8a-group="admin-batch_threadline2" data-default-quantity="1"><p>Loading store…</p></div>
+        <noscript><p>Shop: <a href="https://d8a.com/g/admin-batch_threadline2">https://d8a.com/g/admin-batch_threadline2</a></p></noscript>
       </section>
     </main>
 
@@ -219,11 +219,23 @@
         /* A receipt in the status line outranks the count: the shop panel can
            render (and this pass run again, or a filter be clicked) after a
            returning buyer's order was verified, and the confirmation must not
-           be wiped by "12 pieces in the collection." */
+           be wiped by "12 pieces in the collection."
+
+           An outage notice must survive the same write, but not by freezing
+           the line: the count has to keep describing the list actually on
+           screen. The very next filter click — including the one ?category=
+           triggers by itself — used to drop the notice for good, taking away
+           the only sentence saying these prices are ours rather than the
+           shop's. So the count is rewritten and the notice put straight back;
+           it comes down when the shop answers, not when a filter is clicked. */
         if (status && !(T.receiptIn && T.receiptIn(status))) {
+          var wasDown = !!(T.shopDownIn && T.shopDownIn(status));
           status.textContent = list.length + (list.length === 1 ? " piece" : " pieces") +
             (category === "All" ? " in the collection." : " in " + category + ".") +
             (unlisted ? " " + unlisted + (unlisted === 1 ? " is" : " are") + " not in the shop yet." : "");
+          if (wasDown && T.renderShopDown) {
+            T.renderShopDown(status, { brief: true, append: true });
+          }
         }
         Array.prototype.forEach.call(filters.querySelectorAll("button"), function (b) {
           b.setAttribute("aria-pressed", b.dataset.category === category ? "true" : "false");
@@ -327,20 +339,30 @@
          repaint the category on screen. A panel that fails, times out or
          renders no rows leaves the grid exactly as written. */
       if (panel && T.whenBuyAnchor && T.shopPriceIndex) {
+        var shopAnswered = function () {
+          var index = T.shopPriceIndex(panel);
+          if (!index || !index.size) return;
+          /* Down to up: take the outage notice away before show() rewrites
+             the line, which it will not do while the notice is standing. */
+          if (T.clearShopDown) T.clearShopDown(status);
+          shopIndex = index;
+          show(current);
+        };
+
         T.whenBuyAnchor(panel, null, T.BUY_ANCHOR_TIMEOUT || 12000)
-          .then(function () {
-            var index = T.shopPriceIndex(panel);
-            if (!index || !index.size) return;
-            shopIndex = index;
-            show(current);
-          })
+          .then(shopAnswered)
           .catch(function () {
             /* Nothing to reconcile against — and every reason whenBuyAnchor
                rejects for is the shop's, not ours. The grid keeps its
                catalogue prices; the status line says why, and where Retry is.
                Never over a paid receipt. */
-            if (!status || !T.renderShopDown) return;
-            T.renderShopDown(status, { brief: true, append: true });
+            if (status && T.renderShopDown) {
+              T.renderShopDown(status, { brief: true, append: true });
+            }
+            /* That wait is over, but the shopper's Retry can still bring the
+               shop back. Keep watching, or the grid would hold catalogue
+               prices and the outage line under a shop that is answering. */
+            if (T.whenShopRows) T.whenShopRows(panel, shopAnswered);
           });
       }
     })();

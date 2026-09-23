@@ -30,7 +30,7 @@
 
     var state = wm ? wm.get(root) : root.__threadlineCartState;
     if (!state) {
-      state = { key: key, count: 0, badgeEl: null, drawerEl: null, root: root };
+      state = { key: key, count: 0, badgeEl: null, drawerEl: null, buttonEl: null, root: root };
       if (wm) wm.set(root, state); else root.__threadlineCartState = state;
     }
 
@@ -43,38 +43,109 @@
     return state;
   }
 
+  // scripts/cart.js, when the page loads it. Looked up per call rather than
+  // once, because nothing guarantees it is evaluated before this file.
+  function cartModule() {
+    try { return window.ThreadlineCart || null; } catch (e) { return null; }
+  }
+
+  // cart.js publishes the badge number as both `count` and `totalQuantity`;
+  // the demo tally below publishes only `count`. Read either, and treat a
+  // detail carrying neither as unknown rather than as zero — reading 0 off
+  // cart.js's summary is what used to blank the badge on every real update.
+  function summaryFromDetail(detail) {
+    var d = detail || {};
+    var count = Number(d.count);
+    if (!isFinite(count)) count = Number(d.totalQuantity);
+    if (!isFinite(count)) return null;
+    return { count: count, items: Array.isArray(d.items) ? d.items : null };
+  }
+
+  function summaryFromCart() {
+    var cart = cartModule();
+    if (!cart || typeof cart.read !== 'function') return null;
+    try { return summaryFromDetail(cart.read()); } catch (e) { return null; }
+  }
+
+  function formatCents(cents) {
+    var n = Number(cents);
+    if (!isFinite(n)) return '';
+    return '$' + (n / 100).toFixed(2);
+  }
+
+  // Fill the drawer from the cart's line items. Without a cart module there is
+  // nothing to list, so the drawer keeps its placeholder text.
+  function renderDrawer(drawer, summary) {
+    if (!drawer) return;
+    var items = summary.items;
+    if (!items) return;
+    while (drawer.firstChild) drawer.removeChild(drawer.firstChild);
+    if (!items.length) {
+      drawer.appendChild(document.createTextNode('Your cart is empty.'));
+      return;
+    }
+    var list = document.createElement('ul');
+    list.className = 'threadline-cart-lines';
+    var totalCents = 0;
+    items.forEach(function (it) {
+      var qty = Number(it.quantity) || 0;
+      var lineCents = (Number(it.price_cents) || 0) * qty;
+      totalCents += lineCents;
+      var li = document.createElement('li');
+      li.textContent = (it.name || it.id || 'Item') + ' × ' + qty + ' — ' + formatCents(lineCents);
+      list.appendChild(li);
+    });
+    drawer.appendChild(list);
+    var total = document.createElement('p');
+    total.className = 'threadline-cart-total';
+    total.textContent = 'Total ' + formatCents(totalCents);
+    drawer.appendChild(total);
+  }
+
+  // Push one summary into every root this module has rendered into.
+  function applySummary(summary) {
+    if (!summary) return;
+    for (var i = 0; i < storedStates.length; i++) {
+      var st = storedStates[i];
+      if (!st) continue;
+      st.count = summary.count;
+      if (st.badgeEl) {
+        st.badgeEl.textContent = summary.count > 0 ? String(summary.count) : '';
+        st.badgeEl.style.display = summary.count > 0 ? 'inline-block' : 'none';
+      }
+      // The badge is aria-hidden, so the count reaches assistive tech through
+      // the button's own name instead.
+      if (st.buttonEl) {
+        st.buttonEl.setAttribute('aria-label',
+          summary.count > 0
+            ? 'Cart, ' + summary.count + ' item' + (summary.count === 1 ? '' : 's')
+            : 'Cart, empty');
+      }
+      renderDrawer(st.drawerEl, summary);
+    }
+  }
+
   function ensureHandlers() {
     if (initialized) return;
     initialized = true;
 
-    // Update all rendered roots when cart-updated is fired
+    // Update all rendered roots when cart-updated is fired.
     document.addEventListener('threadline:cart-updated', function (ev) {
-      var detail = (ev && ev.detail) || {};
-      var count = Number(detail.count || 0) || 0;
-      for (var i = 0; i < storedStates.length; i++) {
-        var st = storedStates[i];
-        if (!st) continue;
-        st.count = count;
-        if (st.badgeEl) {
-          st.badgeEl.textContent = count > 0 ? String(count) : '';
-          st.badgeEl.style.display = count > 0 ? 'inline-block' : 'none';
-        }
-      }
+      applySummary(summaryFromDetail(ev && ev.detail));
     }, false);
 
-    // Simple demo add-to-cart handler: increments count and re-emits cart-updated
+    // Demo add-to-cart tally, for a page that renders this UI without
+    // scripts/cart.js. When the cart module IS present it owns this event and
+    // emits its own cart-updated, so a second tally here would fight it: the
+    // badge ended up showing the last add's quantity instead of the cart
+    // total. Hence the check at dispatch time, not at install time — nothing
+    // guarantees cart.js has been evaluated when these handlers go in.
     document.addEventListener('threadline:add-to-cart', function (ev) {
+      if (cartModule()) return;
       var d = (ev && ev.detail) || {};
       var qty = Number(d.quantity || 1) || 1;
-      // For demo purposes we compute a total by adding qty to the first stored state's count
-      var total = 0;
-      if (storedStates.length) {
-        // prefer the first state's current count
-        total = (storedStates[0].count || 0) + qty;
-      } else {
-        total = qty;
-      }
-      document.dispatchEvent(new CustomEvent('threadline:cart-updated', { detail: { count: total } }));
+      var base = storedStates.length ? (storedStates[0].count || 0) : 0;
+      document.dispatchEvent(new CustomEvent('threadline:cart-updated', { detail: { count: base + qty } }));
     }, false);
   }
 
@@ -115,6 +186,12 @@
 
     state.badgeEl = badge;
     state.drawerEl = drawer;
+    state.buttonEl = btn;
+
+    // Paint what is already in the cart. localStorage survives a reload, so a
+    // freshly rendered badge that started at zero was wrong until the shopper
+    // happened to change something.
+    applySummary(summaryFromCart() || { count: state.count, items: null });
 
     btn.addEventListener('click', function () {
       var open = drawer.style.display !== 'none';
