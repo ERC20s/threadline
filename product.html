@@ -139,9 +139,16 @@
         <div class="grid" id="fallback-grid"></div>
       </section>
 
-      <section class="store-panel" aria-labelledby="store-heading">
+      <!-- store-panel--buy-integrated (styles/main.css): the Buy button above
+           IS the store's checkout anchor — it finds the matching row inside
+           #group-store and clicks it (see the inline script's openCheckout /
+           T.whenBuyAnchor below), so this panel no longer needs to show a
+           second, separate Buy link per catalogue item underneath it. The
+           class only hides those per-item links on THIS page; index.html and
+           products.html keep theirs, since the panel is their only Buy control. -->
+      <section class="store-panel store-panel--buy-integrated" aria-labelledby="store-heading">
         <h2 id="store-heading">Checkout</h2>
-        <p>Buy sends you to the group's checkout for this piece; you come back here with your receipt. Prices in the panel are set on the group's Admin tab.</p>
+        <p>Buy above sends you to the group's checkout for this piece; you come back here with your receipt. Prices are set on the group's Admin tab and read from the list below.</p>
         <!-- d8a payments widget container from the repository .d8a payments: block.
              payments-widget.js renders the group's items here and owns the checkout POST.
              data-d8a-fallback="readonly" opts this panel in to the read-only
@@ -150,7 +157,11 @@
              button instead of a bare error line. The fallback rows carry no
              data-item, so nothing can be bought from them; the Retry button is
              also what Threadline.storePanelFailed() looks for, so Buy reports
-             the outage at once instead of waiting out the timeout. -->
+             the outage at once instead of waiting out the timeout.
+             The rows' own Buy links (a[data-item]) stay in the DOM — the Buy
+             button above finds and .click()s one of them — but
+             store-panel--buy-integrated (styles/main.css) hides them from
+             view, so a shopper here sees one Buy control, not one per item. -->
         <div id="group-store" aria-live="polite" data-d8a-group="d8aaaa-batch_threadline" data-default-quantity="1" data-d8a-fallback="readonly"><p>Loading store…</p></div>
         <noscript><p>Shop: <a href="https://d8a.com/g/d8aaaa-batch_threadline">https://d8a.com/g/d8aaaa-batch_threadline</a></p></noscript>
       </section>
@@ -626,8 +637,117 @@
 
       var openCheckout = function (anchor) {
         stampRow(anchor);
-        say("Opening checkout for " + product.name + ", size " + chosenSize +
-          (chosenQuantity > 1 ? " ×" + chosenQuantity : "") + "…");
+        var openingText = "Opening checkout for " + product.name + ", size " + chosenSize +
+          (chosenQuantity > 1 ? " ×" + chosenQuantity : "") + "…";
+        say(openingText);
+
+        // Prefer the platform-exposed API when available. The payload shape is
+        // { item, quantity, variant } inside an array, matching the platform's
+        // groupStoreCheckout contract. Fall back to clicking the widget's own
+        // anchor if the API is not present or if it rejects.
+        try {
+          // Prefer builder when present — it is a guarded, well-scoped helper that
+          // returns an <a> wired to the widget's own duplicate-click guard and POST.
+          if (typeof window.groupStoreBuildBuyAnchor === 'function') {
+            var hostId, hostClass, hostAria;
+            try {
+              hostId = buy && buy.id ? buy.id : undefined;
+              hostClass = buy && buy.className ? buy.className : undefined;
+              hostAria = buy && buy.getAttribute ? buy.getAttribute('aria-describedby') : undefined;
+            } catch (e) { hostId = undefined; hostClass = undefined; hostAria = undefined; }
+
+            var built = null;
+            try {
+              built = window.groupStoreBuildBuyAnchor(product.id, { container: panel, asButton: true, hostId: hostId, hostClass: hostClass, hostAriaDescribedBy: hostAria });
+            } catch (e) { built = null; }
+
+            if (!built) {
+              // Try legacy call without hints for older widget versions.
+              try { built = window.groupStoreBuildBuyAnchor(product.id, { container: panel, asButton: true }); } catch (e) { built = null; }
+            }
+
+            if (built) {
+              try {
+                // Ensure role and visual affordance are present.
+                try { built.setAttribute('role', 'button'); } catch (e) {}
+                try { built.style.textDecoration = 'none'; } catch (e) {}
+                // If the builder did not accept the host-provided attributes,
+                // merge them now defensively.
+                try { if (hostId && !built.id) built.id = hostId; } catch (e) {}
+                try {
+                  var bDesc = null;
+                  try { bDesc = built.getAttribute ? built.getAttribute('aria-describedby') : null; } catch (e) { bDesc = null; }
+                  if (hostAria && !bDesc) try { built.setAttribute('aria-describedby', hostAria); } catch (e) {}
+                } catch (e) {}
+                try {
+                  var builtClasses = (built.className || '').split(/\s+/).filter(function (t) { return !!t; });
+                  var hostTokens = (hostClass && String(hostClass)) ? String(hostClass).split(/\s+/).filter(function (t) { return !!t; }) : [];
+                  hostTokens.forEach(function (t) { if (builtClasses.indexOf(t) === -1) builtClasses.push(t); });
+                  if (builtClasses.indexOf('btn') === -1) builtClasses.push('btn');
+                  built.className = builtClasses.join(' ');
+                } catch (e) {}
+              } catch (e) {}
+
+              var swapAndClick = function () {
+                try { if (buy && buy.parentNode) buy.parentNode.replaceChild(built, buy); } catch (e) {}
+                // Ensure the page's buy variable now refers to the visible control
+                try { buy = built; } catch (e) {}
+                try {
+                  if (chosenQuantity > 1) built.setAttribute('data-quantity', String(chosenQuantity)); else built.removeAttribute('data-quantity');
+                  if (chosenSize) { built.setAttribute('data-size', chosenSize); built.setAttribute('data-d8a-note', product.name + ' - size ' + chosenSize); } else { built.removeAttribute('data-size'); built.removeAttribute('data-d8a-note'); }
+                } catch (e) {}
+                try { built.click(); } catch (e) {}
+              };
+
+              // Keep the same pending UI state while the Promise resolves.
+              pending = true;
+              try { if (built && typeof built.disabled !== 'undefined') built.disabled = true; } catch (e) {}
+              try { if (built) built.setAttribute("aria-busy", "true"); } catch (e) {}
+
+              var restoreUI = function () {
+                pending = false;
+                try { buy.disabled = notListed; } catch (e) {}
+                try { buy.removeAttribute("aria-busy"); } catch (e) {}
+              };
+
+              Promise.resolve().then(function () { swapAndClick(); }).then(function () { restoreUI(); }).catch(function (err) { restoreUI(); try { built.click(); } catch (e) {} });
+              return;
+            }
+          }
+
+          if (typeof window.groupStoreCheckout === 'function') {
+            var itemId = anchor && anchor.getAttribute ? anchor.getAttribute('data-item') : null;
+            if (!itemId) itemId = product.id;
+            var payload = [{ item: itemId, quantity: chosenQuantity, variant: chosenSize }];
+
+            // Keep the same pending UI state while the Promise resolves.
+            pending = true;
+            buy.disabled = true;
+            buy.setAttribute("aria-busy", "true");
+            var restoreUI = function () {
+              pending = false;
+              buy.disabled = notListed;
+              buy.removeAttribute("aria-busy");
+            };
+
+            Promise.resolve()
+              .then(function () { return window.groupStoreCheckout(payload, { returnUrl: location.href }); })
+              .then(function () {
+                // The widget typically navigates away. If it resolves without
+                // navigating, restore the button state.
+                restoreUI();
+              })
+              .catch(function (err) {
+                // On error, restore the UI and fall back to the anchor click so
+                // behaviour is unchanged for hosts that do not provide the API.
+                restoreUI();
+                try { anchor.click(); } catch (e) {}
+              });
+            return;
+          }
+        } catch (e) {}
+
+        // Fallback: click the widget's anchor as before.
         anchor.click();
       };
 

@@ -149,7 +149,62 @@
 
       var paintGrid = function () {
         if (!shopIndex || !T.reconcileGrid) return 0;
-        return T.reconcileGrid(grid, shopIndex);
+        var unlisted = T.reconcileGrid(grid, shopIndex);
+        try { if (typeof addBuyButtonsToCards === 'function') addBuyButtonsToCards(); } catch (e) {}
+        return unlisted;
+      };
+
+      /* Insert platform or fallback buy controls into each catalogue card.
+         Idempotent: does nothing if a card already has a buy control. Works
+         without the shop panel present; when a platform builder is available
+         it is preferred for one-size pieces. */
+      var addBuyButtonsToCards = function () {
+        if (!grid) return;
+        try {
+          var cards = grid.querySelectorAll('.card');
+          Array.prototype.forEach.call(cards, function (card) {
+            // don't add twice
+            if (card.querySelector('.buy-anchor, .buy-fallback, .choose-size')) return;
+            var id = card.dataset.productId;
+            if (!id) return;
+            var product = (T && typeof T.byId === 'function') ? T.byId(String(id)) : null;
+            if (!product) return;
+            // prefer the card body as the container, fall back to the card itself
+            var container = card.querySelector('.card-body') || card;
+
+            var isOneSize = Array.isArray(product.sizes) && product.sizes.length === 1;
+
+            if (isOneSize) {
+              // try the platform builder when available and the panel exists
+              if (typeof window.groupStoreBuildBuyAnchor === 'function' && panel) {
+                try {
+                  var built = window.groupStoreBuildBuyAnchor(product.id, { container: container, asButton: true, hostClass: 'btn buy-anchor' });
+                  if (built) {
+                    // if the builder returned an element ensure it is present
+                    if (built instanceof Element && !container.contains(built)) container.appendChild(built);
+                    return;
+                  }
+                } catch (e) { /* fall through to fallback */ }
+              }
+
+              // fallback: conservative link to the product page
+              var a = document.createElement('a');
+              a.className = 'btn buy-fallback';
+              a.href = (T && typeof T.productUrl === 'function') ? T.productUrl(product.id) : ('product.html?id=' + encodeURIComponent(String(product.id)));
+              a.setAttribute('data-quantity', '1');
+              a.textContent = 'Buy';
+              container.appendChild(a);
+              return;
+            }
+
+            // sized pieces: a single conservative "Choose size" link to the product
+            var choose = document.createElement('a');
+            choose.className = 'choose-size';
+            choose.href = (T && typeof T.productUrl === 'function') ? T.productUrl(product.id) : ('product.html?id=' + encodeURIComponent(String(product.id)));
+            choose.textContent = 'Choose size';
+            container.appendChild(choose);
+          });
+        } catch (err) { /* never break the catalogue rendering */ }
       };
 
       var show = function (category) {
@@ -160,6 +215,7 @@
         /* renderGrid rebuilds the cards on every filter click, so the live
            prices and notes have to be painted again each time. */
         var unlisted = paintGrid();
+        try { addBuyButtonsToCards(); } catch (e) {}
         /* A receipt in the status line outranks the count: the shop panel can
            render (and this pass run again, or a filter be clicked) after a
            returning buyer's order was verified, and the confirmation must not

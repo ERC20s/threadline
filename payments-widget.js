@@ -3,11 +3,20 @@
   if (window.__d8aPaymentsWidgetInstalled) return;
   window.__d8aPaymentsWidgetInstalled = true;
 
+  // Secondary hosts to try when the platform at the resolved base is
+  // unreachable. Limited to localhost to keep the fallback narrow; browsers may
+  // block http requests from secure pages — see risks in the proposal.
+  //
+  // `BASE` itself is NOT declared here any more: it is resolveBase() below,
+  // which subsumes main's single constant (window.D8A_BASE → LOCAL_BASE when
+  // the page is served locally → REMOTE_BASE). The retry list survives the
+  // merge because the code further down still walks it.
+  var FALLBACK_BASES = ["http://localhost:3004"];
   // The group slug this site sells for. Must match the `group:` line and the
   // items/verify URLs generated in the root .d8a file
-  // (group: d8a:d8aaaa-batch_threadline). A container may override it with
+  // (group: d8a:admin-batch_threadline2). A container may override it with
   // data-d8a-group; see getGroupForElement below.
-  var GROUP = "d8aaaa-batch_threadline";
+  var GROUP = "admin-batch_threadline2";
   var esc = function (s) {
     return String(s).replace(/[&<>\"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; });
   };
@@ -302,8 +311,16 @@
             if (b && !seenBases[b]) { seenBases[b] = true; pairs.push({group: g, base: b}); }
           } catch (e) {}
         });
-        // If no declared bases for this group, fall back to a null base which means the global BASE.
-        if (!Object.keys(seenBases).length) pairs.push({group: g, base: null});
+        // If no declared bases for this group, fall back to trying the global BASE
+        // then any configured FALLBACK_BASES in order.
+        if (!Object.keys(seenBases).length) {
+          pairs.push({group: g, base: null});
+          try {
+            (FALLBACK_BASES || []).forEach(function (fb) {
+              if (fb) pairs.push({group: g, base: fb});
+            });
+          } catch (e) {}
+        }
       });
     } catch (e) {}
 
@@ -329,6 +346,156 @@
   };
 
   window.groupStoreVerify = groupStoreVerify;
+
+  // Expose a guarded builder that constructs a single-anchor Buy control for a
+  // product page to prefer over rendering a second, separate Buy link. The
+  // builder is intentionally defensive: when the widget's helpers are absent
+  // it returns null so callers fall back to their existing behaviour.
+  window.groupStoreBuildBuyAnchor = function (itemId, opts) {
+    try {
+      if (!itemId) return null;
+      // Minimal helper presence checks — be defensive about globals.
+      if (typeof sanitizeUrl !== 'function' || typeof doFetch !== 'function' || typeof getBaseForElement !== 'function' || typeof getGroupForElement !== 'function' || !window.__d8aPaymentsWidgetOpening) return null;
+    } catch (e) { return null; }
+
+    opts = opts || {};
+    var el = opts.container || null;
+    if (!el || !el.getAttribute) return null;
+
+    try {
+      var group = getGroupForElement(el) || GROUP;
+      // Create either an <a> or a <button> depending on opts.asButton. Buttons do
+      // not get an href but otherwise mirror the anchor's behaviour so hosts can
+      // swap a real button into their UI without losing the widget's click logic.
+      var anchor = (opts && opts.asButton) ? document.createElement('button') : document.createElement('a');
+      // Default classes the widget likes; hosts can pass their classes in opts.hostClass
+      anchor.className = 'platform-buy-anchor btn';
+
+      // If the host provided attributes to preserve on the built element, apply
+      // them defensively: id, aria-describedby and class merging (dedupe tokens,
+      // ensure the 'btn' token is present). Also set role and a conservative
+      // textDecoration so the built anchor matches the original button's affordance.
+      try {
+        var hostId = (opts && typeof opts.hostId !== 'undefined') ? opts.hostId : null;
+        var hostClass = (opts && typeof opts.hostClass !== 'undefined') ? opts.hostClass : '';
+        var hostAria = (opts && typeof opts.hostAriaDescribedBy !== 'undefined') ? opts.hostAriaDescribedBy : null;
+
+        // Merge class lists without duplicating tokens.
+        try {
+          var baseClasses = (anchor.className || '').split(/\s+/).filter(function (t) { return !!t; });
+          var hostTokens = (hostClass && String(hostClass)) ? String(hostClass).split(/\s+/).filter(function (t) { return !!t; }) : [];
+          hostTokens.forEach(function (t) { if (baseClasses.indexOf(t) === -1) baseClasses.push(t); });
+          if (baseClasses.indexOf('btn') === -1) baseClasses.push('btn');
+          anchor.className = baseClasses.join(' ');
+        } catch (e) {}
+
+        if (hostId) {
+          try { anchor.id = String(hostId); } catch (e) {}
+        }
+        if (hostAria) {
+          try { anchor.setAttribute('aria-describedby', String(hostAria)); } catch (e) {}
+        }
+        try { anchor.setAttribute('role', 'button'); } catch (e) {}
+        try { anchor.style.textDecoration = 'none'; } catch (e) {}
+      } catch (e) {}
+
+      if (opts && opts.asButton) {
+        try { anchor.setAttribute('type', 'button'); } catch (e) {}
+      } else {
+        // A conservative href that points at the group's storefront as fallback.
+        try { anchor.setAttribute('href', sanitizeUrl(BASE + '/g/' + encodeURIComponent(group)) || '#'); } catch (e) {}
+      }
+      anchor.setAttribute('data-item', String(itemId));
+
+      // If the host did not supply any visible content, set a sensible default
+      // label so the returned control is accessible and visible for keyboard users.
+      try {
+        var label = (opts && typeof opts.label !== 'undefined') ? opts.label : ((opts && typeof opts.text !== 'undefined') ? opts.text : 'Buy');
+        var hasVisible = false;
+        try { hasVisible = (anchor.textContent && String(anchor.textContent).replace(/\s+/g, '').length > 0) || anchor.childNodes.length > 0; } catch (e) { hasVisible = false; }
+        if (!hasVisible) try { anchor.textContent = String(label); } catch (e) {}
+      } catch (e) {}
+
+      // Propagate container-level default quantity if present so the anchor
+      // honours what the host page declared.
+      try {
+        var qdef = el.getAttribute('data-default-quantity');
+        if (qdef) anchor.setAttribute('data-default-quantity', qdef);
+      } catch (e) {}
+
+      // Click handler mirrors the widget's own POST / fallback flow and uses
+      // the shared opening guard so duplicate clicks are collapsed.
+      anchor.addEventListener('click', function (e) {
+        // Read quantity in the same order the widget does: explicit data-quantity,
+        // then anchor/container defaults, then 1.
+        var qty = 1;
+        try {
+          var qAttr = anchor.getAttribute('data-quantity');
+          var qDef = anchor.getAttribute('data-default-quantity') || (el && el.getAttribute ? el.getAttribute('data-default-quantity') : null);
+          if (qAttr != null) {
+            var n = parseInt(qAttr, 10); if (!isNaN(n) && n > 0) qty = n;
+          } else if (qDef != null) {
+            var nd = parseInt(qDef, 10); if (!isNaN(nd) && nd > 0) qty = nd;
+          }
+        } catch (err) {}
+
+        var size = '';
+        var noteText = '';
+        try { size = (anchor.getAttribute && anchor.getAttribute('data-size')) || ''; } catch (e) { size = ''; }
+        try { noteText = (anchor.getAttribute && anchor.getAttribute('data-d8a-note')) || ''; } catch (e) { noteText = ''; }
+
+        var groupLocal = getGroupForElement(el);
+        var variant = (noteText || size || '').toString();
+        var key = groupLocal + '::' + itemId + '::' + qty + '::' + variant;
+        if (window.__d8aPaymentsWidgetOpening[key]) return;
+        try { window.__d8aPaymentsWidgetOpening[key] = true; } catch (e) {}
+
+        e.preventDefault();
+        var originalText = anchor.textContent;
+        try { anchor.textContent = 'Opening…'; } catch (e) {}
+
+        var here = location.href.replace(/([?&])d8a_order=[^&#]*&?/, "$1").replace(/[?&](#|$)/, "$1");
+        var payload = { group: groupLocal, item: itemId, quantity: qty, returnUrl: here };
+        var plainBody = JSON.stringify(payload);
+        if (size) payload.size = size;
+        if (noteText) payload.note = noteText;
+        var body = JSON.stringify(payload);
+        var hasExtras = body !== plainBody;
+
+        // Resolve checkout endpoint from the container's current store if the
+        // widget has already populated it; otherwise fall back to the global.
+        var checkoutUrl = null;
+        var store = null;
+        try { store = el.__d8a_store || null; } catch (e) { store = null; }
+        if (store && store.checkout && store.checkout.url) checkoutUrl = store.checkout.url;
+        if (!checkoutUrl) checkoutUrl = BASE + '/api/v1/store/checkout';
+        try { var elBase = getBaseForElement(el); if (typeof checkoutUrl === 'string' && checkoutUrl.charAt(0) === '/' && elBase) checkoutUrl = elBase + checkoutUrl; } catch (e) {}
+
+        var release = function () { try { delete window.__d8aPaymentsWidgetOpening[key]; } catch (err) {} };
+        var fallback = function () {
+          try { anchor.textContent = originalText; } catch (err) {}
+          // For buttons there is no href attribute: fall back to the store URL
+          // or the group's storefront host so navigation always goes somewhere safe.
+          var safe = sanitizeUrl(anchor.getAttribute && anchor.getAttribute('href') ? anchor.getAttribute('href') : '') || (store && store.group && store.group.url) || (BASE + '/g/' + encodeURIComponent(group)) || '#';
+          try { location.href = safe; } catch (err) {}
+        };
+        var post = function (bodyText) {
+          return doFetch(checkoutUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyText }, 10000)
+            .then(function (r) { return (r && r.json) ? r.json() : null; });
+        };
+
+        post(body)
+          .then(function (d) {
+            if (d && d.url) { release(); location.href = d.url; return null; }
+            if (!hasExtras) { release(); fallback(); return null; }
+            return post(plainBody).then(function (d2) { release(); if (d2 && d2.url) { location.href = d2.url; return null; } fallback(); return null; }).catch(function () { release(); fallback(); return null; });
+          })
+          .catch(function () { release(); fallback(); });
+      }, false);
+
+      return anchor;
+    } catch (e) { return null; }
+  };
 
   var back = (location.search.match(/[?&]d8a_order=([A-Za-z0-9_-]+)/) || [])[1];
   if (back) groupStoreVerify(back).then(function (o) {
@@ -498,11 +665,14 @@
       var itemId = a.getAttribute('data-item');
       if (!itemId) return;
 
-      // Determine quantity: data-quantity (explicit) or data-default-quantity fallback to store default.
+      // Determine quantity: data-quantity (explicit), then per-anchor data-default-quantity,
+      // then the container's data-default-quantity, then the store default. This makes a
+      // single integrated Buy anchor honour a container-level default like product.html/index.html set.
       var qty = 1;
       try {
         var qAttr = a.getAttribute('data-quantity');
-        var qDef = a.getAttribute('data-default-quantity') || (store && store.defaultQuantity);
+        // Read fallback in this order: anchor's own data-default-quantity, container's attribute, then store.defaultQuantity.
+        var qDef = a.getAttribute('data-default-quantity') || (el && el.getAttribute ? el.getAttribute('data-default-quantity') : null) || (store && store.defaultQuantity);
         if (qAttr != null) {
           var n = parseInt(qAttr, 10);
           if (!isNaN(n) && n > 0) qty = n;
@@ -626,11 +796,30 @@
     try { base = getBaseForElement(el); } catch (e) { base = null; }
     var key = group + '::' + (base || '');
     if (storeFetchCache[key]) return storeFetchCache[key];
-    var host = base || BASE;
-    var url = host + "/api/v1/store/items?group=" + encodeURIComponent(group);
-    var p = doFetch(url, null, 10000)
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .catch(function () { return null; });
+
+    // If a container declares a base, keep the existing behaviour of
+    // fetching only from that base. When there is no declared base, try the
+    // primary BASE first then each FALLBACK_BASES entry in order, caching per-host.
+    var basesToTry = [];
+    if (base) {
+      basesToTry = [base];
+    } else {
+      basesToTry = [BASE].concat(FALLBACK_BASES || []);
+    }
+
+    // Build a promise chain that tries each host in order and resolves to the
+    // first successful parsed store object, or null.
+    var p = basesToTry.reduce(function (prev, host) {
+      return prev.then(function (res) {
+        if (res) return res;
+        try {
+          var url = host + "/api/v1/store/items?group=" + encodeURIComponent(group);
+          return doFetch(url, null, 10000).then(function (r) { return r && r.ok ? r.json() : null; }).catch(function () { return null; });
+        } catch (e) { return Promise.resolve(null); }
+      });
+    }, Promise.resolve(null));
+
+    // Cache the promise under the canonical key for this group+base (empty when no declared base).
     storeFetchCache[key] = p;
     return p;
   };
