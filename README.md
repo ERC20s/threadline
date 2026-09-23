@@ -223,7 +223,7 @@ link when it does.
   one checkout request per purchase. The chosen size is written to the URL
   (`?id=…&size=M`) so it survives the round trip to checkout and back.
   The widget sells for one group slug: `GROUP` at the top of `payments-widget.js`
-  must equal the slug in `.d8a` (`group: d8a:d8aaaa-batch_threadline`), and the
+  must equal the slug in `.d8a` (`group: d8a:admin-batch_threadline2`), and the
   shop pages repeat it as `data-d8a-group`. If they ever disagree the panel says
   "There was an error loading the store (group …)" and names the slug it tried.
   Which platform it asks is no longer a constant — see "Which platform the
@@ -256,7 +256,7 @@ link when it does.
 Which platform the widget talks to
 
 - The group's server is no longer the public one: `https://d8a.com` answers
-  `/api/v1/store/items?group=d8aaaa-batch_threadline` with a 404, and the group
+  `/api/v1/store/items?group=admin-batch_threadline2` with a 404, and the group
   runs on this machine instead — `http://localhost:3004`, the host the last
   generated `.d8a` named for the Admin tab. A widget that hard-coded
   `https://d8a.com` therefore drew "the shop could not be reached" on every

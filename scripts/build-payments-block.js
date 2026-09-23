@@ -8,20 +8,73 @@
  * still only knew how to buy a single item, and no one noticed because nothing
  * compared the two. This script exists so the block is COPIED, never rewritten:
  *
- *   node scripts/build-payments-block.js            # from the live platform
- *   node scripts/build-payments-block.js --from f   # from a saved docs page
+ *   node scripts/build-payments-block.js              # from .d8a (the default)
+ *   node scripts/build-payments-block.js --from-docs  # from the live platform
+ *   node scripts/build-payments-block.js --from f     # from a saved docs page
  *
- * It pulls the block out of the platform's own docs page, substitutes the group
- * slug, replaces the hard-coded BASE with the resolver below, and writes
- * payments-block.js. Re-run it whenever the platform ships a new block; the
- * diff is then the platform's changes, not ours.
+ * The default source is this repository's own `.d8a`. Its `payments:` section
+ * IS this block, written by the platform for THIS group and kept current by it
+ * — so the build needs no network, no running platform, and no second copy of
+ * the group id (2026-09-23: the id used to be a constant in this file, the
+ * group was renamed, and the shop 404ed with nothing saying why). `--from-docs`
+ * is for checking what the platform has shipped since; it substitutes the id
+ * from `.d8a` into the generic block. Either way the write is REFUSED unless
+ * the group the block names matches `.d8a`.
+ *
+ * All this does to the block itself is replace its hard-coded BASE with the
+ * resolver below. Re-run it whenever the platform ships a new block; the diff
+ * is then the platform's changes, not ours.
  */
 const fs = require('fs');
 const path = require('path');
 
-const GROUP = 'd8aaaa-batch_threadline';
-const DOCS = 'http://localhost:3004/docs?group=' + GROUP;
+let GROUP = '';            // only set when the block comes from the generic docs page
+let EXPECT_GROUP = '';     // what .d8a says this group is — the one source of truth
+const D8A = path.join(__dirname, '..', '.d8a');
 const OUT = path.join(__dirname, '..', 'payments-block.js');
+
+/* WHERE THE GROUP ID COMES FROM — the `.d8a` file, and nowhere else.
+ *
+ * It used to be a constant here, and that was the bug: the id is the group's
+ * SLUG, and a slug moves (a rename on 2026-09-23 turned admin-batch_threadline2
+ * into admin-batch_threadline2). The platform keeps `.d8a` current by itself —
+ * it re-commits the generated half, because `proof:` is a signature over the id
+ * — so any second copy in this repository is a copy that goes stale silently
+ * and takes the shop down with it: every ?group= call 404s and nothing says
+ * why. One source of truth, read at build time. */
+function groupFromD8a(text) {
+  const m = /^group:[ \t]*(\S+)/m.exec(text);
+  if (!m) throw new Error('.d8a has no group: line');
+  const parts = m[1].split(':');
+  return parts.length > 1 ? parts.slice(1).join(':') : parts[0];
+}
+
+/* The block ITSELF is in `.d8a` too — the platform writes its `payments:`
+ * section with this group's id already substituted, which is the same block the
+ * docs page serves generically. Reading it here means the build needs no
+ * network and no running platform, and cannot disagree with the file that
+ * governs this repository. `--from-docs` keeps the old path for checking what
+ * the platform has shipped since. */
+function blockFromD8a(text) {
+  const lines = text.split('\n').map((l) => l.replace(/\r$/, ''));
+  const at = lines.findIndex((l) => /^payments:[ \t]*$/.test(l));
+  if (at === -1) throw new Error('.d8a has no payments: block');
+  const body = [];
+  for (let i = at + 1; i < lines.length; i += 1) {
+    if (/^\S/.test(lines[i])) break;            // the next left-margin key ends it
+    body.push(lines[i].replace(/^ {2}/, ''));   // the block is indented by two
+  }
+  let text2 = body.join('\n');
+  if (!/<script>/.test(text2)) throw new Error('.d8a payments: block has no <script> — did the block change shape?');
+  // Everything from the LAST closing script tag on is markup, not code. The
+  // docs path drops it by slicing up to that tag; here the tag is a line of
+  // its own, so it has to be cut explicitly — leave it in and the generated
+  // file ends in `</script>` and does not parse.
+  const close = text2.lastIndexOf('</script>');
+  if (close === -1) throw new Error('.d8a payments: block never closes its <script>');
+  text2 = text2.slice(0, close);
+  return text2.replace(/^[^<]*/, '');
+}
 
 /* The one intentional deviation from the pasted block. The block hard-codes a
    single BASE; this site is served both locally (the `site` run entry, serve
@@ -80,15 +133,27 @@ function build(block) {
   const css = styleLine.trim().replace(/^<style>/, '').replace(/<\/style>$/, '');
   let js = lines.slice(scriptAt + 1).join('\n');
 
+  // GROUP is NOT substituted any more when the block comes from `.d8a`: the
+  // platform already wrote this group's id into it, and re-writing it here
+  // would just be a second place for the id to be wrong. It IS substituted for
+  // a block taken from the generic docs page (--from / --from-docs), and either
+  // way the result is checked against `.d8a` below.
   const before = js;
-  js = js.replace(/var GROUP = "[^"]*";/, 'var GROUP = ' + JSON.stringify(GROUP) + ';');
+  if (GROUP) js = js.replace(/var GROUP = "[^"]*";/, 'var GROUP = ' + JSON.stringify(GROUP) + ';');
   js = js.replace(/var BASE = "[^"]*";/, 'var BASE = ' + BASE_RESOLVER + ';');
   if (js === before) throw new Error('BASE/GROUP substitution matched nothing — block shape changed');
+  const wrote = /var GROUP = "([^"]*)";/.exec(js);
+  if (!wrote || wrote[1] !== EXPECT_GROUP) {
+    throw new Error(`the block names group "${wrote ? wrote[1] : '(none)'}" but .d8a says "${EXPECT_GROUP}" — refusing to write a shop that points at the wrong group`);
+  }
 
   return `/* GENERATED FILE — DO NOT EDIT BY HAND.
  *
- * The D8A payments block for group ${GROUP}, copied from the
- * platform's own docs and written here by scripts/build-payments-block.js.
+ * The D8A payments block for group ${EXPECT_GROUP}, taken from this
+ * repository's own .d8a (the file the platform keeps current) and written here
+ * by scripts/build-payments-block.js. The group id lives in .d8a and NOWHERE
+ * else: edit this file and the next build undoes it; edit the id here and it
+ * disagrees with the file that governs the repository.
  * Regenerate with:  node scripts/build-payments-block.js
  *
  * Every page that sells carries <div id="group-store"></div> and includes this
@@ -109,16 +174,29 @@ ${js}`;
 }
 
 const fromArg = process.argv.indexOf('--from');
+const fromDocs = process.argv.includes('--from-docs');
 (async () => {
-  let html;
+  const d8a = fs.readFileSync(D8A, 'utf8');
+  EXPECT_GROUP = groupFromD8a(d8a);
+
+  let block;
   if (fromArg > -1) {
-    html = fs.readFileSync(process.argv[fromArg + 1], 'utf8');
-  } else {
-    const res = await fetch(DOCS);
+    // A saved docs page: generic, so the id has to be substituted in.
+    GROUP = EXPECT_GROUP;
+    block = extract(fs.readFileSync(process.argv[fromArg + 1], 'utf8'));
+  } else if (fromDocs) {
+    GROUP = EXPECT_GROUP;
+    const docs = 'http://localhost:3004/docs?group=' + EXPECT_GROUP;
+    const res = await fetch(docs);
     if (!res.ok) throw new Error('docs fetch failed: HTTP ' + res.status);
-    html = await res.text();
+    block = extract(await res.text());
+  } else {
+    // The default, and the point of all this: the block the platform already
+    // wrote into THIS repository, for THIS group. No network, no running
+    // platform, no second copy of the id.
+    block = blockFromD8a(d8a);
   }
-  const out = build(extract(html));
+  const out = build(block);
   fs.writeFileSync(OUT, out);
-  console.log('wrote ' + OUT + ' (' + out.split('\n').length + ' lines)');
+  console.log('wrote ' + OUT + ' (' + out.split('\n').length + ' lines) for group ' + EXPECT_GROUP + (fromArg > -1 || fromDocs ? ' from the docs page' : ' from .d8a'));
 })().catch(e => { console.error('FAILED: ' + e.message); process.exit(1); });

@@ -46,7 +46,7 @@
   // Where the platform lives. Two hosts, because the group's server is no
   // longer on the public one: `https://d8a.com` still 404s the store API, and
   // the group now runs on this machine (the admin tab the last generated .d8a
-  // pointed at is http://localhost:3004/g/d8aaaa-batch_threadline?section=admin).
+  // pointed at is http://localhost:3004/g/admin-batch_threadline2?section=admin).
   // So the widget resolves its base per page instead of naming one host:
   //
   //   1. window.D8A_BASE, if a page sets it before this script — an explicit

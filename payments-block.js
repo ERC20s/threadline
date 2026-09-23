@@ -1,7 +1,10 @@
 /* GENERATED FILE — DO NOT EDIT BY HAND.
  *
- * The D8A payments block for group d8aaaa-batch_threadline, copied from the
- * platform's own docs and written here by scripts/build-payments-block.js.
+ * The D8A payments block for group admin-batch_threadline2, taken from this
+ * repository's own .d8a (the file the platform keeps current) and written here
+ * by scripts/build-payments-block.js. The group id lives in .d8a and NOWHERE
+ * else: edit this file and the next build undoes it; edit the id here and it
+ * disagrees with the file that governs the repository.
  * Regenerate with:  node scripts/build-payments-block.js
  *
  * Every page that sells carries <div id="group-store"></div> and includes this
@@ -10,7 +13,7 @@
  * count read window.groupStoreCart.lines() and listen for "group-store:cart";
  * pages with their own cart hand it over with window.groupStoreCheckout(lines).
  *
- * Generated 2026-09-22.
+ * Generated 2026-09-23.
  */
 (function () {
   var s = document.createElement('style');
@@ -44,7 +47,7 @@
     } catch (e) {}
     return "https://d8a.com";
   })();
-  var GROUP = "d8aaaa-batch_threadline";
+  var GROUP = "admin-batch_threadline2";
   var esc = function (s) {
     return String(s).replace(/[&<>"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; });
   };
