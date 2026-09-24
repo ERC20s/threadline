@@ -23,6 +23,7 @@
         <a href="index.html#about">About</a>
         <a href="size-guide.html">Size guide</a>
         <a href="index.html#contact">Contact</a>
+        <a href="account.html">Account</a>
       </nav>
     </header>
 
@@ -108,6 +109,8 @@
        after products.js, which owns the window.Threadline namespace, and before
        payments-widget.js, which fills #group-store. -->
   <script src="scripts/checkout-intent.js"></script>
+  <!-- The shopper's D8A account: a signed-in buyer's checkout is posted with it. -->
+  <script src="scripts/d8a-account.js"></script>
   <script src="payments-widget.js"></script>
   <script>
     (function () {
@@ -197,10 +200,36 @@
               return;
             }
 
+            var pageUrl = (T && typeof T.productUrl === 'function') ? T.productUrl(product.id) : ('product.html?id=' + encodeURIComponent(String(product.id)));
+
+            // sized pieces the shopper already has a size for (picked on any
+            // piece of the same fit, scripts/d8a-account.js): one click from
+            // here, in that size. The builder's button reads data-size and
+            // data-d8a-note at click time, exactly as the product page stamps them.
+            var usual = (T && T.d8a && T.d8a.rememberedSize) ? T.d8a.rememberedSize(product) : '';
+            if (usual && typeof window.groupStoreBuildBuyAnchor === 'function') {
+              try {
+                var quick = window.groupStoreBuildBuyAnchor(product.id, { container: container, asButton: true, hostClass: 'btn buy-anchor', label: 'Buy · ' + usual });
+                if (quick) {
+                  quick.setAttribute('data-size', usual);
+                  quick.setAttribute('data-d8a-note', product.name + ' - size ' + usual);
+                  quick.setAttribute('aria-label', 'Buy ' + product.name + ' in size ' + usual);
+                  container.appendChild(quick);
+                  var other = document.createElement('a');
+                  other.className = 'choose-size';
+                  other.href = pageUrl;
+                  other.textContent = 'Other sizes';
+                  container.appendChild(document.createTextNode(' '));
+                  container.appendChild(other);
+                  return;
+                }
+              } catch (e) { /* fall through to the size link */ }
+            }
+
             // sized pieces: a single conservative "Choose size" link to the product
             var choose = document.createElement('a');
             choose.className = 'choose-size';
-            choose.href = (T && typeof T.productUrl === 'function') ? T.productUrl(product.id) : ('product.html?id=' + encodeURIComponent(String(product.id)));
+            choose.href = pageUrl;
             choose.textContent = 'Choose size';
             container.appendChild(choose);
           });

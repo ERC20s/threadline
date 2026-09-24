@@ -55,35 +55,42 @@
              redirect match set on the group's Admin tab — so a sign-in started from
              this site cannot come back to it until this site's origin is added
              there. That part is platform configuration, not repository code. -->
+        <!-- The loader now lives in scripts/d8a-account.js, shared with the
+             product page (1-click Buy), with the same host resolution and the
+             same window.__d8aLoginReady promise the panel below waits on. -->
+        <script src="scripts/d8a-account.js"></script>
+        <!-- Came here from a product page's "Sign in with D8A for 1-click
+             checkout"? Say so, and go back to that piece once signed in. The
+             target survives the sign-in round trip in sessionStorage (the
+             platform returns to this page's exact redirect line, which may not
+             keep our query), is a path on this site only, and expires. -->
+        <p class="hint" id="return-note" hidden>Sign in and we'll take you straight back to your piece, ready for 1-click Buy.</p>
         <script>
         (function () {
-          var base = (function () {
+          var D = window.Threadline && window.Threadline.d8a;
+          if (!D) return;
+          var KEY = "threadline:return";
+          var TTL = 15 * 60 * 1000;
+          var asked = D.safeReturn(new URLSearchParams(location.search).get("return"));
+          try { if (asked) sessionStorage.setItem(KEY, JSON.stringify({ to: asked, at: Date.now() })); } catch (e) {}
+          var pendingReturn = function () {
             try {
-              var o = String(window.D8A_BASE || '');
-              if (o.indexOf('http://') === 0 || o.indexOf('https://') === 0) {
-                while (o.length > 1 && o.slice(-1) === '/') o = o.slice(0, -1);
-                return o;
-              }
+              var r = JSON.parse(sessionStorage.getItem(KEY) || "null");
+              if (r && D.safeReturn(r.to) && Date.now() - r.at < TTL) return r.to;
+              sessionStorage.removeItem(KEY);
             } catch (e) {}
-            try {
-              var h = String(location.hostname || '').toLowerCase();
-              if (location.protocol === 'file:' || h === 'localhost' || h === '127.0.0.1' ||
-                  h === '::1' || h === '[::1]' || h.slice(-10) === '.localhost') return 'http://localhost:3004';
-            } catch (e) {}
-            return 'https://d8a.com';
-          })();
-          var s = document.createElement('script');
-          s.src = base + '/d8a-login.js';
-          s.setAttribute('data-client', 'd8a_app_b3a35968bf907e64');
-          /* Injecting the tag means it no longer blocks the parser, so the panel
-             below can run before d8aLogin exists. It waits on this instead.
-             Resolves on failure too — the panel then says so rather than rendering
-             nothing at all, which is what the old silent return did. */
-          window.__d8aLoginReady = new Promise(function (resolve) {
-            s.onload = resolve;
-            s.onerror = function () { resolve(); };
-          });
-          document.head.appendChild(s);
+            return "";
+          };
+          var note = document.getElementById("return-note");
+          if (note && pendingReturn()) note.hidden = false;
+          var goBack = function () {
+            var to = pendingReturn();
+            if (!to || !D.user()) return;
+            try { sessionStorage.removeItem(KEY); } catch (e) {}
+            location.replace(to);
+          };
+          D.ready.then(goBack);
+          document.addEventListener("d8a-login:signed-in", goBack);
         })();
         </script>
         <!-- The account panel: a Sign in button; once signed in, who they are and every

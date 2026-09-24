@@ -52,6 +52,7 @@
         <a href="index.html#about">About</a>
         <a href="size-guide.html">Size guide</a>
         <a href="index.html#contact">Contact</a>
+        <a href="account.html">Account</a>
       </nav>
     </header>
 
@@ -109,10 +110,17 @@
             <p class="hint" id="quantity-note">Need more than five? Email <a href="mailto:hello@threadline.example">hello@threadline.example</a>.</p>
           </div>
 
-          <p class="actions">
-            <button type="button" class="btn" id="buy" aria-describedby="buy-status">Buy</button>
-            <a class="btn btn-ghost" href="products.html">Back to the shop</a>
-          </p>
+          <div class="buy-box">
+            <p class="actions">
+              <!-- The label is rewritten by the script below: the price for the
+                   quantity chosen, and "1-Click Buy" once the shopper is signed
+                   in with D8A (scripts/d8a-account.js). -->
+              <button type="button" class="btn btn-buy" id="buy" aria-describedby="buy-status buy-account">Buy now</button>
+              <a class="btn btn-ghost" href="products.html">Back to the shop</a>
+            </p>
+            <!-- Who is paying: "Paying as @name with D8A", or a way to sign in. -->
+            <p class="buy-account" id="buy-account" hidden></p>
+          </div>
           <p class="status" id="buy-status" role="status"></p>
 
           <!-- This page renders entirely from scripts/products.js, so without
@@ -148,7 +156,7 @@
            products.html keep theirs, since the panel is their only Buy control. -->
       <section class="store-panel store-panel--buy-integrated" aria-labelledby="store-heading">
         <h2 id="store-heading">Checkout</h2>
-        <p>Buy above sends you to the group's checkout for this piece; you come back here with your receipt. Prices are set on the group's Admin tab and read from the list below.</p>
+        <p>Buy above sends you to the group's checkout for this piece; you come back here with your receipt. Signed in with D8A, it is one click and the order is kept on your account. Prices are set on the group's Admin tab and read from the list below.</p>
         <!-- d8a payments widget container from the repository .d8a payments: block.
              payments-widget.js renders the group's items here and owns the checkout POST.
              data-d8a-fallback="readonly" opts this panel in to the read-only
@@ -215,6 +223,9 @@
   <script type="module" src="scripts/garment3d.js"></script>
   <!-- Queues a Buy click until payments-widget.js has rendered #group-store. -->
   <script src="scripts/checkout-intent.js"></script>
+  <!-- The shopper's D8A account (1-click Buy) and remembered size. Above the
+       widget, so a signed-in buyer's checkout is posted with their account. -->
+  <script src="scripts/d8a-account.js"></script>
   <script src="payments-widget.js"></script>
   <script>
     (function () {
@@ -374,6 +385,16 @@
       var requestedSize = params.get("size");
       var chosenSize = resolveSize(product, requestedSize);
 
+      /* No size on the link: start from the size this shopper picked last time
+         for this kind of piece (scripts/d8a-account.js keeps it per fit
+         family), so a returning buyer's only click is Buy. The URL is
+         corrected below like any other size we chose for them. */
+      var usualSize = "";
+      if (requestedSize === null && !chosenSize && T.d8a && T.d8a.rememberedSize) {
+        usualSize = T.d8a.rememberedSize(product);
+        if (usualSize) chosenSize = usualSize;
+      }
+
       /* ---- sizing help, per piece ----
          The label used to say "Choose a size" even for the Classic Cap, and the
          hint said "Fits run relaxed" for every piece — wrong for a close rib and
@@ -438,6 +459,8 @@
           paintSizes();
           say("Size " + s + " selected.");
           putSizeOnUrl(s);
+          if (T.d8a && T.d8a.rememberSize) T.d8a.rememberSize(product, s);
+          paintBuy();
         });
         sizeBox.appendChild(b);
       });
@@ -452,6 +475,9 @@
       if (requestedSize !== null && requestedSize !== chosenSize) {
         putSizeOnUrl(chosenSize);
         if (!chosenSize) say("We don't make that size — choose one below.", "error");
+      } else if (usualSize) {
+        putSizeOnUrl(usualSize);
+        say("Your usual size, " + usualSize + ", is picked — choose another if you like.");
       }
 
       /* ---- quantity ----
@@ -508,6 +534,7 @@
               paintQuantities();
               say(n === 1 ? "Buying one." : "Buying " + n + ".");
               putQuantityOnUrl(n);
+              paintBuy();
             });
             qtyBox.appendChild(b);
           })(q);
@@ -548,6 +575,67 @@
          on the page was talking to the local platform. */
       var STORE_BASE = (typeof window.d8aPaymentsBase === "string" && window.d8aPaymentsBase) ? window.d8aPaymentsBase : "https://d8a.com";
       var STORE_URL = STORE_BASE + "/g/admin-batch_threadline2";
+
+      /* ---- the Buy button says what one click does ----
+         "Buy now · $76" for everyone, "1-Click Buy · $76" once the shopper is
+         signed in with D8A: payments-widget.js then posts the checkout with
+         their account, so the platform already knows who is paying and keeps
+         the order on that account. The price is the one on screen (the shop's,
+         once reconciled) times the quantity chosen. The line under the button
+         names the account, or offers the sign-in that turns this on. */
+      var accountLine = document.getElementById("buy-account");
+      var signedIn = function () { return !!(T.d8a && T.d8a.user && T.d8a.user()); };
+      var buyTotal = function () {
+        var el = document.getElementById("product-price");
+        var unit = Number(String(el ? el.textContent : "").replace(/[^0-9.]/g, ""));
+        if (!isFinite(unit) || unit <= 0) return "";
+        return T.money ? T.money(Math.round(unit * chosenQuantity * 100) / 100) : "";
+      };
+      var paintBuy = function () {
+        if (!buy || pending || buy.getAttribute("aria-busy") === "true") return;
+        var total = buyTotal();
+        buy.textContent = (signedIn() ? "1-Click Buy" : "Buy now") + (total ? " · " + total : "");
+        buy.classList.toggle("btn-one-click", signedIn());
+      };
+      var paintAccount = function () {
+        if (!accountLine || !T.d8a) return;
+        accountLine.textContent = "";
+        var u = T.d8a.user();
+        if (u) {
+          accountLine.setAttribute("data-signed-in", "");
+          accountLine.appendChild(document.createTextNode("Paying as "));
+          var b = document.createElement("b");
+          b.textContent = T.d8a.who(u);
+          accountLine.appendChild(b);
+          accountLine.appendChild(document.createTextNode(" with D8A — the order is kept on your account. "));
+          var out = document.createElement("button");
+          out.type = "button";
+          out.className = "link-button";
+          out.textContent = "Not you?";
+          out.addEventListener("click", function () {
+            try { window.d8aLogin.signOut(); } catch (e) {}
+          });
+          accountLine.appendChild(out);
+        } else {
+          accountLine.removeAttribute("data-signed-in");
+          var a = document.createElement("a");
+          a.href = T.d8a.signInHref(location.pathname + location.search);
+          /* Size and quantity chosen after this was drawn are on the URL now. */
+          a.addEventListener("click", function () {
+            a.href = T.d8a.signInHref(location.pathname + location.search);
+          });
+          a.textContent = "Sign in with D8A";
+          accountLine.appendChild(a);
+          accountLine.appendChild(document.createTextNode(" for 1-click checkout — your orders are kept on your account."));
+        }
+        accountLine.hidden = false;
+      };
+      var repaintAccount = function () { paintAccount(); paintBuy(); };
+      if (T.d8a) {
+        T.d8a.ready.then(repaintAccount);
+        document.addEventListener("d8a-login:signed-in", repaintAccount);
+        document.addEventListener("d8a-login:signed-out", repaintAccount);
+      }
 
       /* The failure line, with a way out: the group's own storefront. */
       var sayNotListed = function (scroll) {
@@ -635,119 +723,27 @@
         } catch (e) {}
       };
 
+      /* One click, one checkout: stamp the widget's own row for this piece and
+         click it. payments-widget.js's listener on #group-store posts the
+         checkout (with the shopper's D8A account when signed in), owns the
+         duplicate-click guard and falls back to the row's pay link if the
+         platform does not answer.
+         This used to prefer window.groupStoreBuildBuyAnchor: it swapped a
+         freshly built button in for #buy, disabled it to show it was busy and
+         then called .click() on it — and a disabled button ignores .click(),
+         so Buy said "Opening checkout…" and never posted anything. */
       var openCheckout = function (anchor) {
         stampRow(anchor);
-        var openingText = "Opening checkout for " + product.name + ", size " + chosenSize +
-          (chosenQuantity > 1 ? " ×" + chosenQuantity : "") + "…";
-        say(openingText);
-
-        // Prefer the platform-exposed API when available. The payload shape is
-        // { item, quantity, variant } inside an array, matching the platform's
-        // groupStoreCheckout contract. Fall back to clicking the widget's own
-        // anchor if the API is not present or if it rejects.
-        try {
-          // Prefer builder when present — it is a guarded, well-scoped helper that
-          // returns an <a> wired to the widget's own duplicate-click guard and POST.
-          if (typeof window.groupStoreBuildBuyAnchor === 'function') {
-            var hostId, hostClass, hostAria;
-            try {
-              hostId = buy && buy.id ? buy.id : undefined;
-              hostClass = buy && buy.className ? buy.className : undefined;
-              hostAria = buy && buy.getAttribute ? buy.getAttribute('aria-describedby') : undefined;
-            } catch (e) { hostId = undefined; hostClass = undefined; hostAria = undefined; }
-
-            var built = null;
-            try {
-              built = window.groupStoreBuildBuyAnchor(product.id, { container: panel, asButton: true, hostId: hostId, hostClass: hostClass, hostAriaDescribedBy: hostAria });
-            } catch (e) { built = null; }
-
-            if (!built) {
-              // Try legacy call without hints for older widget versions.
-              try { built = window.groupStoreBuildBuyAnchor(product.id, { container: panel, asButton: true }); } catch (e) { built = null; }
-            }
-
-            if (built) {
-              try {
-                // Ensure role and visual affordance are present.
-                try { built.setAttribute('role', 'button'); } catch (e) {}
-                try { built.style.textDecoration = 'none'; } catch (e) {}
-                // If the builder did not accept the host-provided attributes,
-                // merge them now defensively.
-                try { if (hostId && !built.id) built.id = hostId; } catch (e) {}
-                try {
-                  var bDesc = null;
-                  try { bDesc = built.getAttribute ? built.getAttribute('aria-describedby') : null; } catch (e) { bDesc = null; }
-                  if (hostAria && !bDesc) try { built.setAttribute('aria-describedby', hostAria); } catch (e) {}
-                } catch (e) {}
-                try {
-                  var builtClasses = (built.className || '').split(/\s+/).filter(function (t) { return !!t; });
-                  var hostTokens = (hostClass && String(hostClass)) ? String(hostClass).split(/\s+/).filter(function (t) { return !!t; }) : [];
-                  hostTokens.forEach(function (t) { if (builtClasses.indexOf(t) === -1) builtClasses.push(t); });
-                  if (builtClasses.indexOf('btn') === -1) builtClasses.push('btn');
-                  built.className = builtClasses.join(' ');
-                } catch (e) {}
-              } catch (e) {}
-
-              var swapAndClick = function () {
-                try { if (buy && buy.parentNode) buy.parentNode.replaceChild(built, buy); } catch (e) {}
-                // Ensure the page's buy variable now refers to the visible control
-                try { buy = built; } catch (e) {}
-                try {
-                  if (chosenQuantity > 1) built.setAttribute('data-quantity', String(chosenQuantity)); else built.removeAttribute('data-quantity');
-                  if (chosenSize) { built.setAttribute('data-size', chosenSize); built.setAttribute('data-d8a-note', product.name + ' - size ' + chosenSize); } else { built.removeAttribute('data-size'); built.removeAttribute('data-d8a-note'); }
-                } catch (e) {}
-                try { built.click(); } catch (e) {}
-              };
-
-              // Keep the same pending UI state while the Promise resolves.
-              pending = true;
-              try { if (built && typeof built.disabled !== 'undefined') built.disabled = true; } catch (e) {}
-              try { if (built) built.setAttribute("aria-busy", "true"); } catch (e) {}
-
-              var restoreUI = function () {
-                pending = false;
-                try { buy.disabled = notListed; } catch (e) {}
-                try { buy.removeAttribute("aria-busy"); } catch (e) {}
-              };
-
-              Promise.resolve().then(function () { swapAndClick(); }).then(function () { restoreUI(); }).catch(function (err) { restoreUI(); try { built.click(); } catch (e) {} });
-              return;
-            }
-          }
-
-          if (typeof window.groupStoreCheckout === 'function') {
-            var itemId = anchor && anchor.getAttribute ? anchor.getAttribute('data-item') : null;
-            if (!itemId) itemId = product.id;
-            var payload = [{ item: itemId, quantity: chosenQuantity, variant: chosenSize }];
-
-            // Keep the same pending UI state while the Promise resolves.
-            pending = true;
-            buy.disabled = true;
-            buy.setAttribute("aria-busy", "true");
-            var restoreUI = function () {
-              pending = false;
-              buy.disabled = notListed;
-              buy.removeAttribute("aria-busy");
-            };
-
-            Promise.resolve()
-              .then(function () { return window.groupStoreCheckout(payload, { returnUrl: location.href }); })
-              .then(function () {
-                // The widget typically navigates away. If it resolves without
-                // navigating, restore the button state.
-                restoreUI();
-              })
-              .catch(function (err) {
-                // On error, restore the UI and fall back to the anchor click so
-                // behaviour is unchanged for hosts that do not provide the API.
-                restoreUI();
-                try { anchor.click(); } catch (e) {}
-              });
-            return;
-          }
-        } catch (e) {}
-
-        // Fallback: click the widget's anchor as before.
+        say("Opening checkout for " + product.name +
+          (chosenSize && !oneSize ? ", size " + chosenSize : "") +
+          (chosenQuantity > 1 ? " ×" + chosenQuantity : "") +
+          (signedIn() ? " with your D8A account…" : "…"));
+        buy.textContent = "Opening checkout…";
+        buy.setAttribute("aria-busy", "true");
+        /* The page normally leaves for checkout. If it is still here a few
+           seconds later (the platform refused, a pop-up blocker, a modified
+           click), give the button back. */
+        setTimeout(function () { buy.removeAttribute("aria-busy"); paintBuy(); }, 6000);
         anchor.click();
       };
 
@@ -795,6 +791,7 @@
           priceNote.textContent = "Price from the group shop, where checkout takes payment.";
           priceNote.hidden = false;
         }
+        paintBuy();
       };
 
       /* The related cards carry catalogue prices too. One shopPriceIndex pass
@@ -885,6 +882,8 @@
         });
       }
 
+      paintBuy();
+
       buy.addEventListener("click", function () {
         if (pending) return;
         if (notListed) { sayNotListed(true); return; }
@@ -894,6 +893,7 @@
           if (first) first.focus();
           return;
         }
+        if (T.d8a && T.d8a.rememberSize) T.d8a.rememberSize(product, chosenSize);
 
         /* Already rendered — the common case, and after the load-time reconcile
            usually the anchor it resolved — goes straight through. */

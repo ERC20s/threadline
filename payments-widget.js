@@ -154,6 +154,19 @@
 
   // Shared map for concurrent checkout attempts across containers. Keys are
   // namespaced by group so the same item in different groups is distinct.
+  // The checkout POST's headers. A shopper signed in with D8A (d8a-login.js,
+  // loaded by scripts/d8a-account.js) is sent as a bearer, exactly as the
+  // generated payments: block in .d8a does, so the platform charges their
+  // account and the order is kept on it: that is what makes Buy one click.
+  // Signed out, the headers are the ones this widget has always sent.
+  var checkoutHeaders = function () {
+    var h = { 'Content-Type': 'application/json' };
+    try {
+      var l = window.d8aLogin;
+      if (l && l.bearer) h.Authorization = 'Bearer ' + String(l.bearer);
+    } catch (e) {}
+    return h;
+  };
   window.__d8aPaymentsWidgetOpening = window.__d8aPaymentsWidgetOpening || {};
   var globalOpening = window.__d8aPaymentsWidgetOpening;
 
@@ -498,7 +511,7 @@
           try { location.href = safe; } catch (err) {}
         };
         var post = function (bodyText) {
-          return doFetch(checkoutUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyText }, 10000)
+          return doFetch(checkoutUrl, { method: 'POST', headers: checkoutHeaders(), body: bodyText }, 10000)
             .then(function (r) { return (r && r.json) ? r.json() : null; });
         };
 
@@ -766,7 +779,7 @@
         location.href = safe;
       };
       var post = function (bodyText) {
-        return doFetch(checkoutUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyText }, 10000)
+        return doFetch(checkoutUrl, { method: 'POST', headers: checkoutHeaders(), body: bodyText }, 10000)
           .then(function (r) { return (r && r.json) ? r.json() : null; });
       };
 

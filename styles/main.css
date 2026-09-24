@@ -160,6 +160,17 @@ a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid rgb
 .field-label{display:block;font-weight:700;margin-bottom:2px}
 .hint{color:var(--muted);font-size:0.86rem;margin:6px 0 0}
 .status{margin:10px 0 0;font-size:0.92rem;min-height:1.2em}
+/* The product page's Buy area: one primary button that carries the price,
+   and the line under it naming the D8A account that pays (scripts/d8a-account.js). */
+.buy-box{margin-top:18px}
+.buy-box .actions{margin-top:0}
+.btn-buy{min-width:12rem;padding-left:26px;padding-right:26px;font-size:1rem;font-weight:700}
+.btn-one-click::before{content:"";display:inline-block;width:0.55em;height:0.55em;margin-right:0.5em;border-radius:50%;background:currentColor;opacity:0.85;vertical-align:0.08em}
+.buy-account{color:var(--muted);font-size:0.86rem;margin:8px 0 0}
+.buy-account[data-signed-in]{color:var(--ink)}
+.buy-account[data-signed-in]::before{content:"\2713\00a0";color:var(--ok);font-weight:700}
+.link-button{font:inherit;color:var(--accent);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline}
+@media (max-width:520px){.buy-box .actions .btn-buy{flex:1 1 100%}}
 .status[data-tone="error"]{color:var(--error)}
 .status[data-tone="ok"]{color:var(--ok)}
 .breadcrumb{font-size:0.86rem;color:var(--muted);margin:0 0 8px}

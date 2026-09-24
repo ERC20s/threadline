@@ -228,6 +228,30 @@ link when it does.
   "There was an error loading the store (group …)" and names the slug it tried.
   Which platform it asks is no longer a constant — see "Which platform the
   widget talks to" below; served from localhost it talks to the local one.
+- 1-click Buy with D8A. `scripts/d8a-account.js` loads `d8a-login.js` (the
+  `login:` block of `.d8a`) on every page that sells — `product.html`,
+  `products.html`, `index.html` and `account.html`, which used to be the only
+  one — and exposes `Threadline.d8a` (`ready`, `user()`, `who()`,
+  `signInHref()`, `rememberSize()`, `rememberedSize()`). `payments-widget.js`
+  sends `window.d8aLogin.bearer` as `Authorization: Bearer …` with both of its
+  checkout POSTs, as the generated `payments:` block already does, so a
+  signed-in shopper's checkout is opened for their D8A account and the order is
+  kept on it. On `product.html` the Buy button carries the price for the chosen
+  quantity and reads "1-Click Buy · $38" when signed in; the line under it names
+  the account ("Paying as @name with D8A") or links "Sign in with D8A" to
+  `account.html?return=<this page>`, which signs in and sends the shopper back
+  with their size and quantity (the target is kept in `sessionStorage`, must be
+  a path on this site, and expires after 15 minutes). The size a shopper picks
+  is remembered per fit family (`sizeGuide`, else `category`) in
+  `localStorage`, so the next piece of that fit opens with it chosen and a
+  sized card on `products.html` offers "Buy · M" directly. Whether the platform
+  then skips the card form for a signed-in account is the platform's decision;
+  the site's part is one click and the account on the request.
+- `openCheckout` in `product.html` stamps the widget's row for this piece and
+  clicks it — nothing else. It used to swap in a button from
+  `groupStoreBuildBuyAnchor`, disable it and then `.click()` it; a disabled
+  button ignores `.click()`, so Buy showed "Opening checkout…" and posted
+  nothing.
 - `scripts/checkout-intent.js` closes the early-click race. The widget only fills
   `#group-store` once its items request returns, so a shopper who clicks Buy in
   the first seconds used to be told the piece was not listed. The helper adds
