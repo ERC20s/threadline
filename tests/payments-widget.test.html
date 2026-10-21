@@ -132,8 +132,14 @@
     window.__testCheckoutBodies = {};
     window.__testCheckoutSeen = new Promise(function (resolve) { window.__resolveTestCheckoutSeen = resolve; });
 
-    // Stateful behavior: retry-group first call fails, second call succeeds.
-    var callState = { 'retry-group': 0, 'fallback-test': 0 };
+    // Stateful behavior: retry-group and fallback-test model a platform that is
+    // down when the page loads and back by the time the shopper clicks Retry.
+    // "Down" means every host fails, not just the first request: served from
+    // localhost the widget walks BASE plus getFallbackBases(), so a mock that
+    // failed only its first call was answered by the fallback host and the
+    // Retry / read-only paths these fixtures exist for never rendered. The
+    // assertions flip the flag just before they click Retry.
+    window.__testPlatformUp = { 'retry-group': false, 'fallback-test': false };
 
     function jsonResponse(obj, ok) {
       return Promise.resolve({ ok: !!ok, status: ok?200:500, json: function(){ return Promise.resolve(obj); } });
@@ -173,19 +179,20 @@
       if (url.indexOf('/api/v1/store/items') !== -1) {
         var g = (url.match(/[?&]group=([^&]+)/) || [])[1] || '';
         g = decodeURIComponent(g);
-        // retry-group: first call fails (network reject), second call succeeds
+        // retry-group: every call fails (network reject) until the Retry
+        // assertion brings the platform up, then succeeds
         if (g === 'retry-group') {
-          callState['retry-group']++; if (callState['retry-group'] === 1) return Promise.reject(new Error('network'));
+          if (!window.__testPlatformUp['retry-group']) return Promise.reject(new Error('network'));
           return jsonResponse({ items: [ { id: 'r1', name: 'Retry Tee', price: '$10', payUrl: payUrl('r1') } ], group: { name: 'Retry', url: 'https://d8a.com/g/retry-group' }, checkout: { enabled: false } }, true);
         }
 
-        // fallback-test: the first call fails, so the widget's opt-in
+        // fallback-test: the page-load calls fail, so the widget's opt-in
         // read-only fallback renders. A later call — the one the fallback's
-        // own Retry button forces — succeeds, which is how the assertions
-        // below can watch live rows replace the read-only list.
+        // own Retry button forces, after the assertion brings the platform up —
+        // succeeds, which is how the assertions below can watch live rows
+        // replace the read-only list.
         if (g === 'fallback-test') {
-          callState['fallback-test']++;
-          if (callState['fallback-test'] === 1) return Promise.reject(new Error('network'));
+          if (!window.__testPlatformUp['fallback-test']) return Promise.reject(new Error('network'));
           return jsonResponse({ items: [ { id: 'f1', name: 'Fallback Tee', price: '$18', payUrl: payUrl('f1') } ], group: { name: 'Fallback', url: 'https://d8a.com/g/fallback-test' }, checkout: { enabled: false } }, true);
         }
 
@@ -405,6 +412,7 @@
         note('retry-button-present', hadBtn, hadBtn ? 'found retry button' : 'no retry button');
         if (!btn) return;
         var before = (window.__testFetchCounts && window.__testFetchCounts['retry-group']) || 0;
+        window.__testPlatformUp['retry-group'] = true;
         btn.click();
         // wait for retry to finish
         setTimeout(function(){
@@ -487,6 +495,7 @@
 
             // Clicking it must clear the cache, re-fetch and render live rows.
             var fbBefore = (window.__testFetchCounts && window.__testFetchCounts['fallback-test']) || 0;
+            window.__testPlatformUp['fallback-test'] = true;
             fbBtn.click();
             setTimeout(function () {
               var fbAfter = (window.__testFetchCounts && window.__testFetchCounts['fallback-test']) || 0;

@@ -376,6 +376,11 @@ Read-only shop fallback (opt-in, on for the home and product pages)
 
 ## Running the tests
 
+`npm ci && npm test` serves the site and runs all three test pages below
+headlessly in Chromium, failing on any FAIL line; CI runs the same on every push
+and pull request. The site itself still has no dependencies — those two are
+only the server and the headless browser.
+
 Serve the repository root and open `tests/payments-widget.test.html`. It is a
 browser-run suite: every assertion prints PASS or FAIL on the page, and the
 fixtures mock `fetch`, so nothing leaves the machine.

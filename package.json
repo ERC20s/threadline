@@ -1,0 +1,13 @@
+{
+  "name": "threadline",
+  "private": true,
+  "description": "Website for Threadline Clothing Co. Static site; these dependencies are only for serving it and running the browser tests.",
+  "scripts": {
+    "start": "serve -l 5004 .",
+    "test": "node tests/run-browser-tests.js"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1",
+    "serve": "14.2.6"
+  }
+}
