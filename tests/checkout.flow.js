@@ -198,6 +198,46 @@ module.exports = async function checkout(browser, origin) {
     await context.close();
   }
 
+  // ---- product.html: an email link is not a checkout leaving ----
+  // Chromium fires beforeunload for a mailto: link, and the page stays. After
+  // an attempt that ended on the page, a click on the address in the footer
+  // used to count as the page leaving for a checkout, and the next Buy was
+  // swallowed for twenty seconds: "Opening checkout…" and no POST.
+  {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    const pageErrors = collectErrors(page);
+    const answers = answerQueue();
+    const here = '/product.html?id=everyday-tee&size=M';
+    const seen = await mockPlatform(page, { origin, checkout: heldCheckout(answers), payUrl: (id) => here + '#pay-' + id });
+    try {
+      await page.goto(origin + here);
+      await page.waitForSelector('#group-store a[data-item]', { state: 'attached' });
+      await page.locator('#buy').click();
+      await page.waitForTimeout(400);
+      answers.give({});
+      answers.give({});
+      const back = await until(page, () => {
+        const b = document.getElementById('buy');
+        return b && !b.disabled && !b.hasAttribute('aria-busy');
+      }, null, 5000);
+      await page.waitForTimeout(1500); // the shopper reads the page, then writes to us
+      await page.locator('footer a[href^="mailto:"]').click();
+      await page.waitForTimeout(300);
+      const before = seen.checkoutPosts.length;
+      answers.give({ url: origin + '/index.html#checkout-opened' });
+      await page.locator('#buy').click();
+      const deadline = Date.now() + 3000;
+      while (seen.checkoutPosts.length === before && Date.now() < deadline) await page.waitForTimeout(100);
+      check('checkout-product-buy-posts-after-email-link', back && seen.checkoutPosts.length === before + 1,
+        'buy back after declined attempt=' + back + ' POSTs after the email link and Buy=' + (seen.checkoutPosts.length - before));
+    } catch (e) {
+      check('checkout-product-email-link-flow-completes', false, String(e).split('\n')[0]);
+    }
+    errors.push(...pageErrors);
+    await context.close();
+  }
+
   // ---- index.html: the shop panel's own rows ----
   {
     const context = await browser.newContext();
