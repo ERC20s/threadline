@@ -582,35 +582,66 @@
      the latch, and so does a long grace period, in case the shopper stopped
      the navigation and is still here with the controls held. The listener is
      only installed once a buy click has been seen, so a page nobody buys from
-     keeps whatever back/forward cache eligibility it had. */
+     keeps whatever back/forward cache eligibility it had.
+
+     beforeunload is not proof of a checkout on its own, though: Chromium fires
+     it for a mailto: link too (the address beside Buy on product.html, and in
+     every footer), and the page stays where it is. Counted as leaving, one
+     click on the email address after an attempt that had ended on the page —
+     or after coming back from the checkout — swallowed every Buy for the next
+     twenty seconds: product.html said "Opening checkout…" and posted nothing.
+     So it only counts while an attempt seen here is open or has just
+     answered. The widget drops its key and assigns location.href in the same
+     turn, and the browser runs beforeunload inside that assignment, so the
+     checkout's own navigation always falls inside that. */
   var LEAVE_GRACE_MS = 20000;
+  var ATTEMPT_ANSWER_MS = 1000;
   var leavingSince = 0;
   var leaveLatchArmed = false;
+  var attemptOpen = false;
+  var attemptAnsweredAt = 0;
 
   var checkoutLeaving = function () {
     return !!leavingSince && (Date.now() - leavingSince) < LEAVE_GRACE_MS;
+  };
+
+  /* Whether the widget holds a checkout key now — and, as a side effect, the
+     record of when an attempt seen open was last seen to have answered. */
+  var widgetOpening = function () {
+    var opening = global.__d8aPaymentsWidgetOpening;
+    var held = false;
+    if (opening && typeof opening === "object") {
+      for (var k in opening) {
+        if (Object.prototype.hasOwnProperty.call(opening, k) && opening[k]) { held = true; break; }
+      }
+    }
+    if (held) attemptOpen = true;
+    else if (attemptOpen) { attemptOpen = false; attemptAnsweredAt = Date.now(); }
+    return held;
+  };
+
+  var leavingForCheckout = function () {
+    if (widgetOpening()) return true;
+    return !!attemptAnsweredAt && (Date.now() - attemptAnsweredAt) < ATTEMPT_ANSWER_MS;
   };
 
   var armLeaveLatch = function () {
     if (leaveLatchArmed || !global.addEventListener) return;
     leaveLatchArmed = true;
     try {
-      global.addEventListener("beforeunload", function () { leavingSince = Date.now(); });
+      global.addEventListener("beforeunload", function () { if (leavingForCheckout()) leavingSince = Date.now(); });
       /* Only a restore from the back/forward cache: the pageshow of the
          initial load can arrive after a Buy clicked while images were still
          loading, and must not reopen the window it would be closing. */
-      global.addEventListener("pageshow", function (e) { if (e && e.persisted) leavingSince = 0; });
+      global.addEventListener("pageshow", function (e) {
+        if (e && e.persisted) { leavingSince = 0; attemptOpen = false; attemptAnsweredAt = 0; }
+      });
     } catch (e) {}
   };
 
   var checkoutInFlight = function () {
     if (checkoutLeaving()) return true;
-    var opening = global.__d8aPaymentsWidgetOpening;
-    if (!opening || typeof opening !== "object") return false;
-    for (var k in opening) {
-      if (Object.prototype.hasOwnProperty.call(opening, k) && opening[k]) return true;
-    }
-    return false;
+    return widgetOpening();
   };
 
   var whenCheckoutSettles = function (cb) {
@@ -667,6 +698,11 @@
       armLeaveLatch();
       setTimeout(function () { if (checkoutInFlight()) hold(); }, 0);
     }, true);
+
+    /* The widget's own listener is on the control or the panel, so it has run
+       by the time the click bubbles up to root: note the attempt it opened in
+       the same dispatch, before a fast answer could send the page away. */
+    root.addEventListener("click", function () { widgetOpening(); }, false);
   };
 
   /* ---- the paid-order receipt --------------------------------------------

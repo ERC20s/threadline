@@ -259,7 +259,10 @@ link when it does.
   the first buy click, so a page nobody buys from keeps its back/forward
   cache eligibility) and counts the page as in flight from then until it has
   really gone, or come back from the cache (`pageshow`), or twenty seconds
-  have passed with it still here.
+  have passed with it still here. A `beforeunload` only counts while an
+  attempt it has seen is open or has just answered (within a second):
+  Chromium fires it for a `mailto:` link too, and the page stays, so an email
+  link clicked after an attempt that ended on the page no longer holds Buy.
 - The same helper reconciles the page with the live shop on load, before anyone
   clicks. `Threadline.buyRowPrice(anchor)` returns the price the panel is
   showing for a row (the widget builds each row as
