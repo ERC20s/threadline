@@ -239,6 +239,18 @@ link when it does.
   says "Fetching the shop — checkout will open in a moment…" and disables Buy
   while one intent is pending. It never posts to checkout itself — it clicks the
   widget's own link, so the widget's duplicate-checkout guard still applies.
+- One checkout at a time. The widget's guard only collapses an identical click:
+  a second click on the same row was let through to the row's pay link, and a
+  click on another row or size posted a second checkout beside the first.
+  `Threadline.holdCheckouts(document)` (`scripts/checkout-intent.js`, installed
+  by `index.html`, `products.html` and `product.html`) swallows every buy click
+  in the capture phase while the widget has a checkout POST open
+  (`Threadline.checkoutInFlight()` reads the widget's shared
+  `window.__d8aPaymentsWidgetOpening` guard) and disables the buy controls until
+  it settles; `Threadline.whenCheckoutSettles(cb)` is how `product.html` gives
+  its own Buy back after an attempt that did not leave the page. Buy on
+  `product.html` is disabled and `aria-busy` from the click until then. The
+  checkout POST itself, and any idempotency key on it, is the widget's.
 - The same helper reconciles the page with the live shop on load, before anyone
   clicks. `Threadline.buyRowPrice(anchor)` returns the price the panel is
   showing for a row (the widget builds each row as
@@ -276,12 +288,13 @@ Which platform the widget talks to
      did before.
   The two hosts are the `LOCAL_BASE` and `REMOTE_BASE` constants at the top of
   the file; change the port there if the platform moves.
-- The resolved value is published as `window.d8aPaymentsBase` so a page can
-  build its own links to the same platform. `product.html` uses it for the
-  "Open the group shop" link on the not-listed line, which used to point at
-  `d8a.com` while every request on the page went to localhost, and
+- The resolved value is published as `window.d8aPaymentsBase`, and
   `tests/payments-widget.test.html` asserts the read-only footer link against
-  it rather than against a fixed host.
+  it rather than against a fixed host. The site's own code does not follow it:
+  the "Open the group shop" link on `product.html`'s not-listed line and the
+  sign-in script on `account.html` name the production platform,
+  `https://d8a.com`, and nothing else — no local host ships in the site's own
+  pages.
 - A single `#group-store` container still overrides all of this with
   `data-d8a-base` (next section), and the checkout POST still prefers the
   `checkout.url` the items response carries — the local platform returns its own
@@ -377,9 +390,28 @@ Read-only shop fallback (opt-in, on for the home and product pages)
 ## Running the tests
 
 `npm ci && npm test` serves the site and runs all three test pages below
-headlessly in Chromium, failing on any FAIL line; CI runs the same on every push
-and pull request. The site itself still has no dependencies — those two are
-only the server and the headless browser.
+headlessly in Chromium, then the Playwright flows, failing on any FAIL line; CI
+runs the same on every push and pull request. The site itself still has no
+dependencies — those two are only the server and the headless browser.
+
+The flows (`tests/*.flow.js`, listed in `FLOWS` in `tests/run-browser-tests.js`)
+drive the real pages with Playwright. `tests/flow-helpers.js` answers the group
+shop's API from the `items:` block of `.d8a`, answers the placeholder
+photographs with a local PNG and aborts any other outside request, so nothing
+leaves the machine.
+
+- `smoke` walks home → product grid → product page → size guide → lookbook →
+  about by clicking real links, with no console error on the way and the
+  product page's Buy button rendered.
+- `checkout` holds the checkout POST open and checks that one Buy click is one
+  POST, that Buy (and the panel rows, and a one-size card's button) are
+  disabled while it is open, that nothing clicked meanwhile posts again or
+  navigates, and that a declined attempt gives the controls back.
+- `seo-perf` checks the meta description and Open Graph tags on every root
+  page, that the product grids cause no layout shift while
+  `scripts/products.js` arrives late, that cards below the fold do not fetch
+  their cloth until scrolled to, and that the `<img>` elements carry width,
+  height and a `srcset`.
 
 Serve the repository root and open `tests/payments-widget.test.html`. It is a
 browser-run suite: every assertion prints PASS or FAIL on the page, and the

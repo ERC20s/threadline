@@ -597,6 +597,43 @@
     cord:        { stroke: "rgba(255,255,255,0.62)", width: 4, dash: null }
   };
 
+  /* ---- the cloth, fetched when it is about to be seen ----
+     A card or a look draws its garment straight away but leaves the
+     photograph's URL on the <image> as data-cloth; wearCloth() sets the href
+     once the stage comes within 300px of the viewport — the distance at which
+     scripts/garment3d.js starts its mesh from the same photograph. So the
+     shop page no longer fetches all twelve on load. With no
+     IntersectionObserver the cloth is put on at once, as it always was. */
+  var CLOTH_ATTR = "data-cloth";
+
+  /* href is the modern spelling; xlink:href keeps older engines happy. */
+  var wear = function (image, url) {
+    image.setAttribute("href", url);
+    image.setAttributeNS(XLINK_NS, "xlink:href", url);
+  };
+
+  var wearCloth = function (stage) {
+    Array.prototype.forEach.call(stage.querySelectorAll("image[" + CLOTH_ATTR + "]"), function (image) {
+      wear(image, image.getAttribute(CLOTH_ATTR));
+      image.removeAttribute(CLOTH_ATTR);
+    });
+  };
+
+  var clothWatcher = null;
+  var clothWhenNear = function (stage) {
+    if (typeof IntersectionObserver !== "function") { wearCloth(stage); return; }
+    if (!clothWatcher) {
+      clothWatcher = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (!e.isIntersecting) return;
+          clothWatcher.unobserve(e.target);
+          wearCloth(e.target);
+        });
+      }, { rootMargin: "300px" });
+    }
+    clothWatcher.observe(stage);
+  };
+
   /* One fabric-filled panel: the shape, clipped, with the product photograph
      inside it and the shading that turns a flat cut-out into cloth. */
   var panel = function (opts) {
@@ -617,9 +654,8 @@
         x: -20, y: -20, width: VIEW_W + 40, height: VIEW_H + 40,
         preserveAspectRatio: "xMidYMid slice"
       });
-      /* href is the modern spelling; xlink:href keeps older engines happy. */
-      image.setAttribute("href", opts.image);
-      image.setAttributeNS(XLINK_NS, "xlink:href", opts.image);
+      if (opts.lazy) image.setAttribute(CLOTH_ATTR, opts.image);
+      else wear(image, opts.image);
       if (opts.warp) image.setAttribute("filter", "url(#" + opts.warp + ")");
       inner.appendChild(image);
     } else {
@@ -775,7 +811,7 @@
         var backIds = { round: uid("round"), sheen: uid("sheen"), drop: uid("drop"), blur: uid("blur") };
         svg.appendChild(defsFor(backIds, 5));
         svg.appendChild(panel({
-          paths: shape.behind, image: image,
+          paths: shape.behind, image: image, lazy: opts.lazy,
           round: backIds.round, sheen: backIds.sheen, drop: backIds.drop, blur: backIds.blur
         }));
         var shade = el("g");
@@ -797,7 +833,7 @@
       else bodyPaths = [torsoPath(s)];
 
       svg.appendChild(panel({
-        paths: bodyPaths, image: image, folds: foldsFor(shape),
+        paths: bodyPaths, image: image, lazy: opts.lazy, folds: foldsFor(shape),
         round: ids.round, sheen: ids.sheen, drop: ids.drop, blur: ids.blur,
         warp: opts.warp ? ids.warp : null
       }));
@@ -815,7 +851,7 @@
       if (!frontPaths.length || !frontPaths[0]) return null;
 
       svg.appendChild(panel({
-        paths: frontPaths, image: image,
+        paths: frontPaths, image: image, lazy: opts.lazy,
         round: ids.round, sheen: ids.sheen, drop: ids.drop, blur: ids.blur,
         warp: opts.warp ? ids.warp : null
       }));
@@ -892,7 +928,7 @@
     scene.appendChild(floor);
 
     ["back", "body", "front", "detail"].forEach(function (which) {
-      var svg = plane(shape, product, ids, which, { warp: full });
+      var svg = plane(shape, product, ids, which, { warp: full, lazy: !full });
       if (!svg) return;
       var layer = document.createElement("div");
       layer.className = "g3d-layer g3d-layer-" + which;
@@ -901,6 +937,9 @@
     });
 
     stage.appendChild(scene);
+    /* The product page's own garment is above the fold: its cloth is not
+       deferred. A card or a look waits until it is near the viewport. */
+    if (!full) clothWhenNear(stage);
 
     /* ---- turning it ----
        Pointer, drag and the arrow keys all write the same two custom

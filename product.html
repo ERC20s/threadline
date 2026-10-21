@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Product — Threadline Clothing Co.</title>
   <meta name="description" content="A single Threadline piece: the garment drawn and turnable, description, size selection and checkout through the group's payments widget.">
+  <!-- Open Graph: what a shared link previews as. og:url names the public
+       host this project deploys to (server: in .d8a). -->
+  <meta property="og:site_name" content="Threadline Clothing Co.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Product — Threadline Clothing Co.">
+  <meta property="og:description" content="A single Threadline piece: the garment drawn and turnable, description, size selection and checkout through the group's payments widget.">
+  <meta property="og:url" content="https://verkl.com/product.html">
   <!-- serve.json rewrites /product/<id> to this file without redirecting, so
        the browser stays on a two-segment path and every relative URL below —
        styles/, scripts/, payments-widget.js and every nav link — would resolve
@@ -266,6 +273,14 @@
 
       /* ---- render the piece ---- */
       document.title = product.name + " — Threadline Clothing Co.";
+      /* The description and preview tags name the piece too, for the crawlers
+         that run scripts; the static ones in <head> describe the page. */
+      [["name", "description", product.blurb], ["property", "og:description", product.blurb],
+       ["property", "og:title", document.title],
+       ["property", "og:url", "https://verkl.com/" + T.productUrl(product)]].forEach(function (m) {
+        var tag = document.querySelector('meta[' + m[0] + '="' + m[1] + '"]');
+        if (tag && m[2]) tag.setAttribute("content", m[2]);
+      });
       document.getElementById("crumb").textContent = product.name;
       /* The kicker is a link into the shop's filter now: products.html reads
          ?category= and opens on that category, so "Outerwear" here goes to the
@@ -295,6 +310,12 @@
          photograph is simply shown, exactly as this page used to work. */
       var image = document.getElementById("product-image");
       image.src = product.image;
+      /* Above the fold, so not lazy; but sized to the column it fills. */
+      var imageSrcset = T.imageSrcset ? T.imageSrcset(product.image, [450, 900]) : "";
+      if (imageSrcset) {
+        image.srcset = imageSrcset;
+        image.sizes = "(min-width: 760px) 520px, 100vw";
+      }
       image.alt = product.alt || product.name;
 
       var mediaStage = document.getElementById("product-media");
@@ -541,13 +562,11 @@
 
       var panel = document.getElementById("group-store");
       var buy = document.getElementById("buy");
-      /* The group's own storefront, on whichever platform the widget resolved
-         (window.d8aPaymentsBase — localhost when the site is served locally,
-         d8a.com when it is deployed). Hard-coding d8a.com here sent a shopper
-         to a host that no longer answers for this group while everything else
-         on the page was talking to the local platform. */
-      var STORE_BASE = (typeof window.d8aPaymentsBase === "string" && window.d8aPaymentsBase) ? window.d8aPaymentsBase : "https://d8a.com";
-      var STORE_URL = STORE_BASE + "/g/admin-batch_threadline2";
+      /* The group's own storefront, on the production platform. This used to
+         follow window.d8aPaymentsBase, which payments-widget.js points at
+         localhost when the page is served locally — a dev host has no place in
+         a link this page writes. */
+      var STORE_URL = "https://d8a.com/g/admin-batch_threadline2";
 
       /* The failure line, with a way out: the group's own storefront. */
       var sayNotListed = function (scroll) {
@@ -635,120 +654,34 @@
         } catch (e) {}
       };
 
+      /* One attempt at a time. From the moment the widget's row is clicked
+         until that attempt settles, Buy is off and busy: the widget leaves the
+         page for the checkout when it opens, and if it comes back without one
+         (Threadline.whenCheckoutSettles sees its guard released) Buy is
+         switched on again. The widget's own POST is the only one: this page
+         used to swap in a widget-built button, disable it and then .click() it
+         — a disabled button ignores .click(), so the first Buy did nothing and
+         the second, on an enabled button, posted — and its
+         groupStoreCheckout branch clicked the row again whenever that call
+         failed, a second POST for one purchase. */
+      var inFlight = false;
+      var settle = function () {
+        inFlight = false;
+        buy.disabled = notListed;
+        buy.removeAttribute("aria-busy");
+      };
+
       var openCheckout = function (anchor) {
+        if (inFlight) return;
         stampRow(anchor);
-        var openingText = "Opening checkout for " + product.name + ", size " + chosenSize +
-          (chosenQuantity > 1 ? " ×" + chosenQuantity : "") + "…";
-        say(openingText);
-
-        // Prefer the platform-exposed API when available. The payload shape is
-        // { item, quantity, variant } inside an array, matching the platform's
-        // groupStoreCheckout contract. Fall back to clicking the widget's own
-        // anchor if the API is not present or if it rejects.
-        try {
-          // Prefer builder when present — it is a guarded, well-scoped helper that
-          // returns an <a> wired to the widget's own duplicate-click guard and POST.
-          if (typeof window.groupStoreBuildBuyAnchor === 'function') {
-            var hostId, hostClass, hostAria;
-            try {
-              hostId = buy && buy.id ? buy.id : undefined;
-              hostClass = buy && buy.className ? buy.className : undefined;
-              hostAria = buy && buy.getAttribute ? buy.getAttribute('aria-describedby') : undefined;
-            } catch (e) { hostId = undefined; hostClass = undefined; hostAria = undefined; }
-
-            var built = null;
-            try {
-              built = window.groupStoreBuildBuyAnchor(product.id, { container: panel, asButton: true, hostId: hostId, hostClass: hostClass, hostAriaDescribedBy: hostAria });
-            } catch (e) { built = null; }
-
-            if (!built) {
-              // Try legacy call without hints for older widget versions.
-              try { built = window.groupStoreBuildBuyAnchor(product.id, { container: panel, asButton: true }); } catch (e) { built = null; }
-            }
-
-            if (built) {
-              try {
-                // Ensure role and visual affordance are present.
-                try { built.setAttribute('role', 'button'); } catch (e) {}
-                try { built.style.textDecoration = 'none'; } catch (e) {}
-                // If the builder did not accept the host-provided attributes,
-                // merge them now defensively.
-                try { if (hostId && !built.id) built.id = hostId; } catch (e) {}
-                try {
-                  var bDesc = null;
-                  try { bDesc = built.getAttribute ? built.getAttribute('aria-describedby') : null; } catch (e) { bDesc = null; }
-                  if (hostAria && !bDesc) try { built.setAttribute('aria-describedby', hostAria); } catch (e) {}
-                } catch (e) {}
-                try {
-                  var builtClasses = (built.className || '').split(/\s+/).filter(function (t) { return !!t; });
-                  var hostTokens = (hostClass && String(hostClass)) ? String(hostClass).split(/\s+/).filter(function (t) { return !!t; }) : [];
-                  hostTokens.forEach(function (t) { if (builtClasses.indexOf(t) === -1) builtClasses.push(t); });
-                  if (builtClasses.indexOf('btn') === -1) builtClasses.push('btn');
-                  built.className = builtClasses.join(' ');
-                } catch (e) {}
-              } catch (e) {}
-
-              var swapAndClick = function () {
-                try { if (buy && buy.parentNode) buy.parentNode.replaceChild(built, buy); } catch (e) {}
-                // Ensure the page's buy variable now refers to the visible control
-                try { buy = built; } catch (e) {}
-                try {
-                  if (chosenQuantity > 1) built.setAttribute('data-quantity', String(chosenQuantity)); else built.removeAttribute('data-quantity');
-                  if (chosenSize) { built.setAttribute('data-size', chosenSize); built.setAttribute('data-d8a-note', product.name + ' - size ' + chosenSize); } else { built.removeAttribute('data-size'); built.removeAttribute('data-d8a-note'); }
-                } catch (e) {}
-                try { built.click(); } catch (e) {}
-              };
-
-              // Keep the same pending UI state while the Promise resolves.
-              pending = true;
-              try { if (built && typeof built.disabled !== 'undefined') built.disabled = true; } catch (e) {}
-              try { if (built) built.setAttribute("aria-busy", "true"); } catch (e) {}
-
-              var restoreUI = function () {
-                pending = false;
-                try { buy.disabled = notListed; } catch (e) {}
-                try { buy.removeAttribute("aria-busy"); } catch (e) {}
-              };
-
-              Promise.resolve().then(function () { swapAndClick(); }).then(function () { restoreUI(); }).catch(function (err) { restoreUI(); try { built.click(); } catch (e) {} });
-              return;
-            }
-          }
-
-          if (typeof window.groupStoreCheckout === 'function') {
-            var itemId = anchor && anchor.getAttribute ? anchor.getAttribute('data-item') : null;
-            if (!itemId) itemId = product.id;
-            var payload = [{ item: itemId, quantity: chosenQuantity, variant: chosenSize }];
-
-            // Keep the same pending UI state while the Promise resolves.
-            pending = true;
-            buy.disabled = true;
-            buy.setAttribute("aria-busy", "true");
-            var restoreUI = function () {
-              pending = false;
-              buy.disabled = notListed;
-              buy.removeAttribute("aria-busy");
-            };
-
-            Promise.resolve()
-              .then(function () { return window.groupStoreCheckout(payload, { returnUrl: location.href }); })
-              .then(function () {
-                // The widget typically navigates away. If it resolves without
-                // navigating, restore the button state.
-                restoreUI();
-              })
-              .catch(function (err) {
-                // On error, restore the UI and fall back to the anchor click so
-                // behaviour is unchanged for hosts that do not provide the API.
-                restoreUI();
-                try { anchor.click(); } catch (e) {}
-              });
-            return;
-          }
-        } catch (e) {}
-
-        // Fallback: click the widget's anchor as before.
+        say("Opening checkout for " + product.name + ", size " + chosenSize +
+          (chosenQuantity > 1 ? " ×" + chosenQuantity : "") + "…");
+        inFlight = true;
+        buy.disabled = true;
+        buy.setAttribute("aria-busy", "true");
         anchor.click();
+        if (T.whenCheckoutSettles) T.whenCheckoutSettles(settle);
+        else settle();
       };
 
       /* One queued intent at a time: while we wait for the panel, Buy is
@@ -839,6 +772,10 @@
           });
       }
 
+      /* One checkout at a time, page-wide: see holdCheckouts in
+         scripts/checkout-intent.js. */
+      if (T.holdCheckouts) T.holdCheckouts(document);
+
       /* ---- the same guard on the panel's own Buy links ----
          The Buy button above insists on a size; the widget's rows in the panel
          below did not. A click there posted a checkout for the bare item, so the
@@ -886,7 +823,7 @@
       }
 
       buy.addEventListener("click", function () {
-        if (pending) return;
+        if (pending || inFlight) return;
         if (notListed) { sayNotListed(true); return; }
         if (!chosenSize) {
           say("Choose a size first.", "error");

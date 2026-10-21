@@ -11,9 +11,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -23,6 +23,8 @@ jobs:
       - name: Install Chromium for the browser tests
         run: npx playwright install --with-deps chromium
 
-      # Serves the site as the `site` run entry in .d8a does and runs every
-      # tests/*.test.html page headlessly; exits non-zero on any FAIL.
+      # Serves the site as the `site` run entry in .d8a does, runs every
+      # tests/*.test.html page headlessly, then the Playwright flows
+      # (tests/*.flow.js: the smoke walk, checkout, SEO/performance); exits
+      # non-zero on any FAIL.
       - run: npm test

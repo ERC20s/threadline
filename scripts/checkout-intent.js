@@ -104,6 +104,11 @@
  * passed through untouched, exactly as the widget passes them through. It
  * returns a dispose() that detaches the guard again.
  *
+ * holdCheckouts(root) is the in-flight guard: while payments-widget.js has a
+ * checkout POST open (checkoutInFlight()), every buy click under root is
+ * swallowed in the capture phase and every buy control is disabled until the
+ * attempt settles. whenCheckoutSettles(cb) calls cb once nothing is in flight.
+ *
  * resolveSize(product, requested) is the gate on ?size=. The value on the URL is
  * shopper input and used to be trusted as written, so product.html?id=classic-
  * cap&size=XL gave a one-size piece the size XL and Buy stamped it onto the
@@ -541,6 +546,86 @@
     };
   };
 
+  /* ---- one checkout at a time -------------------------------------------
+     payments-widget.js owns the checkout POST. While one is in flight it holds
+     a key in window.__d8aPaymentsWidgetOpening (the guard every widget control
+     shares) and drops it when the attempt ends without leaving the page. Its
+     guard only collapses an identical click, though: a second click on the
+     same row returns early without preventDefault, so the browser follows the
+     row's pay link while the first checkout is still opening, and a click on a
+     different row or size posts a second checkout beside the first.
+
+     holdCheckouts(root) closes both. A capture-phase listener on root swallows
+     every buy click while any checkout is in flight, and every buy control
+     under root is disabled (buttons) or aria-disabled (links) until the
+     attempt settles. whenCheckoutSettles(cb) calls cb once nothing is in
+     flight any more, so a page can switch its own Buy back on. */
+  var BUY_CONTROLS = "a[data-item], button[data-item]";
+  var HELD_ATTR = "data-threadline-held";
+  var SETTLE_POLL_MS = 150;
+
+  var checkoutInFlight = function () {
+    var opening = global.__d8aPaymentsWidgetOpening;
+    if (!opening || typeof opening !== "object") return false;
+    for (var k in opening) {
+      if (Object.prototype.hasOwnProperty.call(opening, k) && opening[k]) return true;
+    }
+    return false;
+  };
+
+  var whenCheckoutSettles = function (cb) {
+    var tick = function () {
+      if (checkoutInFlight()) { setTimeout(tick, SETTLE_POLL_MS); return; }
+      try { cb(); } catch (e) {}
+    };
+    tick();
+  };
+
+  var holdCheckouts = function (root) {
+    if (!root || !root.addEventListener) return;
+    if (root.__threadlineCheckoutHold) return;
+    root.__threadlineCheckoutHold = true;
+
+    var held = false;
+    var hold = function () {
+      if (held) return;
+      held = true;
+      Array.prototype.forEach.call(root.querySelectorAll(BUY_CONTROLS), function (c) {
+        if (c.tagName === "BUTTON") {
+          if (c.disabled) return;
+          c.disabled = true;
+        } else {
+          if (c.getAttribute("aria-disabled") === "true") return;
+          c.setAttribute("aria-disabled", "true");
+        }
+        c.setAttribute(HELD_ATTR, "1");
+      });
+      whenCheckoutSettles(function () {
+        held = false;
+        Array.prototype.forEach.call(root.querySelectorAll("[" + HELD_ATTR + "]"), function (c) {
+          if (c.tagName === "BUTTON") c.disabled = false;
+          else c.removeAttribute("aria-disabled");
+          c.removeAttribute(HELD_ATTR);
+        });
+      });
+    };
+
+    root.addEventListener("click", function (e) {
+      var control = null;
+      try { control = (e.target && e.target.closest) ? e.target.closest(BUY_CONTROLS) : null; } catch (err) { control = null; }
+      if (!control || !isPlainClick(e)) return;
+      if (checkoutInFlight()) {
+        /* Before the widget's listeners, so neither a second POST nor the
+           row's href can happen while the first checkout is opening. */
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      /* Let it through; once the widget has had the click, reflect what it did. */
+      setTimeout(function () { if (checkoutInFlight()) hold(); }, 0);
+    }, true);
+  };
+
   /* ---- the paid-order receipt --------------------------------------------
      payments-widget.js verifies the ?d8a_order= a buyer comes back with and
      fires "group-store:paid". Every page that hosts a #group-store panel can
@@ -882,6 +967,9 @@
   ns.resolveQuantity = resolveQuantity;
   ns.MAX_QUANTITY = MAX_QUANTITY;
   ns.guardBuyClicks = guardBuyClicks;
+  ns.checkoutInFlight = checkoutInFlight;
+  ns.whenCheckoutSettles = whenCheckoutSettles;
+  ns.holdCheckouts = holdCheckouts;
   ns.productForOrder = productForOrder;
   ns.renderReceipt = renderReceipt;
   ns.receiptIn = receiptIn;

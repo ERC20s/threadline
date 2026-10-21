@@ -8,7 +8,7 @@ Plain HTML/CSS/JS with no build step; the shop panel is the d8a group-store widg
 ```
 npm ci        # install dev tooling (serve, playwright) from package-lock.json
 npm start     # serve the site on http://localhost:5004/ (same as the `site` entry in .d8a's run: block)
-npm test      # serve the site and run tests/*.test.html headlessly in Chromium; non-zero on any FAIL
+npm test      # serve the site, run tests/*.test.html headlessly in Chromium, then the Playwright flows in tests/*.flow.js; non-zero on any FAIL
 ```
 
 `npm test` needs a Chromium for Playwright (`npx playwright install chromium` once, unless one is preinstalled)

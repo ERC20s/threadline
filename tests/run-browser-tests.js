@@ -12,6 +12,10 @@
  * all, when a page throws an uncaught error, or when a page navigates away
  * (which would take its results with it).
  *
+ * Then it runs the Playwright flows in FLOWS (tests/<name>.flow.js): each
+ * module drives the real pages itself and resolves with its own
+ * { name, ok, detail } results, reported and counted the same way.
+ *
  *   npm test
  */
 const path = require('path');
@@ -22,6 +26,7 @@ const ROOT = path.join(__dirname, '..');
 const PORT = 5004;
 const ORIGIN = 'http://localhost:' + PORT;
 const PAGES = ['cart', 'product-page-sanity', 'payments-widget'];
+const FLOWS = ['smoke', 'checkout', 'seo-perf'];
 const QUIET_MS = 4000;     // no new result for this long = page finished
 const MAX_MS = 60000;      // hard limit per page
 
@@ -74,6 +79,18 @@ async function runPage(browser, name) {
   return { name, passed: results.length - results.filter((r) => r.startsWith('FAIL')).length, problems };
 }
 
+async function runFlow(browser, name) {
+  let results;
+  try {
+    results = await require('./' + name + '.flow.js')(browser, ORIGIN);
+  } catch (e) {
+    results = [{ name: name + '-flow-runs', ok: false, detail: String(e) }];
+  }
+  const problems = results.filter((r) => !r.ok).map((r) => 'FAIL — ' + r.name + (r.detail ? ' — ' + r.detail : ''));
+  if (!results.length) problems.push('FAIL — no results: the flow returned no assertions');
+  return { name: name + ' (flow)', passed: results.filter((r) => r.ok).length, problems };
+}
+
 (async () => {
   if (await portInUse()) {
     console.error('Port ' + PORT + ' is already in use; stop that server first so the tests run against this checkout.');
@@ -85,12 +102,13 @@ async function runPage(browser, name) {
     await waitForServer(20000);
     const browser = await chromium.launch();
     try {
-      for (const name of PAGES) {
-        const r = await runPage(browser, name);
+      const report = (r) => {
         console.log(r.name + ': ' + r.passed + ' passed, ' + r.problems.length + ' failed');
         r.problems.forEach((p) => console.log('  ' + p));
         if (r.problems.length) failed = true;
-      }
+      };
+      for (const name of PAGES) report(await runPage(browser, name));
+      for (const name of FLOWS) report(await runFlow(browser, name));
     } finally {
       await browser.close();
     }
