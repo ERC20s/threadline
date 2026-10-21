@@ -251,6 +251,15 @@ link when it does.
   its own Buy back after an attempt that did not leave the page. Buy on
   `product.html` is disabled and `aria-busy` from the click until then. The
   checkout POST itself, and any idempotency key on it, is the widget's.
+  "In flight" outlasts the POST: the widget drops its guard the moment the
+  POST answers with a checkout URL and only then navigates, and the browser
+  keeps the page clickable until the checkout page's response arrives —
+  seconds, on a slow platform — so a second click in that window posted a
+  second checkout. `holdCheckouts` listens for `beforeunload` (installed on
+  the first buy click, so a page nobody buys from keeps its back/forward
+  cache eligibility) and counts the page as in flight from then until it has
+  really gone, or come back from the cache (`pageshow`), or twenty seconds
+  have passed with it still here.
 - The same helper reconciles the page with the live shop on load, before anyone
   clicks. `Threadline.buyRowPrice(anchor)` returns the price the panel is
   showing for a row (the widget builds each row as
@@ -260,8 +269,11 @@ link when it does.
   and then: shows the shop's price in `#product-price` with a short note when it
   differs from the catalogue, or, when rows rendered but none match this piece,
   disables Buy and says it is not listed. If the panel fails or times out the
-  page is left exactly as written and the queued-click path still applies.
-  Prices are set on the group's Admin tab, so the shop always wins.
+  page is left exactly as written, told the shop is down, and the queued-click
+  path still applies; like `index.html` and `products.html` it then keeps
+  watching the panel (`Threadline.whenShopRows`), so a Retry that brings the
+  shop back takes the notice down and runs the same pass. Prices are set on
+  the group's Admin tab, so the shop always wins.
 
 ---
 
@@ -406,12 +418,20 @@ leaves the machine.
 - `checkout` holds the checkout POST open and checks that one Buy click is one
   POST, that Buy (and the panel rows, and a one-size card's button) are
   disabled while it is open, that nothing clicked meanwhile posts again or
-  navigates, and that a declined attempt gives the controls back.
+  navigates, and that a declined attempt gives the controls back; then answers
+  the POST at once with a checkout page that is slow to arrive and checks that
+  a click in that window is still held and still posts nothing.
 - `seo-perf` checks the meta description and Open Graph tags on every root
-  page, that the product grids cause no layout shift while
-  `scripts/products.js` arrives late, that cards below the fold do not fetch
-  their cloth until scrolled to, and that the `<img>` elements carry width,
-  height and a `srcset`.
+  page, that the product grids and the product page cause no layout shift
+  while `scripts/products.js` arrives late (the product page keeps its text
+  column unpainted, `data-loading`, and its stage sized until the piece is
+  written in), that cards below the fold do not fetch their cloth until
+  scrolled to, and that the `<img>` elements carry width, height and a
+  `srcset`.
+- `outage` loads the product page and the home page with the shop down, then
+  clicks the panel's Retry with the shop back (selling the tee for a dollar
+  more), and checks that each page takes its "isn't answering" line down and
+  shows the shop's price.
 
 Serve the repository root and open `tests/payments-widget.test.html`. It is a
 browser-run suite: every assertion prints PASS or FAIL on the page, and the

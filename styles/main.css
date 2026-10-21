@@ -132,6 +132,23 @@ a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid rgb
    they land in place and nothing in view moves. Only with scripting on, so a
    page without JavaScript keeps no empty gap above its <noscript> links. */
 @media(scripting:enabled){.grid:empty,.lookbook:empty{min-height:100vh}}
+/* product.html is the same story: the stage, the name, the price, the sizes
+   and the Buy button are all written by script after the first paint, and
+   the Checkout panel and the suggestions used to be painted high on the page
+   and then pushed down as the piece filled in — a layout shift of 0.6 on a
+   phone. So, with scripting on: an empty stage already holds the garment's
+   proportions, drawn as the studio it will stand in, and the meta column is
+   kept invisible (laid out, not painted) until the script has filled it and
+   taken data-loading off the section, so nothing on screen moves when the
+   text arrives. Without scripting there is no stage to wait for and the
+   <noscript> note in the column must show, so neither rule applies. */
+@media(scripting:enabled){
+  .media-stage:empty{
+    aspect-ratio:400/560;border-radius:var(--radius);
+    background:radial-gradient(120% 90% at 50% 18%,var(--studio-1),var(--studio-2));
+  }
+  .product[data-loading] .meta{visibility:hidden}
+}
 .card{display:flex;flex-direction:column;gap:10px;text-decoration:none;color:inherit;border-radius:var(--radius);min-width:0}
 .card:hover{text-decoration:none}
 .card:hover .name{color:var(--accent)}

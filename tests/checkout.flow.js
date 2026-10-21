@@ -32,6 +32,27 @@ function answerQueue() {
 
 const until = async (page, fn, arg, ms) => page.waitForFunction(fn, arg, { timeout: ms || 3000 }).then(() => true, () => false);
 
+/* Answer the checkout POST at once with a page on this server, and hold that
+   page's response back for a while: the time a real checkout takes to arrive,
+   during which the shop page is still on screen. */
+function slowCheckoutPage(page, origin) {
+  const url = origin + '/checkout-page.html';
+  let armed = null;
+  return async (route) => {
+    // Registered now, not when the handler is built: a route added later is
+    // asked first, and mockPlatform's own route would otherwise pass this URL
+    // straight through to the server, which has no such page.
+    if (!armed) {
+      armed = page.route((u) => u.href === url, async (r) => {
+        await new Promise((done) => setTimeout(done, 2500));
+        return r.fulfill({ body: '<!doctype html><title>Checkout</title>', contentType: 'text/html' });
+      });
+    }
+    await armed;
+    return route.fulfill({ json: { url }, headers: CORS });
+  };
+}
+
 module.exports = async function checkout(browser, origin) {
   const results = [];
   const check = (name, ok, detail) => results.push({ name, ok: !!ok, detail: detail || '' });
@@ -71,6 +92,76 @@ module.exports = async function checkout(browser, origin) {
       check('checkout-product-opens-checkout', opened, 'url=' + page.url());
     } catch (e) {
       check('checkout-product-flow-completes', false, String(e).split('\n')[0]);
+    }
+    errors.push(...pageErrors);
+    await context.close();
+  }
+
+  // ---- product.html: the checkout page is slow to arrive ----
+  // The widget drops its guard the moment the POST answers with a URL and only
+  // then navigates; the browser keeps this page alive and clickable until the
+  // checkout page's response commits. A shopper who clicked again in that
+  // window used to post a second checkout. The re-click is scheduled from
+  // inside the page, because nothing can be evaluated in a document with a
+  // navigation pending, and the state at that moment is reported the same way
+  // (console.log, read back here).
+  {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    const pageErrors = collectErrors(page);
+    const reports = [];
+    page.on('console', (m) => { if (m.text().indexOf('flow:') === 0) reports.push(m.text()); });
+    const seen = await mockPlatform(page, { origin, checkout: slowCheckoutPage(page, origin) });
+    try {
+      await page.goto(origin + '/product.html?id=everyday-tee&size=M');
+      await page.waitForSelector('#group-store a[data-item]', { state: 'attached' });
+      await page.evaluate(() => {
+        const b = document.getElementById('buy');
+        setTimeout(() => {
+          console.log('flow:before-reclick disabled=' + b.disabled + ' busy=' + b.getAttribute('aria-busy'));
+          b.click(); b.click();
+        }, 1200);
+        b.click();
+      });
+      await page.waitForTimeout(2000);
+      check('checkout-product-buy-held-while-checkout-page-loads',
+        reports.some((r) => /^flow:before-reclick disabled=true busy=true/.test(r)), reports.join(' | ') || 'no report');
+      check('checkout-product-no-second-post-while-checkout-page-loads', seen.checkoutPosts.length === 1,
+        'POSTs=' + seen.checkoutPosts.length);
+    } catch (e) {
+      check('checkout-product-slow-checkout-page-flow-completes', false, String(e).split('\n')[0]);
+    }
+    errors.push(...pageErrors);
+    await context.close();
+  }
+
+  // ---- index.html: the panel's rows, same window ----
+  {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    const pageErrors = collectErrors(page);
+    const reports = [];
+    page.on('console', (m) => { if (m.text().indexOf('flow:') === 0) reports.push(m.text()); });
+    const seen = await mockPlatform(page, { origin, checkout: slowCheckoutPage(page, origin), payUrl: (id) => '/index.html#pay-' + id });
+    try {
+      await page.goto(origin + '/index.html');
+      await page.waitForSelector('#group-store a[data-item="classic-cap"]');
+      await page.evaluate(() => {
+        const cap = document.querySelector('#group-store a[data-item="classic-cap"]');
+        const scarf = document.querySelector('#group-store a[data-item="lambswool-scarf"]');
+        setTimeout(() => {
+          console.log('flow:before-reclick other-row-held=' + scarf.getAttribute('aria-disabled'));
+          cap.click(); scarf.click();
+        }, 1200);
+        cap.click();
+      });
+      await page.waitForTimeout(2000);
+      check('checkout-panel-rows-held-while-checkout-page-loads',
+        reports.some((r) => /^flow:before-reclick other-row-held=true/.test(r)), reports.join(' | ') || 'no report');
+      check('checkout-panel-no-second-post-while-checkout-page-loads', seen.checkoutPosts.length === 1,
+        'POSTs=' + seen.checkoutPosts.length);
+    } catch (e) {
+      check('checkout-panel-slow-checkout-page-flow-completes', false, String(e).split('\n')[0]);
     }
     errors.push(...pageErrors);
     await context.close();

@@ -108,6 +108,9 @@
  * checkout POST open (checkoutInFlight()), every buy click under root is
  * swallowed in the capture phase and every buy control is disabled until the
  * attempt settles. whenCheckoutSettles(cb) calls cb once nothing is in flight.
+ * "In flight" lasts past the POST: once it has answered with a checkout URL
+ * the page is leaving for it, and stays held until it really has (see
+ * checkoutLeaving below).
  *
  * resolveSize(product, requested) is the gate on ?size=. The value on the URL is
  * shopper input and used to be trusted as written, so product.html?id=classic-
@@ -564,7 +567,44 @@
   var HELD_ATTR = "data-threadline-held";
   var SETTLE_POLL_MS = 150;
 
+  /* The guard key is not the whole story. When the POST answers with a
+     checkout URL the widget deletes its key and only then assigns
+     location.href — and the browser keeps this page alive and clickable until
+     the checkout page's response arrives, which on a slow platform is seconds.
+     In that window the key was gone, whenCheckoutSettles() gave every Buy
+     control back, and a second click posted a second checkout: two sessions
+     for one purchase, the very thing holdCheckouts exists to stop.
+
+     beforeunload fires the moment that navigation starts, so it is the signal
+     that the attempt succeeded. From then on the page counts as leaving — no
+     control is given back and no click gets through — until it really has
+     gone, or has come back: a bfcache restore (pageshow with persisted) clears
+     the latch, and so does a long grace period, in case the shopper stopped
+     the navigation and is still here with the controls held. The listener is
+     only installed once a buy click has been seen, so a page nobody buys from
+     keeps whatever back/forward cache eligibility it had. */
+  var LEAVE_GRACE_MS = 20000;
+  var leavingSince = 0;
+  var leaveLatchArmed = false;
+
+  var checkoutLeaving = function () {
+    return !!leavingSince && (Date.now() - leavingSince) < LEAVE_GRACE_MS;
+  };
+
+  var armLeaveLatch = function () {
+    if (leaveLatchArmed || !global.addEventListener) return;
+    leaveLatchArmed = true;
+    try {
+      global.addEventListener("beforeunload", function () { leavingSince = Date.now(); });
+      /* Only a restore from the back/forward cache: the pageshow of the
+         initial load can arrive after a Buy clicked while images were still
+         loading, and must not reopen the window it would be closing. */
+      global.addEventListener("pageshow", function (e) { if (e && e.persisted) leavingSince = 0; });
+    } catch (e) {}
+  };
+
   var checkoutInFlight = function () {
+    if (checkoutLeaving()) return true;
     var opening = global.__d8aPaymentsWidgetOpening;
     if (!opening || typeof opening !== "object") return false;
     for (var k in opening) {
@@ -621,7 +661,10 @@
         e.stopPropagation();
         return;
       }
-      /* Let it through; once the widget has had the click, reflect what it did. */
+      /* Let it through — but be listening before the widget's POST can answer
+         and send the page on its way — and once the widget has had the click,
+         reflect what it did. */
+      armLeaveLatch();
       setTimeout(function () { if (checkoutInFlight()) hold(); }, 0);
     }, true);
   };
@@ -968,6 +1011,7 @@
   ns.MAX_QUANTITY = MAX_QUANTITY;
   ns.guardBuyClicks = guardBuyClicks;
   ns.checkoutInFlight = checkoutInFlight;
+  ns.checkoutLeaving = checkoutLeaving;
   ns.whenCheckoutSettles = whenCheckoutSettles;
   ns.holdCheckouts = holdCheckouts;
   ns.productForOrder = productForOrder;

@@ -26,7 +26,7 @@ const ROOT = path.join(__dirname, '..');
 const PORT = 5004;
 const ORIGIN = 'http://localhost:' + PORT;
 const PAGES = ['cart', 'product-page-sanity', 'payments-widget'];
-const FLOWS = ['smoke', 'checkout', 'seo-perf'];
+const FLOWS = ['smoke', 'checkout', 'seo-perf', 'outage'];
 const QUIET_MS = 4000;     // no new result for this long = page finished
 const MAX_MS = 60000;      // hard limit per page
 
