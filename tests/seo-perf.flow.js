@@ -3,10 +3,11 @@
  *
  *   - every page at the root carries a meta description and the Open Graph
  *     tags a link preview is built from;
- *   - the product grids do not move what is on screen as they fill — measured
- *     with the browser's own layout-shift entries, while scripts/products.js
- *     arrives late, as it does on a slow connection (which is when the grid is
- *     filled after the first paint);
+ *   - the product grids do not move what is on screen as they fill, and nor
+ *     does the product page as the piece is written in — measured with the
+ *     browser's own layout-shift entries, while scripts/products.js arrives
+ *     late, as it does on a slow connection (which is when the grid is filled
+ *     after the first paint);
  *   - the cloth photographs of cards below the fold are not fetched until the
  *     reader scrolls towards them;
  *   - every <img> the pages build carries width and height, a srcset sized to
@@ -46,7 +47,7 @@ async function layoutShift(browser, origin, target, viewport) {
   });
   await mockPlatform(page, { origin, slow: { match: /\/scripts\/products\.js$/, ms: 400 } });
   await page.goto(origin + target);
-  await page.waitForSelector('#catalogue-grid a.card, #featured-grid a.card');
+  await page.waitForSelector('#catalogue-grid a.card, #featured-grid a.card, #related-grid a.card');
   await page.waitForTimeout(2500); // the shop panel answers and reconciles
   const shift = await page.evaluate(() => window.__shift);
   await context.close();
@@ -72,12 +73,14 @@ module.exports = async function seoPerf(browser, origin) {
     check('seo-meta-' + file, missing.length === 0, missing.length ? 'missing: ' + missing.join(', ') : '');
   }
 
-  // ---- no layout shift as the product grids fill ----
+  // ---- no layout shift as the product grids fill, nor as the product page does ----
   const cases = [
     ['/products.html', { width: 390, height: 844 }],
     ['/products.html', { width: 1280, height: 800 }],
     ['/index.html', { width: 390, height: 844 }],
     ['/index.html', { width: 1280, height: 800 }],
+    ['/product.html?id=everyday-tee', { width: 390, height: 844 }],
+    ['/product.html?id=everyday-tee', { width: 1280, height: 800 }],
   ];
   for (const [target, vp] of cases) {
     const s = await layoutShift(browser, origin, target, vp);

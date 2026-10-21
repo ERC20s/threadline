@@ -65,8 +65,11 @@
     <main id="content">
       <p class="breadcrumb"><a href="index.html">Home</a> &rsaquo; <a href="products.html">Shop</a> &rsaquo; <span id="crumb">Product</span></p>
 
-      <!-- Filled by the script below from ?id=<product id>; scripts/products.js is the catalogue. -->
-      <section class="product" id="product" aria-live="polite">
+      <!-- Filled by the script below from ?id=<product id>; scripts/products.js is the catalogue.
+           data-loading keeps the text column unpainted until then (styles/main.css),
+           so the page does not shift as the piece is written in; the script
+           removes it once the piece is on screen. -->
+      <section class="product" id="product" aria-live="polite" data-loading>
         <div class="media">
           <!-- The garment itself, drawn by scripts/garment.js and turnable:
                the catalogue's photograph is wrapped onto a tee-shaped tee
@@ -226,7 +229,15 @@
   <script>
     (function () {
       var T = window.Threadline;
-      if (!T) return;
+      var productEl = document.getElementById("product");
+      /* styles/main.css keeps the text column invisible while the section
+         carries data-loading, so the page does not shift as the piece is
+         written in. Taken off once it has been — and before any early return,
+         so a catalogue that failed to load still shows the page as written. */
+      var reveal = function () {
+        if (productEl && productEl.removeAttribute) productEl.removeAttribute("data-loading");
+      };
+      if (!T) { reveal(); return; }
 
       var params = new URLSearchParams(location.search);
       /* Which piece to show. Every link on the site is
@@ -252,6 +263,7 @@
 
       /* No id, or an id we do not sell: show the catalogue instead of a broken page. */
       if (!product) {
+        reveal();
         document.getElementById("product").hidden = true;
         var nf = document.getElementById("not-found");
         nf.hidden = false;
@@ -546,6 +558,9 @@
         }
       }
 
+      /* Everything the shopper reads is on the page now: paint it, all at once. */
+      reveal();
+
       /* ---- Buy: hand off to the widget's own Buy link for this item ---- */
       var normalise = function (s) {
         return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
@@ -741,34 +756,52 @@
         try { T.reconcileGrid(relatedGrid, T.shopPriceIndex(panel)); } catch (e) {}
       };
 
+      /* The panel has rows: make the page agree with them. */
+      var shopAnswered = function () {
+        reconcileRelated();
+        var mine = T.findBuyAnchor ? T.findBuyAnchor(panel, matchesProduct) : null;
+        if (mine) {
+          resolvedAnchor = mine;
+          showShopPrice(mine);
+          return;
+        }
+        /* Rows, but none for this piece: say so now rather than after a
+           click and a twelve-second wait. */
+        notListed = true;
+        buy.disabled = true;
+        buy.setAttribute("aria-disabled", "true");
+        /* Never over a receipt: this pass finishes when the panel renders,
+           which can be after a returning buyer's order was verified, and
+           "isn't listed" under a paid order reads as a failed purchase. */
+        var paidHere = status && T.receiptIn && T.receiptIn(status);
+        if (!pending && !paidHere) sayNotListed();
+      };
+
       if (panel && T.whenBuyAnchor) {
         /* No matchFn: resolves as soon as the panel has rendered any row. */
         T.whenBuyAnchor(panel, null, T.BUY_ANCHOR_TIMEOUT || 12000)
-          .then(function () {
-            reconcileRelated();
-            var mine = T.findBuyAnchor ? T.findBuyAnchor(panel, matchesProduct) : null;
-            if (mine) {
-              resolvedAnchor = mine;
-              showShopPrice(mine);
-              return;
-            }
-            /* Rows, but none for this piece: say so now rather than after a
-               click and a twelve-second wait. */
-            notListed = true;
-            buy.disabled = true;
-            buy.setAttribute("aria-disabled", "true");
-            /* Never over a receipt: this pass finishes when the panel renders,
-               which can be after a returning buyer's order was verified, and
-               "isn't listed" under a paid order reads as a failed purchase. */
-            var paidHere = status && T.receiptIn && T.receiptIn(status);
-            if (!pending && !paidHere) sayNotListed();
-          })
+          .then(shopAnswered)
           .catch(function (err) {
             /* The page's own prices stay as written — the shop said nothing to
                reconcile against — but the shopper is told, instead of being
                left with a Buy button that looks ready and a blamed catalogue
                twelve seconds after they click it. Never over a receipt. */
-            if (shopIsDown(err)) sayShopDown(false);
+            if (!shopIsDown(err)) return;
+            sayShopDown(false);
+            /* That wait is over, but the Retry button the notice points at can
+               still bring the shop back — and used to bring it back under a
+               page that went on saying it was down, at the catalogue price,
+               with the suggestions unreconciled. index.html and products.html
+               keep watching; so does this page now: the first row to appear
+               takes the notice down and runs the same pass as a panel that
+               answered on time. Never over a receipt (clearShopDown only ever
+               removes its own notice). */
+            if (T.whenShopRows) {
+              T.whenShopRows(panel, function () {
+                if (T.clearShopDown) T.clearShopDown(status);
+                shopAnswered();
+              });
+            }
           });
       }
 
