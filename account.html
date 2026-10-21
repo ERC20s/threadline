@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Your account — Threadline Clothing Co.</title>
   <meta name="description" content="Sign in with your D8A account to see what you bought from Threadline and pick it up.">
+  <!-- Open Graph: what a shared link previews as. og:url names the public
+       host this project deploys to (server: in .d8a). -->
+  <meta property="og:site_name" content="Threadline Clothing Co.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Your account — Threadline Clothing Co.">
+  <meta property="og:description" content="Sign in with your D8A account to see what you bought from Threadline and pick it up.">
+  <meta property="og:url" content="https://verkl.com/account.html">
   <link rel="stylesheet" href="styles/main.css">
   <!-- The brand mark, inline so the site never asks for a file that is not
        in the repository (every page used to log a 404 for /favicon.ico). -->
@@ -45,11 +52,14 @@
              to leave. Load it ABOVE the payments: block so a signed-in buyer's order is
              bound to their account. -->
         <!-- DEVIATION from the pasted block, kept as small as possible because
-             regenerating .d8a is the real fix. The block names
-             https://d8a.com/d8a-login.js, which 404s — the group's platform serves
-             this script, the public host does not. So the host is resolved exactly
-             the way payments-widget.js resolves its base (window.D8A_BASE, then a
-             local origin, then the public host) and the tag is written from here.
+             regenerating .d8a is the real fix. The tag is injected from script
+             rather than written as markup, so the panel below can wait for it
+             (window.__d8aLoginReady) and say so when it does not load. It names
+             the production platform and nothing else — no page-set override and
+             no local-origin host, because nothing dev-only ships to a browser.
+             https://d8a.com/d8a-login.js 404s today (the group's platform serves
+             the script, the public host does not), so until it is served there
+             the panel reads "Sign-in is unavailable right now."
              NOTE: loading the script is only half of sign-in. The redirect lines in
              the login: block are verkl.com, and sign-in returns ONLY to an exact
              redirect match set on the group's Admin tab — so a sign-in started from
@@ -57,23 +67,8 @@
              there. That part is platform configuration, not repository code. -->
         <script>
         (function () {
-          var base = (function () {
-            try {
-              var o = String(window.D8A_BASE || '');
-              if (o.indexOf('http://') === 0 || o.indexOf('https://') === 0) {
-                while (o.length > 1 && o.slice(-1) === '/') o = o.slice(0, -1);
-                return o;
-              }
-            } catch (e) {}
-            try {
-              var h = String(location.hostname || '').toLowerCase();
-              if (location.protocol === 'file:' || h === 'localhost' || h === '127.0.0.1' ||
-                  h === '::1' || h === '[::1]' || h.slice(-10) === '.localhost') return 'http://localhost:3004';
-            } catch (e) {}
-            return 'https://d8a.com';
-          })();
           var s = document.createElement('script');
-          s.src = base + '/d8a-login.js';
+          s.src = 'https://d8a.com/d8a-login.js';
           s.setAttribute('data-client', 'd8a_app_b3a35968bf907e64');
           /* Injecting the tag means it no longer blocks the parser, so the panel
              below can run before d8aLogin exists. It waits on this instead.

@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Threadline Clothing Co. — small-batch wardrobe essentials</title>
   <meta name="description" content="Threadline Clothing Co. makes small-batch wardrobe essentials: tees, shirts, knitwear and outer layers, made in short runs at honest prices.">
+  <!-- Open Graph: what a shared link previews as. og:url names the public
+       host this project deploys to (server: in .d8a). -->
+  <meta property="og:site_name" content="Threadline Clothing Co.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Threadline Clothing Co. — small-batch wardrobe essentials">
+  <meta property="og:description" content="Threadline Clothing Co. makes small-batch wardrobe essentials: tees, shirts, knitwear and outer layers, made in short runs at honest prices.">
+  <meta property="og:url" content="https://verkl.com/">
   <link rel="stylesheet" href="styles/main.css">
   <!-- The brand mark, inline so the site never asks for a file that is not
        in the repository (every page used to log a 404 for /favicon.ico). -->
@@ -189,6 +196,10 @@
       };
 
       show();
+
+      /* One checkout at a time, page-wide: see holdCheckouts in
+         scripts/checkout-intent.js. */
+      if (T.holdCheckouts) T.holdCheckouts(document);
 
       /* ---- no sized garment leaves the panel without a size ----
          The panel's own Buy links post a checkout for the platform item and

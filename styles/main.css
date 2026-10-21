@@ -125,6 +125,13 @@ a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid rgb
    as the width really holds, and every card is allowed to be narrower than
    its longest word. */
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,140px),1fr));gap:var(--gap);margin-top:18px}
+/* The grids and the lookbook are filled by script, after the first paint, and
+   used to push the shop panel and the footer down the screen as they filled.
+   While one is still empty it holds a screen's height, so what follows it is
+   first painted below the fold and is still below it when the cards arrive:
+   they land in place and nothing in view moves. Only with scripting on, so a
+   page without JavaScript keeps no empty gap above its <noscript> links. */
+@media(scripting:enabled){.grid:empty,.lookbook:empty{min-height:100vh}}
 .card{display:flex;flex-direction:column;gap:10px;text-decoration:none;color:inherit;border-radius:var(--radius);min-width:0}
 .card:hover{text-decoration:none}
 .card:hover .name{color:var(--accent)}
@@ -297,6 +304,8 @@ a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid rgb
    where the panel's per-item Buy links are the only way to buy, are
    untouched. */
 .store-panel--buy-integrated #group-store a[data-item]{display:none}
+/* A row held by Threadline.holdCheckouts while another checkout is opening. */
+#group-store a[data-item][aria-disabled="true"]{opacity:0.5;cursor:not-allowed}
 
 /* Conservative rules for the platform-built anchor used on product.html when available. */
 .platform-buy-anchor.btn{display:inline-block;border:1px solid var(--accent);background:var(--accent);color:#fff;font:inherit;font-weight:700;padding:11px 20px;border-radius:999px;cursor:pointer;text-decoration:none}

@@ -27,6 +27,25 @@
     return "https://picsum.photos/seed/threadline-" + seed + "/" + w + "/" + h;
   };
 
+  /* The same photograph at another width, same aspect: the image URLs end in
+     /<width>/<height>. A URL of any other shape is returned as it is. */
+  var imageAt = function (url, width) {
+    var m = /^(.*\/)(\d+)\/(\d+)$/.exec(String(url || ""));
+    if (!m) return url;
+    return m[1] + width + "/" + Math.round(Number(m[3]) * width / Number(m[2]));
+  };
+
+  /* A srcset for an <img>: the photograph at each width, so the browser
+     fetches the one the layout needs instead of the full-size original.
+     "" when the URL cannot be resized. */
+  var imageSrcset = function (url, widths) {
+    if (imageAt(url, 1) === url) return "";
+    return (widths || [450, 900]).map(function (w) { return imageAt(url, w) + " " + w + "w"; }).join(", ");
+  };
+
+  /* Card thumbnails: two across on a phone, about 260px from 560px up. */
+  var CARD_SIZES = "(min-width: 560px) 260px, 50vw";
+
   var CLOTHING_SIZES = ["XS", "S", "M", "L", "XL"];
   var ONE_SIZE = ["One size"];
 
@@ -486,8 +505,11 @@
     } else {
       var image = document.createElement("img");
       image.src = p.image;
+      var srcset = imageSrcset(p.image, [450, 900]);
+      if (srcset) { image.srcset = srcset; image.sizes = CARD_SIZES; }
       image.alt = p.alt || p.name;
       image.loading = "lazy";
+      image.decoding = "async";
       image.width = 900;
       image.height = 1100;
       thumb.appendChild(image);
@@ -552,8 +574,11 @@
     } else {
       var image = document.createElement("img");
       image.src = look.image;
+      var lookSrcset = imageSrcset(look.image, [400, 800]);
+      if (lookSrcset) { image.srcset = lookSrcset; image.sizes = "(min-width: 560px) 360px, 100vw"; }
       image.alt = look.alt || "";
       image.loading = "lazy";
+      image.decoding = "async";
       image.width = 800;
       image.height = 1000;
       fig.appendChild(image);
@@ -629,6 +654,8 @@
     productFromLocation: productFromLocation,
     card: card,
     renderGrid: renderGrid,
+    imageAt: imageAt,
+    imageSrcset: imageSrcset,
     LOOKS: LOOKS,
     looks: looks,
     lookFigure: lookFigure,
