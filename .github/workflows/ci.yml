@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install Chromium for the browser tests
+        run: npx playwright install --with-deps chromium
+
+      # Serves the site as the `site` run entry in .d8a does and runs every
+      # tests/*.test.html page headlessly; exits non-zero on any FAIL.
+      - run: npm test
